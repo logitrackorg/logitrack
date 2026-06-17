@@ -370,22 +370,67 @@ func (s *CoverageService) store(d *model.CoverageDiagram) {
 // an area in km², chosen via the frontend simulator slider — against every
 // branch's real, post-clip Voronoi area.
 //
-// The simulated radius is modelled as a circle centred on the branch site and
-// intersected with the cell's (already country-clipped) Voronoi polygon:
-// coveragePercentage = AreaIntersectada / cell.AreaKm2 * 100, where
-// AreaIntersectada is the portion of the simulated circle that actually falls
-// within this branch's jurisdiction. Using the raw circle area instead would
-// let the percentage exceed 100% whenever the circle spills over into a
-// neighbouring cell or the ocean — intersecting first guarantees
-// AreaIntersectada <= cell.AreaKm2.
-//
-// A low percentage means the simulated radius would only cover a small
-// fraction of the branch's assigned territory, surfaced as a capacity gap
-// (crítico/moderado/leve) independent of the admin-configured
-// MaxCoverageAreaKm2 threshold used by the main diagram.
-func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationResult {
-	d := s.Diagram()
-	cells := make([]model.SimulationDiagnosis, 0, len(d.Cells))
+// customBoundary, when non-nil and at least 3 points, clips the Voronoi cells
+// against the drawn polygon instead of Argentina's national outline, so the
+// diagnosis is restricted to the user-drawn region (e.g. AMBA, a province).
+// A nil/empty slice uses the cached national-boundary diagram.
+func (s *CoverageService) Diagnose(simulatedAreaKm2 float64, customBoundary []model.LatLng) model.SimulationResult {
+	if len(customBoundary) >= 3 {
+		branches := s.branchRepo.ListActive()
+		var sites []voronoiSite
+		for _, b := range branches {
+			if b.Latitude == nil || b.Longitude == nil {
+				continue
+			}
+			sites = append(sites, voronoiSite{
+				branchID:   b.ID,
+				branchName: b.Name,
+				province:   b.Province,
+				lat:        *b.Latitude,
+				lng:        *b.Longitude,
+			})
+		}
+		return s.diagnoseWithCells(simulatedAreaKm2, s.buildVoronoiCells(sites, customBoundary), customBoundary)
+	}
+	return s.diagnoseWithCells(simulatedAreaKm2, s.Diagram().Cells, nil)
+}
+
+// DiagnoseExcluding is like Diagnose but recomputes the Voronoi diagram after
+// removing the listed branch IDs — the "Simulador de cierre de sucursales"
+// feature. An empty slice is equivalent to calling Diagnose directly.
+// customBoundary follows the same semantics as in Diagnose.
+func (s *CoverageService) DiagnoseExcluding(simulatedAreaKm2 float64, excludedBranchIDs []string, customBoundary []model.LatLng) model.SimulationResult {
+	if len(excludedBranchIDs) == 0 {
+		return s.Diagnose(simulatedAreaKm2, customBoundary)
+	}
+	excluded := make(map[string]bool, len(excludedBranchIDs))
+	for _, id := range excludedBranchIDs {
+		excluded[id] = true
+	}
+	branches := s.branchRepo.ListActive()
+	var sites []voronoiSite
+	for _, b := range branches {
+		if b.Latitude == nil || b.Longitude == nil || excluded[b.ID] {
+			continue
+		}
+		sites = append(sites, voronoiSite{
+			branchID:   b.ID,
+			branchName: b.Name,
+			province:   b.Province,
+			lat:        *b.Latitude,
+			lng:        *b.Longitude,
+		})
+	}
+	return s.diagnoseWithCells(simulatedAreaKm2, s.buildVoronoiCells(sites, customBoundary), customBoundary)
+}
+
+// diagnoseWithCells is the core diagnosis logic shared by Diagnose and
+// DiagnoseExcluding. coverageCells is the set of Voronoi cells to evaluate —
+// either the cached diagram (Diagnose) or a freshly-computed filtered set
+// (DiagnoseExcluding). customBoundary, when non-nil, is used as the clipping
+// polygon for suggestion placement instead of Argentina's national outline.
+func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCells []model.CoverageCell, customBoundary []model.LatLng) model.SimulationResult {
+	diagCells := make([]model.SimulationDiagnosis, 0, len(coverageCells))
 	suggestions := make([]model.SuggestedLocation, 0)
 
 	// The circle is the same in every cell's site-centred projection (always
@@ -407,12 +452,12 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 
 	// All active branch sites, used by the grid-search heuristic below to
 	// push suggestions away from already-covered areas (see bestInteriorPoint).
-	branchSites := make([]model.LatLng, len(d.Cells))
-	for i, c := range d.Cells {
+	branchSites := make([]model.LatLng, len(coverageCells))
+	for i, c := range coverageCells {
 		branchSites[i] = c.Site
 	}
 
-	for _, c := range d.Cells {
+	for _, c := range coverageCells {
 		var intersectedAreaKm2 float64
 		var proj equirectProjector
 		var cellPoly polyclip.Polygon
@@ -432,8 +477,12 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 			intersection := fromPolyclip(cellPoly.Construct(polyclip.INTERSECTION, circle))
 			intersectedAreaKm2 = sumArea(intersection)
 
-			countryLocal = projectCountry(geo.ArgentinaContour(), proj)
-			otherCellsLocal = projectCellsLocal(d.Cells, proj)
+			if len(customBoundary) >= 3 {
+				countryLocal = projectRings([][]model.LatLng{customBoundary}, proj)
+			} else {
+				countryLocal = projectCountry(geo.ArgentinaContour(), proj)
+			}
+			otherCellsLocal = projectCellsLocal(coverageCells, proj)
 		}
 
 		var pct float64
@@ -452,7 +501,7 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 		if deficit < 0 {
 			deficit = 0
 		}
-		cells = append(cells, model.SimulationDiagnosis{
+		diagCells = append(diagCells, model.SimulationDiagnosis{
 			BranchID:           c.BranchID,
 			BranchName:         c.BranchName,
 			VoronoiAreaKm2:     c.AreaKm2,
@@ -471,7 +520,7 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 	}
 	return model.SimulationResult{
 		SimulatedAreaKm2:   simulatedAreaKm2,
-		Cells:              cells,
+		Cells:              diagCells,
 		SuggestedLocations: suggestions,
 	}
 }
@@ -489,11 +538,10 @@ type voronoiSite struct {
 
 // buildVoronoiCells runs the same Voronoi-diagram + country-clip pipeline as
 // Refresh, but over an arbitrary set of sites instead of the active branch
-// set — used by ProjectScenario to compute "what if" cells for a network that
-// also includes candidate new-branch locations. Returns one CoverageCell per
-// site, in the same order as sites. Cells carry BranchID/BranchName/Province
-// copied from the corresponding site (empty for suggestion sites).
-func (s *CoverageService) buildVoronoiCells(sites []voronoiSite) []model.CoverageCell {
+// set — used by DiagnoseExcluding and ProjectScenario. Returns one CoverageCell
+// per site, in the same order as sites. customBoundary replaces Argentina's
+// national outline as the clipping polygon when non-nil (≥3 points).
+func (s *CoverageService) buildVoronoiCells(sites []voronoiSite, customBoundary []model.LatLng) []model.CoverageCell {
 	if len(sites) == 0 {
 		return nil
 	}
@@ -520,7 +568,12 @@ func (s *CoverageService) buildVoronoiCells(sites []voronoiSite) []model.Coverag
 	}
 	cells := geometry.VoronoiCells(pts, bbox)
 
-	country := projectCountry(geo.ArgentinaContour(), proj)
+	var country polyclip.Polygon
+	if len(customBoundary) >= 3 {
+		country = projectRings([][]model.LatLng{customBoundary}, proj)
+	} else {
+		country = projectCountry(geo.ArgentinaContour(), proj)
+	}
 
 	out := make([]model.CoverageCell, len(cells))
 	for i, cell := range cells {
@@ -606,13 +659,13 @@ func (s *CoverageService) ProjectScenario(simulatedAreaKm2 float64, suggestions 
 		radiusKm = math.Sqrt(simulatedAreaKm2 / math.Pi)
 	}
 
-	current := s.Diagnose(simulatedAreaKm2)
+	current := s.Diagnose(simulatedAreaKm2, nil)
 	currentByID := make(map[string]float64, len(current.Cells))
 	for _, c := range current.Cells {
 		currentByID[c.BranchID] = c.CoveragePercentage
 	}
 
-	newCells := s.buildVoronoiCells(sites)
+	newCells := s.buildVoronoiCells(sites, nil)
 	branchProjections := make([]model.BranchProjection, 0, len(branches))
 	for _, cell := range newCells {
 		if cell.BranchID == "" {

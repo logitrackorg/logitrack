@@ -104,9 +104,10 @@ type SimulationResult struct {
 // original geometric point in that case.
 type SnappedCity struct {
 	LatLng
-	CityName   string `json:"city_name"`
-	Snapped    bool   `json:"is_snapped"`
-	Population int    `json:"population,omitempty"` // effective population used for selection; 0 when Snapped=false
+	CityName    string `json:"city_name"`
+	Snapped     bool   `json:"is_snapped"`
+	Population  int    `json:"population,omitempty"`  // effective population used for selection; 0 when Snapped=false
+	ErrorReason string `json:"error_reason,omitempty"` // "TIMEOUT" | "NO_RESULTS"; only when Snapped=false
 }
 
 // SnapToCityRequest is the body of POST /coverage/snap-to-city: the geometric
@@ -125,12 +126,38 @@ type SnapToCityRequest struct {
 	// per-place-type fallback) is strictly below this value are discarded
 	// before scoring. 0 disables the filter (all candidates are considered).
 	MinPopulation int `json:"min_population"`
+
+	// BlacklistedCities is an optional list of city names to exclude from
+	// candidate selection — allows the frontend to retry a point with
+	// different results after the user discards a previously-returned city.
+	// Empty or nil disables the filter.
+	BlacklistedCities []string `json:"blacklisted_cities,omitempty"`
 }
 
 // SnapToCityResponse pairs each input point with its SnappedCity result,
 // preserving the request order so the frontend can merge by index.
 type SnapToCityResponse struct {
 	Results []SnappedCity `json:"results"`
+}
+
+// DiagnoseRequest is the body of POST /coverage/diagnose: parameters for the
+// coverage simulator's "Confirmar y Diagnosticar" action.
+type DiagnoseRequest struct {
+	// AreaKm2 is the simulated coverage radius expressed as an area in km²
+	// (the slider value from the frontend simulator panel).
+	AreaKm2 float64 `json:"area_km2"`
+
+	// ExcludedBranchIDs is an optional list of branch IDs to remove from the
+	// Voronoi computation before diagnosing — the "Simulador de cierre de
+	// sucursales" feature.
+	ExcludedBranchIDs []string `json:"excluded_branch_ids,omitempty"`
+
+	// CustomBoundingArea is an optional polygon (ordered lat/lng vertices,
+	// minimum 3) drawn by the user on the map. When provided, Voronoi cells
+	// are clipped against this polygon instead of Argentina's national outline,
+	// so the diagnosis and new-branch suggestions are restricted to the drawn
+	// region (e.g. AMBA, a specific province).
+	CustomBoundingArea []LatLng `json:"custom_bounding_area,omitempty"`
 }
 
 // ProjectionRequest is the body of POST /coverage/project: the simulated

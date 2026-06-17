@@ -991,6 +991,47 @@ export function CoberturaTab() {
   const [snapError, setSnapError] = useState<string | null>(null);
   const [snapMinPopulation, setSnapMinPopulation] = useState(0);
 
+  // Feature: Blacklist de ciudades — nombres descartados por el usuario en
+  // reintentos anteriores; se envían al backend para que no sean seleccionados.
+  const [blacklistedCities, setBlacklistedCities] = useState<string[]>([]);
+
+  // Feature: Ocultar sucursales del diagrama — simula el cierre de una
+  // sucursal para ver cómo quedaría la cobertura sin ella. Filtra la vista
+  // del mapa al instante (client-side); el diagnóstico recalcula al confirmar.
+  const [hiddenBranches, setHiddenBranches] = useState<string[]>([]);
+
+  // Feature: Área de simulación personalizada — el usuario dibuja un polígono
+  // en el mapa para restringir el diagnóstico a esa zona (ej. AMBA, Patagonia).
+  const [territoryMode, setTerritoryMode] = useState<"national" | "custom">("national");
+  const [customBoundary, setCustomBoundary] = useState<[number, number][] | null>(null);
+  const [isDrawingBoundary, setIsDrawingBoundary] = useState(false);
+
+  const handleTerritoryModeChange = useCallback((mode: "national" | "custom") => {
+    setTerritoryMode(mode);
+    if (mode === "custom" && !customBoundary) {
+      setIsDrawingBoundary(true);
+    }
+    if (mode === "national") {
+      setCustomBoundary(null);
+      setIsDrawingBoundary(false);
+    }
+  }, [customBoundary]);
+
+  const handleBoundaryComplete = useCallback((pts: [number, number][]) => {
+    setCustomBoundary(pts);
+    setIsDrawingBoundary(false);
+  }, []);
+
+  const handleBoundaryCancel = useCallback(() => {
+    setIsDrawingBoundary(false);
+    if (!customBoundary) setTerritoryMode("national");
+  }, [customBoundary]);
+
+  const handleClearBoundary = useCallback(() => {
+    setCustomBoundary(null);
+    setIsDrawingBoundary(true);
+  }, []);
+
   // "Proyección de Impacto": cobertura actual vs. proyectada de cada sucursal
   // si la red incluyera también las sugerencias activas. Se recalcula cada
   // vez que cambia simResult (nuevo diagnóstico o sugerencia descartada).
@@ -1015,12 +1056,17 @@ export function CoberturaTab() {
     setSimError(null);
     setSnappedCities(null);
     setSnapError(null);
+    setBlacklistedCities([]);
     setSnapMinPopulation(minPopulation);
+    const boundingArea =
+      territoryMode === "custom" && customBoundary && customBoundary.length >= 3
+        ? customBoundary.map(([lat, lng]) => ({ lat, lng }))
+        : undefined;
     coverageApi
-      .diagnose(area)
+      .diagnose(area, hiddenBranches.length > 0 ? hiddenBranches : undefined, boundingArea)
       .then(setSimResult)
       .catch(() => setSimError("No se pudo calcular el diagnóstico en este momento."));
-  }, []);
+  }, [hiddenBranches, territoryMode, customBoundary]);
 
   // Sugerencias que todavía no aterrizaron en una ciudad real: solo estas se
   // vuelven a enviar al backend en cada click (evita re-consultar Overpass
@@ -1052,7 +1098,7 @@ export function CoberturaTab() {
     });
 
     coverageApi
-      .snapToCity(pendingPoints, radiusKm, snapMinPopulation)
+      .snapToCity(pendingPoints, radiusKm, snapMinPopulation, blacklistedCities.length > 0 ? blacklistedCities : undefined)
       .then((results) => {
         setSnappedCities((prev) => {
           const merged: SnappedCity[] =
@@ -1066,7 +1112,7 @@ export function CoberturaTab() {
       })
       .catch(() => setSnapError("No se pudo aterrizar las sugerencias en ciudades reales en este momento."))
       .finally(() => setIsFetchingCities(false));
-  }, [simResult, pendingSnapIndexes, snapMinPopulation]);
+  }, [simResult, pendingSnapIndexes, snapMinPopulation, blacklistedCities]);
 
   // Descarta una sugerencia: la quita de `simResult.suggested_locations` y de
   // `snappedCities` en el mismo índice, manteniendo ambos arrays alineados.
@@ -1082,6 +1128,33 @@ export function CoberturaTab() {
     });
     setSnappedCities((prev) => (prev ? prev.filter((_, i) => i !== index) : prev));
   }, []);
+
+  // Descarta una ciudad para reintentos: agrega su nombre a la blacklist y
+  // resetea la entrada a is_snapped=false para que aparezca como pendiente.
+  // El punto de sugerencia se mantiene en simResult para el próximo reintento.
+  const blacklistCity = useCallback((index: number, cityName: string) => {
+    setBlacklistedCities((prev) => (prev.includes(cityName) ? prev : [...prev, cityName]));
+    setSnappedCities((prev) => {
+      if (!prev) return prev;
+      const updated = [...prev];
+      const origLoc = simResult?.suggested_locations[index];
+      updated[index] = {
+        lat: origLoc?.lat ?? 0,
+        lng: origLoc?.lng ?? 0,
+        city_name: "",
+        is_snapped: false,
+      };
+      return updated;
+    });
+  }, [simResult]);
+
+  // Toggle de visibilidad de una sucursal para la simulación de cierre.
+  // Solo afecta el mapa (client-side) hasta el próximo "Confirmar y Diagnosticar".
+  const toggleHiddenBranch = useCallback((id: string) => {
+    setHiddenBranches((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  }, []);
+
+  const restoreAllBranches = useCallback(() => setHiddenBranches([]), []);
 
   // Pausa/reanuda una sugerencia (análisis "What-If"): no la elimina, solo la
   // excluye temporalmente del mapa y de la Proyección de Impacto.
@@ -1103,6 +1176,34 @@ export function CoberturaTab() {
   const activeSnappedCities = useMemo(() => {
     if (!snappedCities) return snappedCities;
     return snappedCities.filter((c) => !c.is_paused);
+  }, [snappedCities]);
+
+  // Celdas visibles del mapa: excluye las sucursales "cerradas" en la simulación.
+  const visibleCells = useMemo(() => {
+    if (!diagram) return [];
+    if (hiddenBranches.length === 0) return diagram.cells;
+    return diagram.cells.filter((c) => !hiddenBranches.includes(c.branch_id));
+  }, [diagram, hiddenBranches]);
+
+  // Lista de sucursales para el panel del simulador (derivada del diagrama).
+  const simulatorBranches = useMemo(() => {
+    if (!diagram) return [];
+    return diagram.cells.map((c) => ({ id: c.branch_id, label: c.branch_name }));
+  }, [diagram]);
+
+  // Resumen de fallos por tipo de error en el último lote de snapping.
+  const failureSummary = useMemo(() => {
+    if (!snappedCities) return null;
+    let timeouts = 0;
+    let noResults = 0;
+    for (const c of snappedCities) {
+      if (!c.is_snapped) {
+        if (c.error_reason === "TIMEOUT") timeouts++;
+        else if (c.error_reason === "NO_RESULTS") noResults++;
+      }
+    }
+    if (timeouts === 0 && noResults === 0) return null;
+    return { timeouts, noResults };
   }, [snappedCities]);
 
   // Recalcula la proyección de impacto contra el backend cada vez que cambia
@@ -1200,12 +1301,16 @@ export function CoberturaTab() {
         <Card className="lg:col-span-2 overflow-hidden !cursor-default p-0 isolate">
           <div className="h-[420px] sm:h-[520px] lg:h-full w-full">
             <VoronoiCoverageMap
-              cells={diagram.cells}
+              cells={visibleCells}
               highlightedBranchId={highlighted}
               onSelectBranch={(id) => setHighlighted(id)}
               simulationAreaKm2={visualArea}
               suggestedLocations={activeSuggestionLocations}
               snappedCities={activeSnappedCities}
+              isDrawingBoundary={isDrawingBoundary}
+              onBoundaryComplete={handleBoundaryComplete}
+              onBoundaryCancel={handleBoundaryCancel}
+              customBoundary={customBoundary}
             />
           </div>
         </Card>
@@ -1227,6 +1332,15 @@ export function CoberturaTab() {
                 onMinPopulationChange={setSnapMinPopulation}
                 scopeLabel={simScopeLabel}
                 disabled={isFetchingCities}
+                branches={simulatorBranches}
+                hiddenBranchIds={hiddenBranches}
+                onToggleBranch={toggleHiddenBranch}
+                onRestoreAllBranches={restoreAllBranches}
+                territoryMode={territoryMode}
+                onTerritoryModeChange={handleTerritoryModeChange}
+                customBoundaryPoints={customBoundary?.length ?? 0}
+                isDrawingBoundary={isDrawingBoundary}
+                onClearBoundary={handleClearBoundary}
               />
               {simResult !== null && (
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -1259,6 +1373,28 @@ export function CoberturaTab() {
                   {snapError && (
                     <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{snapError}</p>
                   )}
+                  {failureSummary && (
+                    <div className="mt-2 space-y-0.5">
+                      {failureSummary.timeouts > 0 && (
+                        <p className="text-xs text-rose-600 dark:text-rose-400">
+                          {failureSummary.timeouts === 1
+                            ? "1 sugerencia no pudo buscarse"
+                            : `${failureSummary.timeouts} sugerencias no pudieron buscarse`}{" "}
+                          (Timeout de API)
+                        </p>
+                      )}
+                      {failureSummary.noResults > 0 && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          {failureSummary.noResults === 1
+                            ? "1 sugerencia sin ciudades"
+                            : `${failureSummary.noResults} sugerencias sin ciudades`}
+                          {snapMinPopulation > 0
+                            ? ` con más de ${snapMinPopulation.toLocaleString("es-AR")} hab. en el radio`
+                            : " en el radio de búsqueda"}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {snappedCities && !snapError && (
                     <>
                       <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -1281,6 +1417,7 @@ export function CoberturaTab() {
                                   loc={simResult.suggested_locations[index]}
                                   onRemove={() => removeSuggestion(index)}
                                   onTogglePause={() => togglePauseSuggestion(index)}
+                                  onBlacklist={(name) => blacklistCity(index, name)}
                                 />
                               ))}
                           </ul>
@@ -1568,18 +1705,23 @@ function Recommendations({
  * neta real sobre territorio + sucursales que se verían aliviadas). El botón
  * de descarte la quita del estado (y, por lo tanto, del mapa y de la
  * proyección de impacto) sin volver a consultar el backend de diagnóstico.
+ * Si el checkbox "Excluir para reintentos" está activo, el descarte agrega
+ * el nombre a la blacklist y mantiene el punto para un nuevo reintento.
  */
 function SuggestionCard({
   city,
   loc,
   onRemove,
   onTogglePause,
+  onBlacklist,
 }: {
   city: SnappedCity;
   loc: SuggestedLocation;
   onRemove: () => void;
   onTogglePause: () => void;
+  onBlacklist: (cityName: string) => void;
 }) {
+  const [blacklistChecked, setBlacklistChecked] = useState(false);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${city.lat},${city.lng}`;
   const isPaused = city.is_paused ?? false;
   return (
@@ -1600,9 +1742,15 @@ function SuggestionCard({
         </button>
         <button
           type="button"
-          onClick={onRemove}
-          aria-label={`Descartar sugerencia: ${city.city_name}`}
-          title="Descartar sugerencia"
+          onClick={() => {
+            if (blacklistChecked) {
+              onBlacklist(city.city_name);
+            } else {
+              onRemove();
+            }
+          }}
+          aria-label={blacklistChecked ? `Excluir ${city.city_name} para reintentos` : `Descartar sugerencia: ${city.city_name}`}
+          title={blacklistChecked ? "Excluir para reintentos (reintentará con otra ciudad)" : "Descartar sugerencia"}
           className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 cursor-pointer transition-colors"
         >
           <Trash2 className="w-3.5 h-3.5" />
@@ -1628,6 +1776,17 @@ function SuggestionCard({
           Población estimada: {city.population!.toLocaleString("es-AR")} habitantes.
         </p>
       )}
+      <label className="mt-1.5 flex items-center gap-1.5 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={blacklistChecked}
+          onChange={(e) => setBlacklistChecked(e.target.checked)}
+          className="w-3 h-3 rounded accent-slate-600"
+        />
+        <span className="text-[10px] text-slate-500 dark:text-slate-400">
+          Excluir para reintentos
+        </span>
+      </label>
     </li>
   );
 }

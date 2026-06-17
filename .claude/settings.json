@@ -5,7 +5,8 @@
       "Bash(echo \"---TSC DONE \\(exit $?\\)---\")",
       "Bash(go get *)",
       "Bash(cd \"C:\\\\Users\\\\mauri\\\\go/pkg/mod/github.com/ctessum/polyclip-go@v1.1.0\" && grep -n \"^type\\\\|^func\\\\|^const\\\\|Op =\" geom.go clipper.go | head -40)",
-      "Read(//c/Users/mauri/go/pkg/mod/github.com/ctessum/polyclip-go@v1.1.0/**)"
+      "Read(//c/Users/mauri/go/pkg/mod/github.com/ctessum/polyclip-go@v1.1.0/**)",
+      "Bash(npm run *)"
     ]
   }
 }

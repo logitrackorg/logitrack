@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -54,18 +55,31 @@ const (
 	// queries don't trigger Overpass's burst rate limit.
 	snapToCityChunkDelay = 1500 * time.Millisecond
 
-	// snapToCityHTTPTimeout must exceed the Overpass-side `[timeout:25]`
-	// query timeout with margin, otherwise our client gives up
-	// (context deadline exceeded) before Overpass even replies.
-	snapToCityHTTPTimeout = 30 * time.Second
+	// snapToCityHTTPTimeout is the Go HTTP client deadline for a single
+	// Overpass request. It exceeds the Overpass-side [timeout:13] by ~2s to
+	// allow the server to return a clean timeout error before the client cuts
+	// the connection. Kept short (15s) so a slow/overloaded Overpass server
+	// does not stall the whole SnapToCities call indefinitely.
+	snapToCityHTTPTimeout = 15 * time.Second
 )
 
-// overpassElement is a single OSM node from an Overpass "out body" response.
-// Only the fields needed for distance/naming are decoded.
+// overpassCenter holds the centroid returned by Overpass `out center` for
+// way and relation elements. Nodes carry their coordinates at the top level
+// (Lat/Lon); ways and relations carry them here instead.
+type overpassCenter struct {
+	Lat float64 `json:"lat"`
+	Lon float64 `json:"lon"`
+}
+
+// overpassElement is a single OSM element from an Overpass `out center`
+// response (node, way, or relation). After decoding, callers must normalize
+// coordinates: use Center when non-zero (way/relation), otherwise use Lat/Lon
+// (node). See snapChunk for the normalization step.
 type overpassElement struct {
-	Lat  float64           `json:"lat"`
-	Lon  float64           `json:"lon"`
-	Tags map[string]string `json:"tags"`
+	Lat    float64           `json:"lat"`
+	Lon    float64           `json:"lon"`
+	Center overpassCenter    `json:"center"`
+	Tags   map[string]string `json:"tags"`
 }
 
 type overpassResponse struct {
@@ -88,6 +102,10 @@ var snapPopulationFallback = map[string]int{
 // minPopulation filters out candidates whose population (OSM tag or per-type
 // fallback) is strictly below the threshold. 0 disables the filter.
 //
+// blacklistedCities is an optional list of city names to exclude from
+// candidate selection (already-discarded suggestions from a previous call).
+// Nil / empty disables the filter.
+//
 // Points are processed in small sequential chunks (snapToCityChunkSize), each
 // resolved with a single Overpass request — one "around" clause per point in
 // the chunk, unioned together — with a short pause between chunks. This keeps
@@ -96,10 +114,10 @@ var snapPopulationFallback = map[string]int{
 // rapid succession.
 //
 // Results preserve input order. A point with no populated place within
-// radiusKm, or whose chunk request fails (timeout/429/etc.), gets
-// Snapped=false — callers should keep its original geometric coordinates in
-// that case. A failure in one chunk does not affect the others.
-func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64, minPopulation int) []model.SnappedCity {
+// radiusKm gets Snapped=false with ErrorReason="NO_RESULTS". A point whose
+// chunk request fails (timeout/429/etc.) gets Snapped=false with
+// ErrorReason="TIMEOUT". A failure in one chunk does not affect the others.
+func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64, minPopulation int, blacklistedCities []string) []model.SnappedCity {
 	results := make([]model.SnappedCity, len(points))
 	if len(points) == 0 {
 		return results
@@ -113,7 +131,7 @@ func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64, 
 		if end > len(points) {
 			end = len(points)
 		}
-		s.snapChunk(points[start:end], radiusKm, minPopulation, results[start:end])
+		s.snapChunk(points[start:end], radiusKm, minPopulation, blacklistedCities, results[start:end])
 
 		if end < len(points) {
 			time.Sleep(snapToCityChunkDelay)
@@ -124,29 +142,35 @@ func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64, 
 }
 
 // snapChunk resolves one batch of points via a single Overpass request,
-// writing into out (same length as points). On any failure, out is left with
-// its zero values (Snapped=false for every point in the chunk).
-func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, minPopulation int, out []model.SnappedCity) {
+// writing into out (same length as points). On network/server failure all
+// entries get ErrorReason="TIMEOUT"; on a successful response with no
+// matching candidate they get ErrorReason="NO_RESULTS".
+func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, minPopulation int, blacklistedCities []string, out []model.SnappedCity) {
 	radiusMeters := int(radiusKm * 1000)
 
-	// Only city/town: these are real urban centers viable as logistics hubs.
-	// village/hamlet/isolated_dwelling are excluded at the query level so
-	// Overpass never returns tiny settlements that could win on raw proximity.
+	// Query uses `nwr` (node + way + relation) to catch cities mapped as
+	// polygons in OSM. The former area["ISO3166-1"="AR"] filter is intentionally
+	// absent: combining nwr + around + area in a single Overpass request is very
+	// expensive and reliably times out at radii ≥ ~100km. Foreign cities returned
+	// by the wider query are discarded by the Point-in-Polygon check inside
+	// bestSnapCandidate (the sole remaining barrier).
 	//
-	// area["ISO3166-1"="AR"]->.ar restricts every node search to Argentine
-	// territory, so border cities of neighboring countries (Chile, Brazil,
-	// etc.) are never downloaded in the first place — this is the first of
-	// two barriers (see bestSnapCandidate for the second, geometric one).
+	// [timeout:13] gives Overpass 13s; the Go client deadline is 15s, leaving 2s
+	// for the server to emit a clean error before the connection is cut.
+	//
+	// `out center` asks Overpass to compute the centroid of ways/relations;
+	// nodes still carry their coordinates at the top level. The normalization
+	// step below unifies both cases before scoring.
 	var q strings.Builder
-	q.WriteString(`[out:json][timeout:25];area["ISO3166-1"="AR"]->.ar;(`)
+	q.WriteString(`[out:json][timeout:13];(`)
 	for _, p := range points {
-		fmt.Fprintf(&q, `node["place"~"^(city|town)$"](around:%d,%f,%f)(area.ar);`, radiusMeters, p.Lat, p.Lng)
+		fmt.Fprintf(&q, `nwr["place"~"^(city|town)$"](around:%d,%f,%f);`, radiusMeters, p.Lat, p.Lng)
 	}
 	totalLimit := snapToCityResultsPerPoint * len(points)
 	if totalLimit > snapToCityMaxTotalResults {
 		totalLimit = snapToCityMaxTotalResults
 	}
-	fmt.Fprintf(&q, ");out body %d;", totalLimit)
+	fmt.Fprintf(&q, ");out center %d;", totalLimit)
 
 	req, err := http.NewRequest(http.MethodGet, overpassAPIURL, nil)
 	if err != nil {
@@ -164,11 +188,24 @@ func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, min
 
 	resp, err := client.Do(req)
 	if err != nil {
+		for i := range out {
+			out[i] = model.SnappedCity{
+				LatLng:      model.LatLng{Lat: points[i].Lat, Lng: points[i].Lng},
+				ErrorReason: "TIMEOUT",
+			}
+		}
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("[SnapToCity] Overpass returned HTTP %d — possible rate-limit (429) or server error", resp.StatusCode)
+		for i := range out {
+			out[i] = model.SnappedCity{
+				LatLng:      model.LatLng{Lat: points[i].Lat, Lng: points[i].Lng},
+				ErrorReason: "TIMEOUT",
+			}
+		}
 		return
 	}
 
@@ -177,9 +214,23 @@ func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, min
 		return
 	}
 
+	// Normalize coordinates: ways and relations carry their centroid in
+	// `center`; nodes carry it at the top level. After this step all elements
+	// have usable Lat/Lon regardless of their OSM type.
+	for i := range parsed.Elements {
+		if parsed.Elements[i].Center.Lat != 0 || parsed.Elements[i].Center.Lon != 0 {
+			parsed.Elements[i].Lat = parsed.Elements[i].Center.Lat
+			parsed.Elements[i].Lon = parsed.Elements[i].Center.Lon
+		}
+	}
+
 	for i, p := range points {
-		best, found := bestSnapCandidate(parsed.Elements, p.Lat, p.Lng, radiusKm, minPopulation)
+		best, found := bestSnapCandidate(parsed.Elements, p.Lat, p.Lng, radiusKm, minPopulation, blacklistedCities)
 		if !found {
+			out[i] = model.SnappedCity{
+				LatLng:      model.LatLng{Lat: p.Lat, Lng: p.Lng},
+				ErrorReason: "NO_RESULTS",
+			}
 			continue
 		}
 		out[i] = model.SnappedCity{
@@ -196,10 +247,11 @@ func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, min
 // national contour — ~0.05° ≈ 5.5km. Same tolerance used in coverage_test.go.
 const argentinaBorderToleranceDeg = 0.05
 
-// isWithinArgentina is the second barrier: a Point-in-Polygon check against
-// the national contour (geo.ArgentinaContour), independent of the Overpass
-// area filter in snapChunk. A candidate outside Argentina's land borders is
-// discarded regardless of population or score.
+// isWithinArgentina is the sole barrier against foreign candidates: a
+// Point-in-Polygon check against the national contour (geo.ArgentinaContour).
+// The Overpass query no longer uses an area filter (too expensive at large
+// radii), so this check carries the full responsibility of discarding cities
+// from Chile, Uruguay, Bolivia, etc.
 func isWithinArgentina(el overpassElement) bool {
 	pt := orb.Point{el.Lon, el.Lat}
 	contour := geo.ArgentinaContour()
@@ -225,18 +277,19 @@ func candidatePopulation(el overpassElement) int {
 
 // bestSnapCandidate picks the most populous named place within radiusKm of
 // the origin that is inside Argentina. Candidates without a "name" tag,
-// beyond radiusKm, outside the national contour, or below minPopulation are
-// skipped (minPopulation == 0 disables the filter). When two candidates share
-// the same population (including both using a per-type fallback), the closer
-// one wins as a tiebreaker.
-func bestSnapCandidate(elements []overpassElement, originLat, originLng, radiusKm float64, minPopulation int) (overpassElement, bool) {
+// beyond radiusKm, outside the national contour, below minPopulation, or
+// whose name appears in blacklistedCities are skipped. When two candidates
+// share the same population (including both using a per-type fallback), the
+// closer one wins as a tiebreaker.
+func bestSnapCandidate(elements []overpassElement, originLat, originLng, radiusKm float64, minPopulation int, blacklistedCities []string) (overpassElement, bool) {
 	var best overpassElement
 	bestPop := -1
 	var bestDist float64
 	found := false
 
 	for _, el := range elements {
-		if el.Tags["name"] == "" {
+		name := el.Tags["name"]
+		if name == "" {
 			continue
 		}
 		dist := ml.HaversineKm(originLat, originLng, el.Lat, el.Lon)
@@ -248,6 +301,16 @@ func bestSnapCandidate(elements []overpassElement, originLat, originLng, radiusK
 		}
 		pop := candidatePopulation(el)
 		if minPopulation > 0 && pop < minPopulation {
+			continue
+		}
+		blacklisted := false
+		for _, bl := range blacklistedCities {
+			if bl == name {
+				blacklisted = true
+				break
+			}
+		}
+		if blacklisted {
 			continue
 		}
 		if !found || pop > bestPop || (pop == bestPop && dist < bestDist) {

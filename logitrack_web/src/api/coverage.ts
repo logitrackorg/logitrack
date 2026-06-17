@@ -112,6 +112,8 @@ export interface SnappedCity {
   is_snapped: boolean;
   /** Población efectiva de la ciudad elegida (tag OSM o fallback por tipo). 0 / ausente cuando is_snapped=false. */
   population?: number;
+  /** Razón por la que no se encontró ciudad. "TIMEOUT" = error de red/API; "NO_RESULTS" = no hay ciudad en el radio. */
+  error_reason?: string;
   /**
    * Frontend-only (no proviene del backend): true cuando el usuario "pausó"
    * esta sugerencia para un análisis What-If sin descartarla. Las
@@ -155,10 +157,18 @@ export const coverageApi = {
         r.data.branch_id ? (r.data as BranchRecommendation) : null
       ),
 
-  /** Evalúa un radio de cobertura simulado (km²) contra el área Voronoi real de cada sucursal. */
-  diagnose: (areaKm2: number) =>
+  /**
+   * Evalúa un radio de cobertura simulado (km²) contra el área Voronoi real de cada sucursal.
+   * excludedBranchIds: IDs de sucursales a excluir del cálculo (simulación de cierre).
+   * customBoundingArea: polígono dibujado por el usuario — recorta el diagnóstico a esa zona.
+   */
+  diagnose: (areaKm2: number, excludedBranchIds?: string[], customBoundingArea?: LatLng[]) =>
     api
-      .get<SimulationResult>("/coverage/diagnose", { params: { area_km2: areaKm2 } })
+      .post<SimulationResult>("/coverage/diagnose", {
+        area_km2: areaKm2,
+        ...(excludedBranchIds?.length ? { excluded_branch_ids: excludedBranchIds } : {}),
+        ...(customBoundingArea?.length ? { custom_bounding_area: customBoundingArea } : {}),
+      })
       .then((r) => r.data),
 
   /**
@@ -167,12 +177,17 @@ export const coverageApi = {
    * `radiusKm` (la zona de cobertura simulada). Devuelve un resultado por
    * punto, en el mismo orden.
    */
-  snapToCity: (points: LatLng[], radiusKm: number, minPopulation = 0) =>
+  /**
+   * blacklistedCities: nombres de ciudades a excluir de la selección en este reintento
+   * (ciudades descartadas por el usuario en reintentos anteriores).
+   */
+  snapToCity: (points: LatLng[], radiusKm: number, minPopulation = 0, blacklistedCities?: string[]) =>
     api
       .post<SnapToCityResponse>("/coverage/snap-to-city", {
         points,
         radius_km: radiusKm,
         min_population: minPopulation,
+        ...(blacklistedCities?.length ? { blacklisted_cities: blacklistedCities } : {}),
       })
       .then((r) => r.data.results),
 

@@ -637,7 +637,7 @@ func main() {
 	// sucursal óptima para una coordenada (form de nuevo envío).
 	protected.GET("/coverage/diagram", canViewStats, coverageHandler.GetDiagram)
 	protected.GET("/coverage/branch-for", shipmentWrite, coverageHandler.BranchForPoint)
-	protected.GET("/coverage/diagnose", canViewStats, coverageHandler.Diagnose)
+	protected.POST("/coverage/diagnose", canViewStats, coverageHandler.Diagnose)
 	protected.POST("/coverage/snap-to-city", canViewStats, coverageHandler.SnapToCity)
 	protected.POST("/coverage/project", canViewStats, coverageHandler.Project)
 	protected.POST("/admin/fleet-ml/retrain", adminOnly, slaMetricsHandler.RetrainFleetML)

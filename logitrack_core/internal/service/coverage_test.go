@@ -279,7 +279,7 @@ func TestCoverage_Diagnose_PercentageAndDeficit(t *testing.T) {
 	}
 	simArea := minArea / 4
 
-	res := svc.Diagnose(simArea)
+	res := svc.Diagnose(simArea, nil)
 	if res.SimulatedAreaKm2 != simArea {
 		t.Fatalf("SimulatedAreaKm2 = %v, esperado %v", res.SimulatedAreaKm2, simArea)
 	}
@@ -336,7 +336,7 @@ func TestCoverage_Diagnose_AdequateWhenSimulatedAreaCoversCell(t *testing.T) {
 		areaByBranch[c.BranchID] = c.AreaKm2
 	}
 
-	res := svc.Diagnose(simArea)
+	res := svc.Diagnose(simArea, nil)
 	for _, sc := range res.Cells {
 		// Bug 1: el porcentaje nunca puede superar el 100%, ni siquiera por
 		// errores de redondeo del recorte de polígonos.
@@ -380,7 +380,7 @@ func TestCoverage_Diagnose_SuggestedLocationsForCriticalGap(t *testing.T) {
 	}
 	simArea := minArea / 100
 
-	res := svc.Diagnose(simArea)
+	res := svc.Diagnose(simArea, nil)
 
 	criticalBranches := make(map[string]bool)
 	for _, sc := range res.Cells {
@@ -456,7 +456,7 @@ func TestCoverage_Diagnose_IterativeGreedyCoveringFillsLargeGap(t *testing.T) {
 	simArea := minArea / 100
 	radiusKm := math.Sqrt(simArea / math.Pi)
 
-	res := svc.Diagnose(simArea)
+	res := svc.Diagnose(simArea, nil)
 
 	byBranch := make(map[string][]model.SuggestedLocation)
 	for _, sug := range res.SuggestedLocations {
@@ -503,7 +503,7 @@ func TestCoverage_Diagnose_NoSuggestionsWhenAdequate(t *testing.T) {
 
 	const simArea = 1.25e8
 
-	res := svc.Diagnose(simArea)
+	res := svc.Diagnose(simArea, nil)
 	if len(res.SuggestedLocations) != 0 {
 		t.Fatalf("no se esperaban sugerencias con cobertura adecuada, dio %+v", res.SuggestedLocations)
 	}

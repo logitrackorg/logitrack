@@ -38,14 +38,27 @@ interface VoronoiCoverageMapProps {
    * `is_snapped = false` mantienen el color gris (no se encontró ciudad real).
    */
   snappedCities?: SnappedCity[] | null;
+  /**
+   * Cuando true, el cursor cambia a crosshair y cada click en el mapa agrega
+   * un vértice al polígono de área personalizada. Enter lo cierra, Esc cancela,
+   * Cmd/Ctrl+Z deshace el último vértice.
+   */
+  isDrawingBoundary?: boolean;
+  /** Llamado con los vértices cuando el usuario cierra el polígono (Enter o ≥3 puntos). */
+  onBoundaryComplete?: (pts: [number, number][]) => void;
+  /** Llamado cuando el usuario presiona Esc durante el dibujo. */
+  onBoundaryCancel?: () => void;
+  /**
+   * Polígono personalizado ya confirmado: se dibuja como un borde azul
+   * punteado sobre el mapa para indicar la zona activa del simulador.
+   */
+  customBoundary?: [number, number][] | null;
 }
 
 const FACTORY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg>`;
 const STAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
 
-// Color de las sugerencias geométricas (sin ciudad real cercana).
 const SUGGESTION_COLOR_UNSNAPPED = "#808080";
-// Color de las sugerencias "aterrizadas" en una ciudad real (Snap to City).
 const SUGGESTION_COLOR_SNAPPED = "#28a745";
 
 /** Ícono de fábrica circular usado para los marcadores de sugerencia, en el color dado. */
@@ -64,9 +77,12 @@ function suggestionIcon(color: string): L.DivIcon {
  * marcador en la sucursal y, en las celdas con gap, una estrella en la ubicación
  * sugerida para una nueva sucursal.
  *
+ * Cuando `isDrawingBoundary` es true, el mapa pasa a modo dibujo: cada click
+ * agrega un vértice al polígono de área personalizada (mismo patrón que
+ * ZoneManagement). Enter cierra el polígono, Esc cancela, Cmd/Ctrl+Z deshace.
+ *
  * El mapa es responsive: un ResizeObserver llama invalidateSize() cuando el
- * contenedor cambia de tamaño, de modo que se adapta al espacio del dashboard y
- * a la pantalla sin recortes.
+ * contenedor cambia de tamaño.
  */
 export function VoronoiCoverageMap({
   cells,
@@ -75,6 +91,10 @@ export function VoronoiCoverageMap({
   simulationAreaKm2,
   suggestedLocations,
   snappedCities,
+  isDrawingBoundary = false,
+  onBoundaryComplete,
+  onBoundaryCancel,
+  customBoundary,
 }: VoronoiCoverageMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -82,17 +102,24 @@ export function VoronoiCoverageMap({
   const markersLayer = useRef<L.LayerGroup | null>(null);
   const simLayer = useRef<L.LayerGroup | null>(null);
   const suggestionsLayer = useRef<L.LayerGroup | null>(null);
-  // Marcadores/círculos de sugerencias geométricas, en el mismo orden que
-  // `suggestedLocations`, para que el efecto de Snap to City pueda moverlos
-  // (setLatLng anima vía la transición CSS de .coverage-suggestion-marker) y
-  // actualizar su tooltip sin reconstruir toda la capa.
+  const boundaryLayer = useRef<L.LayerGroup | null>(null);
+  const drawLayer = useRef<L.LayerGroup | null>(null);
+
+  // Refs para manejar el estado de dibujo sin stale closures en los event handlers.
+  const isDrawingRef = useRef(isDrawingBoundary);
+  const draftVerticesRef = useRef<[number, number][]>([]);
+  const onBoundaryCompleteRef = useRef(onBoundaryComplete);
+  const onBoundaryCancelRef = useRef(onBoundaryCancel);
+  const onSelectRef = useRef(onSelectBranch);
+
+  useEffect(() => { isDrawingRef.current = isDrawingBoundary; }, [isDrawingBoundary]);
+  useEffect(() => { onBoundaryCompleteRef.current = onBoundaryComplete; }, [onBoundaryComplete]);
+  useEffect(() => { onBoundaryCancelRef.current = onBoundaryCancel; }, [onBoundaryCancel]);
+  useEffect(() => { onSelectRef.current = onSelectBranch; }, [onSelectBranch]);
+
   const suggestionMarkersRef = useRef<
     { marker: L.Marker; circle: L.Circle | null; loc: SuggestedLocation }[]
   >([]);
-  const onSelectRef = useRef(onSelectBranch);
-  useEffect(() => {
-    onSelectRef.current = onSelectBranch;
-  }, [onSelectBranch]);
 
   // Inicializar el mapa una sola vez.
   useEffect(() => {
@@ -112,8 +139,9 @@ export function VoronoiCoverageMap({
     markersLayer.current = L.layerGroup().addTo(map);
     simLayer.current = L.layerGroup().addTo(map);
     suggestionsLayer.current = L.layerGroup().addTo(map);
+    boundaryLayer.current = L.layerGroup().addTo(map);
+    drawLayer.current = L.layerGroup().addTo(map);
 
-    // Responsive: re-ajustar el tamaño del mapa cuando cambia el contenedor.
     const ro = new ResizeObserver(() => map.invalidateSize());
     ro.observe(containerRef.current);
 
@@ -123,6 +151,120 @@ export function VoronoiCoverageMap({
       mapRef.current = null;
     };
   }, []);
+
+  // Modo dibujo: click para agregar vértices, preview del polígono borrador.
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = drawLayer.current;
+    if (!map || !layer) return;
+
+    if (!isDrawingBoundary) {
+      map.getContainer().style.cursor = "";
+      layer.clearLayers();
+      draftVerticesRef.current = [];
+      return;
+    }
+
+    map.getContainer().style.cursor = "crosshair";
+    draftVerticesRef.current = [];
+
+    const redrawDraft = (verts: [number, number][]) => {
+      layer.clearLayers();
+      if (verts.length === 0) return;
+      // Vértices como marcadores pequeños.
+      verts.forEach(([lat, lng]) => {
+        L.circleMarker([lat, lng], {
+          radius: 5,
+          color: "#3b82f6",
+          fillColor: "#3b82f6",
+          fillOpacity: 1,
+          weight: 2,
+        }).addTo(layer);
+      });
+      // Preview del polígono (cerrado si ≥3 vértices).
+      if (verts.length >= 2) {
+        L.polygon(verts, {
+          color: "#3b82f6",
+          weight: 2,
+          dashArray: "6 4",
+          fillColor: "#3b82f6",
+          fillOpacity: 0.1,
+        }).addTo(layer);
+      }
+    };
+
+    const handleClick = (e: L.LeafletMouseEvent) => {
+      if (!isDrawingRef.current) return;
+      const pt: [number, number] = [e.latlng.lat, e.latlng.lng];
+      const newVerts = [...draftVerticesRef.current, pt];
+      draftVerticesRef.current = newVerts;
+      redrawDraft(newVerts);
+    };
+
+    map.on("click", handleClick);
+    return () => { map.off("click", handleClick); };
+  }, [isDrawingBoundary]);
+
+  // Teclado: Enter cierra el polígono, Esc cancela, Cmd/Ctrl+Z deshace.
+  useEffect(() => {
+    if (!isDrawingBoundary) return;
+
+    const handler = (e: KeyboardEvent) => {
+      if (!isDrawingRef.current) return;
+      if (e.key === "Escape") {
+        draftVerticesRef.current = [];
+        drawLayer.current?.clearLayers();
+        onBoundaryCancelRef.current?.();
+      } else if (e.key === "Enter" && draftVerticesRef.current.length >= 3) {
+        const verts = [...draftVerticesRef.current];
+        draftVerticesRef.current = [];
+        drawLayer.current?.clearLayers();
+        onBoundaryCompleteRef.current?.(verts);
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "z") {
+        const prev = draftVerticesRef.current.slice(0, -1);
+        draftVerticesRef.current = prev;
+        // Redibujar el draft con el último vértice eliminado.
+        const layer = drawLayer.current;
+        if (!layer) return;
+        layer.clearLayers();
+        if (prev.length >= 2) {
+          prev.forEach(([lat, lng]) => {
+            L.circleMarker([lat, lng], {
+              radius: 5, color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 1, weight: 2,
+            }).addTo(layer);
+          });
+          L.polygon(prev, {
+            color: "#3b82f6", weight: 2, dashArray: "6 4", fillColor: "#3b82f6", fillOpacity: 0.1,
+          }).addTo(layer);
+        } else if (prev.length === 1) {
+          L.circleMarker([prev[0][0], prev[0][1]], {
+            radius: 5, color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 1, weight: 2,
+          }).addTo(layer);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isDrawingBoundary]);
+
+  // Renderizar el polígono personalizado confirmado (borde azul permanente).
+  useEffect(() => {
+    const layer = boundaryLayer.current;
+    if (!layer) return;
+    layer.clearLayers();
+    if (!customBoundary || customBoundary.length < 3) return;
+
+    L.polygon(customBoundary, {
+      color: "#2563eb",
+      weight: 2.5,
+      dashArray: "8 5",
+      fillColor: "#2563eb",
+      fillOpacity: 0.06,
+    })
+      .bindTooltip("Área personalizada activa", { sticky: true })
+      .addTo(layer);
+  }, [customBoundary]);
 
   // Redibujar celdas + marcadores cuando cambian los datos o el resaltado.
   useEffect(() => {
@@ -147,9 +289,6 @@ export function VoronoiCoverageMap({
             ? GAP_STYLE[cell.gap_severity]
             : COVERED_STYLE;
         const isHighlighted = cell.branch_id === highlightedBranchId;
-        // rings puede contener varios fragmentos desconectados (p.ej.
-        // continente + Tierra del Fuego); L.polygon los renderiza como una
-        // sola layer con un anillo por fragmento.
         const poly = L.polygon(rings, {
           color: style.stroke,
           fillColor: style.fill,
@@ -159,6 +298,7 @@ export function VoronoiCoverageMap({
           dashArray: cell.is_gap ? "6, 5" : undefined,
         });
         poly.on("click", () => {
+          if (isDrawingRef.current) return; // ignorar clicks de dibujo
           onSelectRef.current?.(cell.branch_id === highlightedBranchId ? null : cell.branch_id);
         });
         poly.bindTooltip(
@@ -170,7 +310,6 @@ export function VoronoiCoverageMap({
         poly.addTo(cLayer);
       }
 
-      // Marcador de la sucursal.
       const branchIcon = L.divIcon({
         html: `<div style="width:28px;height:28px;border-radius:50%;background:#1e3a5f;border:2px solid white;box-shadow:0 1px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center">${FACTORY_SVG}</div>`,
         className: "",
@@ -181,7 +320,6 @@ export function VoronoiCoverageMap({
         .bindPopup(`<strong>${cell.branch_name}</strong><br/>${cell.province}`)
         .addTo(mLayer);
 
-      // Estrella de sugerencia en celdas con gap.
       if (cell.is_gap && cell.suggestion) {
         const sevColor = cell.gap_severity
           ? GAP_STYLE[cell.gap_severity].stroke
@@ -203,13 +341,10 @@ export function VoronoiCoverageMap({
     if (allLatLngs.length > 0) {
       map.fitBounds(L.latLngBounds(allLatLngs), { padding: [30, 30] });
     }
-    // Asegurar el cálculo correcto tras el primer render del contenedor.
     setTimeout(() => map.invalidateSize(), 0);
   }, [cells, highlightedBranchId]);
 
-  // Círculo de previsualización del simulador de cobertura: radio = sqrt(área/π)
-  // convertido de km a metros (Leaflet espera metros). Si hay una sucursal
-  // resaltada, se dibuja solo sobre esa; si no, uno por sucursal.
+  // Círculo de previsualización del simulador.
   useEffect(() => {
     const sLayer = simLayer.current;
     if (!sLayer) return;
@@ -234,12 +369,7 @@ export function VoronoiCoverageMap({
     });
   }, [cells, highlightedBranchId, simulationAreaKm2]);
 
-  // Ubicaciones sugeridas para nuevas sucursales: ícono de sucursal "apagado"
-  // (mismo ícono que las sucursales reales, en escala de grises y con opacidad
-  // reducida) más un círculo gris punteado con el mismo radio del simulador,
-  // derivados de los gaps críticos del último diagnóstico. Se guarda cada
-  // marcador/círculo en suggestionMarkersRef para que el efecto de Snap to
-  // City pueda moverlos sin reconstruir la capa.
+  // Ubicaciones sugeridas para nuevas sucursales.
   useEffect(() => {
     const sgLayer = suggestionsLayer.current;
     if (!sgLayer) return;
@@ -280,18 +410,13 @@ export function VoronoiCoverageMap({
     });
   }, [suggestedLocations, simulationAreaKm2]);
 
-  // "Aterrizar sugerencias en ciudades reales": mueve cada marcador (y su
-  // círculo, si lo tiene) a la coordenada real devuelta por Snap to City y
-  // actualiza el tooltip. setLatLng sobre el marcador existente anima la
-  // transición vía la clase CSS .coverage-suggestion-marker (transform).
+  // Snap to City: mueve marcadores a ciudades reales.
   useEffect(() => {
     if (!snappedCities || snappedCities.length === 0) return;
 
     suggestionMarkersRef.current.forEach(({ marker, circle, loc }, i) => {
       const snapped = snappedCities[i];
-      if (!snapped) return;
-
-      if (!snapped.is_snapped) return; // mantiene gris (#808080), sin cambios
+      if (!snapped || !snapped.is_snapped) return;
 
       const latLng: L.LatLngTuple = [snapped.lat, snapped.lng];
       marker.setLatLng(latLng);
