@@ -77,7 +77,7 @@ function SortableStop({
       ref={setNodeRef}
       style={style}
       className={`flex items-start gap-3 p-3 rounded-lg border dark:bg-gray-800 bg-white ${
-        outside ? "border-amber-300 bg-amber-50/40" : "dark:border-gray-700 border-slate-200"
+        outside ? "border-amber-300 bg-amber-50/40 dark:border-amber-500/40 dark:bg-amber-500/10" : "dark:border-gray-700 border-slate-200"
       } ${isDragging ? "shadow-lg" : ""}`}
     >
       {/* Drag handle */}
@@ -103,7 +103,7 @@ function SortableStop({
           <span className="font-mono text-xs font-semibold dark:text-gray-300 text-slate-700">{id}</span>
           {shipment?.priority && <PriorityBadge priority={shipment.priority} />}
           {shipment?.is_fragile && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300 font-medium">
               FRÁGIL
             </span>
           )}
@@ -125,7 +125,7 @@ function SortableStop({
             </>
           )}
           {outside && eta && (
-            <span className="flex items-center gap-1 text-amber-700 font-medium">
+            <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium">
               <AlertTriangle className="w-3 h-3" />
               {Math.abs(eta.windowDeviationMin).toFixed(0)} min{" "}
               {eta.windowDeviationMin > 0 ? "tarde" : "temprano"}
@@ -500,7 +500,7 @@ export function EditDriverStopsModal({
             <p className="text-xs dark:text-gray-400 text-slate-500 mt-0.5">
               {stops.length} paradas · Arrastrá para reordenar
               {manuallyReordered && (
-                <span className="ml-2 text-amber-600 font-medium">· Orden manual</span>
+                <span className="ml-2 text-amber-600 dark:text-amber-400 font-medium">· Orden manual</span>
               )}
             </p>
             {/* Mode selector */}
@@ -561,7 +561,7 @@ export function EditDriverStopsModal({
                 </div>
               )}
               {planDateLabel && selectedDate === planDate && (
-                <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5 dark:text-amber-300 dark:bg-amber-500/10 dark:border-amber-500/30">
                   <CalendarClock className="w-3.5 h-3.5 shrink-0" />
                   Programado para {planDateLabel}
                 </div>
@@ -584,7 +584,7 @@ export function EditDriverStopsModal({
                 <span>{durationStr}</span>
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                <span className={`font-medium ${violations === 0 ? "text-emerald-700" : "text-amber-700"}`}>
+                <span className={`font-medium ${violations === 0 ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>
                   {eta.stops.length - violations}/{eta.stops.length} en ventana
                 </span>
                 <span className="dark:text-gray-400 text-slate-500">Regresa {fmtHHMM(eta.returnTime)}</span>
@@ -628,7 +628,7 @@ export function EditDriverStopsModal({
             Restaurar óptimo
           </Button>
           <div className="flex items-center gap-3">
-            {error && <p className="text-xs text-red-600">{error}</p>}
+            {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
             <Button
               variant="outline"
               onClick={onClose}

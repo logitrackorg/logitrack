@@ -218,7 +218,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
         <div className="max-w-sm w-full text-center">
           {permChecking ? (
             <>
-              <Loader2 className="w-10 h-10 text-blue-400 mx-auto mb-5 animate-spin" />
+              <Loader2 className="w-10 h-10 text-[var(--brand)] mx-auto mb-5 animate-spin" />
               <h1 className="text-lg font-bold text-white mb-2">Verificando permisos</h1>
               <p className="text-sm text-slate-400 leading-relaxed">
                 Necesitamos acceso al GPS y al micrófono para iniciar tu test de seguridad.
@@ -235,11 +235,11 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
 
               <div className="flex flex-col gap-2 mb-6 text-left">
                 <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-[var(--border)]">
-                  <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
+                  <MapPin className="w-4 h-4 text-[var(--brand)] shrink-0" />
                   <span className="text-xs text-slate-300">Ubicación (GPS) — seguimiento de ruta</span>
                 </div>
                 <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-[var(--border)]">
-                  <Mic className="w-4 h-4 text-blue-400 shrink-0" />
+                  <Mic className="w-4 h-4 text-[var(--brand)] shrink-0" />
                   <span className="text-xs text-slate-300">Micrófono — prueba de voz del test</span>
                 </div>
               </div>
@@ -311,7 +311,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
           size="icon"
           onClick={() => setShowInfo(true)}
           aria-label="Información sobre los datos recopilados"
-          className="rounded-full text-slate-400 hover:text-blue-300 hover:bg-slate-700/60"
+                className="rounded-full text-slate-400 hover:text-[var(--brand)] hover:bg-slate-700/60"
         >
           <Info className="w-4 h-4" />
         </Button>
@@ -333,7 +333,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
 
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-300 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-[var(--brand)]/20 text-[var(--brand)] flex items-center justify-center shrink-0">
               <Moon className="w-5 h-5" />
             </div>
             <div>
@@ -355,7 +355,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
                 value={horasSueno}
                 onChange={(e) => setHorasSueno(e.target.value)}
                 placeholder="0 – 10"
-                className="w-full h-12 px-4 rounded-xl bg-slate-800 border border-slate-600 text-white text-base placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full h-12 px-4 rounded-xl bg-slate-800 border border-slate-600 text-white text-base placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--brand)] focus:border-[var(--brand)]"
               />
               {horasSueno !== "" && !horasValid && (
                 <p className="mt-1.5 text-xs text-rose-400">Ingresá un valor entre 0 y 10.</p>
@@ -363,7 +363,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
             </div>
           ) : (
             <div className="mb-6 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-800/60 border border-[var(--border)]">
-              <Moon className="w-4 h-4 text-blue-400 shrink-0" />
+              <Moon className="w-4 h-4 text-[var(--brand)] shrink-0" />
               <p className="text-xs text-slate-400 leading-snug">
                 Horas de sueño ya registradas para este día logístico.
               </p>
@@ -463,7 +463,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
           <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-[var(--sidebar-bg)] border border-[var(--border)] shadow-2xl flex flex-col max-h-[90dvh]">
             <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-[var(--border)] shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-300 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-[var(--brand)]/20 text-[var(--brand)] flex items-center justify-center shrink-0">
                   <Shield className="w-4 h-4" />
                 </div>
                 <h2 className="text-sm font-bold text-white leading-snug">
@@ -505,11 +505,11 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
                 </ul>
               </Section>
 
-              <div className="rounded-lg border border-blue-800/50 bg-blue-900/20 px-3 py-2.5">
-                <p className="text-[11px] text-blue-300 font-semibold mb-1">
+              <div className="rounded-lg border border-[var(--brand)]/50 bg-[var(--brand)]/10 px-3 py-2.5">
+                <p className="text-[11px] text-[var(--brand)] font-semibold mb-1">
                   Ley N.º 25.326 — Art. 6 (Argentina)
                 </p>
-                <p className="text-[11px] text-blue-400 leading-relaxed">
+                <p className="text-[11px] text-[var(--brand)]/80 leading-relaxed">
                   Los datos se recopilan con tu consentimiento expreso, son utilizados exclusivamente para los fines informados y no serán cedidos a terceros sin autorización. Tenés derecho a acceder, rectificar y suprimir tus datos en cualquier momento comunicándote con el responsable del tratamiento.
                 </p>
               </div>

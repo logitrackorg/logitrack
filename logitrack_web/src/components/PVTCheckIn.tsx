@@ -213,7 +213,7 @@ export function PVTCheckIn({ onDone }: Props) {
   // ── render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col">
+    <div className="fixed inset-0 z-[3000] bg-[var(--sidebar-bg)]/95 backdrop-blur-sm flex flex-col">
 
       {/* ── Pantalla de instrucciones ──────────────────────────────────── */}
       {phase === "instructions" && (
@@ -233,7 +233,7 @@ export function PVTCheckIn({ onDone }: Props) {
           <div className="flex-1 overflow-y-auto px-4 pb-8">
             <div className="max-w-md mx-auto pt-4">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-yellow-500/20 text-yellow-300 flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-[var(--brand)]/20 text-[var(--brand)] flex items-center justify-center shrink-0">
                   <Zap className="w-5 h-5" />
                 </div>
                 <div>

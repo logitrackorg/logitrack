@@ -922,9 +922,9 @@ function InterBranchTripView() {
       points.forEach((p, i) => {
         let bg = "var(--sidebar-bg)", content = "📍";
         if (i > 0) {
-          if (p.completed) { bg = "#10b981"; content = "✓"; }
-          else if (p.current) { bg = "#f59e0b"; content = "📍"; }
-          else { bg = "#6366f1"; content = String(i); }
+          if (p.completed) { bg = "var(--ok)"; content = "✓"; }
+          else if (p.current) { bg = "var(--warn)"; content = "📍"; }
+          else { bg = "var(--brand)"; content = String(i); }
         }
         L.marker([p.lat, p.lng], { icon: icon(bg, content) })
           .addTo(map)
@@ -960,7 +960,7 @@ function InterBranchTripView() {
               if (legData.code !== "Ok" || !legData.routes?.[0]) {
                 // fallback línea recta para este segmento
                 L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
-              color: points[i + 1].completed ? "#10b981" : "#6366f1",
+              color: points[i + 1].completed ? "var(--ok)" : "var(--brand)",
                   weight: 3,
                   dashArray: points[i + 1].completed ? undefined : "8 6",
                 }).addTo(map);
@@ -970,7 +970,7 @@ function InterBranchTripView() {
                 (c: number[]) => [c[1], c[0]] as [number, number],
               );
               L.polyline(coords, {
-                color: points[i + 1].completed ? "#10b981" : "#6366f1",
+                color: points[i + 1].completed ? "var(--ok)" : "var(--brand)",
                 weight: 3,
                 opacity: 0.8,
                 dashArray: points[i + 1].completed ? undefined : "8 6",
@@ -982,7 +982,7 @@ function InterBranchTripView() {
           // fallback: líneas rectas si OSRM no responde
           for (let i = 0; i < points.length - 1; i++) {
             L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
-              color: points[i + 1].completed ? "#10b981" : "#6366f1",
+              color: points[i + 1].completed ? "var(--ok)" : "var(--brand)",
               weight: 3,
               dashArray: points[i + 1].completed ? undefined : "8 6",
             }).addTo(map);
@@ -1531,7 +1531,7 @@ function ShipmentCard({
               <span className="break-words">{fullAddress}</span>
             </p>
           </div>
-          {!isCompleted && <ChevronRight className="w-5 h-5 text-slate-300 mt-1.5 shrink-0" />}
+          {!isCompleted && <ChevronRight className="w-5 h-5 text-slate-300 dark:text-gray-500 mt-1.5 shrink-0" />}
         </div>
 
         {!isCompleted && (
@@ -1642,7 +1642,7 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
           </p>
           {qrLoading ? (
             <div className="flex justify-center py-6">
-              <div className="w-8 h-8 border-3 border-amber-400 border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-3 border-amber-400 dark:border-amber-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             qrBase64 && (
@@ -1713,7 +1713,7 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
                   <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">Rechazado por destinatario</p>
                 )}
               </div>
-              <ChevronRight className="w-5 h-5 text-slate-300 shrink-0" />
+              <ChevronRight className="w-5 h-5 text-slate-300 dark:text-gray-500 shrink-0" />
             </Card>
           );
         })}
@@ -1809,10 +1809,10 @@ function StepperBar({
             dotCls = "bg-[var(--sidebar-bg)]";
             dotContent = <Truck className="w-3.5 h-3.5 text-white" />;
           } else if (isCompleted) {
-            dotCls = "bg-emerald-500";
+            dotCls = "bg-emerald-500 dark:bg-emerald-600";
             dotContent = <CheckCircle2 className="w-3.5 h-3.5 text-white" />;
           } else if (isCurrent) {
-            dotCls = "bg-sky-500";
+            dotCls = "bg-sky-500 dark:bg-sky-600";
             dotContent = <MapPin className="w-3.5 h-3.5 text-white" />;
           }
 
@@ -1844,7 +1844,7 @@ function StepperBar({
                 <div
                   className={`flex-1 h-[3px] mt-[16px] mx-0.5 rounded-full ${
                     isCompleted
-                      ? "bg-emerald-500"
+                      ? "bg-emerald-500 dark:bg-emerald-600"
                       : isCurrent
                         ? "bg-gradient-to-r from-emerald-500 to-[var(--border)]"
                         : "bg-[var(--border)]"
@@ -1954,7 +1954,7 @@ function HeroNextStop({
             href={mapsLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full h-14 rounded-xl bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            className="w-full h-14 rounded-xl bg-[var(--brand)] hover:brightness-110 active:brightness-90 text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2"
           >
             <Navigation className="w-5 h-5" />
             Navegar con Maps
@@ -2093,7 +2093,7 @@ function QRModal({
 
               {/* Indicador de espera */}
               <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                <div className="w-2 h-2 rounded-full bg-sky-400 animate-pulse shrink-0" />
+                <div className="w-2 h-2 rounded-full bg-sky-400 dark:bg-sky-500 animate-pulse shrink-0" />
                 Esperando que el operador escanee…
               </div>
 

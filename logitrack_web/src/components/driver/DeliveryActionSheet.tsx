@@ -334,7 +334,7 @@ export function DeliveryActionSheet({
         <Button
           variant="outline"
           onClick={() => onUseContingency?.(true)}
-          className="mt-3 h-14 rounded-xl border-2 border-amber-300 bg-amber-50 text-amber-800 text-base font-bold w-full hover:bg-amber-100"
+          className="mt-3 h-14 rounded-xl border-2 border-amber-300 bg-amber-50 text-amber-800 text-base font-bold w-full hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20"
         >
           Entregar con DNI
         </Button>

@@ -39,7 +39,7 @@ export function NextStopCard({
     return (
       <div className="px-4 pb-4">
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-sm p-4 text-center">
-          <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0 mx-auto mb-2" />
+          <CheckCircle2 className="w-6 h-6 text-emerald-500 dark:text-emerald-400 shrink-0 mx-auto mb-2" />
           <p className="text-sm font-bold text-gray-900 dark:text-gray-100">¡Ruta completada!</p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Todas las paradas registradas.</p>
         </div>
@@ -92,7 +92,7 @@ export function NextStopCard({
                 href={singleUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 h-9 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-semibold cursor-pointer border-none transition-all flex items-center justify-center gap-1.5 no-underline focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:translate-y-px"
+                className="flex-1 h-9 bg-[var(--brand)] hover:brightness-110 text-white rounded-xl text-xs font-semibold cursor-pointer border-none transition-all flex items-center justify-center gap-1.5 no-underline focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2 active:translate-y-px"
               >
                 <Navigation className="w-4 h-4" />
                 Navegar
@@ -126,7 +126,7 @@ export function NextStopCard({
               href={singleUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-3 h-9 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-semibold cursor-pointer border-none transition-all flex items-center justify-center gap-1 no-underline focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:translate-y-px"
+              className="mt-3 h-9 bg-[var(--brand)] hover:brightness-110 text-white rounded-lg text-xs font-semibold cursor-pointer border-none transition-all flex items-center justify-center gap-1 no-underline focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2 active:translate-y-px"
             >
               <Navigation className="w-3.5 h-3.5" />
               Navegar
@@ -144,7 +144,7 @@ export function NextStopCard({
           <Map className="w-3 h-3 shrink-0" />
           Ruta completa en Google Maps
           {truncated && (
-            <span className="text-[10px] text-gray-400 ml-1">(9 primeras)</span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-1">(9 primeras)</span>
           )}
         </a>
       </div>

@@ -213,7 +213,7 @@ export function DriverShipmentDetail() {
             <Phone size={15} />Llamar
           </a>
           <a href={waHref(phone)} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-all no-underline cursor-pointer">
-            <MessageCircle size={15} className="text-emerald-500" />WhatsApp
+            <MessageCircle size={15} className="text-emerald-500 dark:text-emerald-400" />WhatsApp
           </a>
         </div>
       </div>
