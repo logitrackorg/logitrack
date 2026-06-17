@@ -1,0 +1,21 @@
+logitrack_web/android/app/capacitor.build.gradle
+  s_55b428161ac81b::t_666c1c3d86586f 12
+logitrack_web/android/capacitor.settings.gradle
+  s_55b428161ac81b::t_666c1c3d86586f 4-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "087bf0534878692f0f981199dfabebad3cd010ab",
+  "prompts": {},
+  "sessions": {
+    "s_55b428161ac81b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31ac38c4-2222-400c-bd94-70c16a23c912",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
