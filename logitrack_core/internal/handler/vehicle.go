@@ -313,6 +313,15 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		return
 	}
 
+	// US-02 CA-03: un envío en Entrada o Revisión debe moverse a Salida antes de despacharlo.
+	if shipment.CurrentZone != nil {
+		switch model.BranchZoneType(*shipment.CurrentZone) {
+		case model.ZoneEntrada, model.ZoneRevision:
+			c.JSON(http.StatusConflict, gin.H{"error": "El envío debe ser movido a Salida antes de despacharlo"})
+			return
+		}
+	}
+
 	allowedStatuses := map[model.Status]bool{
 		model.StatusAtOriginHub:    true,
 		model.StatusAtHub:          true,
@@ -600,9 +609,10 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 			_ = err
 		}
 
-		// US-02: asignar zona Entrada automáticamente al llegar a la sucursal de destino
+		// US-02: asignar zona Entrada automáticamente al llegar a la sucursal de destino.
+		// Recepción automática del sistema — no sujeta a validación de transiciones de zona.
 		if h.branchZoneSvc != nil && destID != "" {
-			if err := h.branchZoneSvc.MoveShipment(tid, user.Username, destID, "Recepción automática al finalizar viaje", model.ZoneEntrada, user.Role); err != nil {
+			if err := h.branchZoneSvc.AssignToEntrada(tid, destID, user.Username); err != nil {
 				_ = err
 			}
 		}

@@ -26,7 +26,7 @@ const FIELDS: FieldDef[] = [
 ];
 
 const inputClass =
-  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all w-36 tabular-nums";
+  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all w-36 tabular-nums";
 
 function formatHint(value: number, fmt: FieldDef["format"]): string {
   if (fmt === "currency") return `$${value.toLocaleString("es-AR")}`;
@@ -107,7 +107,7 @@ export function PricingConfig() {
                     }
                     className={inputClass}
                   />
-                  <span className="text-xs font-semibold text-[#1e3a5f] tabular-nums">{formatHint(draft[field.key], field.format)}</span>
+                  <span className="text-xs font-semibold text-[var(--sidebar-bg)] tabular-nums">{formatHint(draft[field.key], field.format)}</span>
                 </div>
               </div>
             ))}
@@ -130,7 +130,7 @@ export function PricingConfig() {
               <button
                 onClick={handleSave}
                 disabled={saving || !isDirty}
-                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+                className="h-10 px-5 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
               >
                 {saving ? "Guardando…" : "Guardar cambios"}
               </button>

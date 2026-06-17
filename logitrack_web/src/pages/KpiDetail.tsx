@@ -33,7 +33,7 @@ const statusLabels: Record<string, string> = {
 const issueStatuses = ["delivery_failed", "lost", "destroyed"];
 
 function Skeleton({ className }: { className?: string }) {
-  return <div className={`animate-pulse bg-slate-200 rounded-lg ${className ?? ""}`} />;
+  return <div className={`animate-pulse dark:bg-gray-700 bg-slate-200 rounded-lg ${className ?? ""}`} />;
 }
 
 export function KpiDetail() {
@@ -130,22 +130,22 @@ export function KpiDetail() {
         </Card>
       ) : entries.length === 0 ? (
         <Card className="p-10 text-center">
-          <p className="text-sm text-slate-500">No hay datos para el período seleccionado.</p>
+          <p className="text-sm dark:text-gray-400 text-slate-500">No hay datos para el período seleccionado.</p>
         </Card>
       ) : (
         <>
-          <div className="mb-4 text-sm text-slate-600">
-            Total: <strong className="text-slate-900">{total}</strong> envíos
+          <div className="mb-4 text-sm dark:text-gray-400 text-slate-600">
+            Total: <strong className="dark:text-gray-100 text-slate-900">{total}</strong> envíos
           </div>
 
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50/30 text-left border-b border-slate-100">
-                    <th className="px-5 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Sucursal</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Cantidad</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider" />
+                  <tr className="dark:bg-gray-800/50 bg-slate-50/30 text-left border-b dark:border-gray-700 border-slate-100">
+                    <th className="px-5 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Sucursal</th>
+                    <th className="px-5 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Cantidad</th>
+                    <th className="px-5 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider" />
                   </tr>
                 </thead>
                 <tbody>
@@ -157,10 +157,10 @@ export function KpiDetail() {
                       <tr
                         key={branchID}
                         onClick={() => navigate(`/?status=${statusQuery}&branch_id=${branchID}`)}
-                        className="border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors"
+                        className="border-b dark:border-gray-700 border-slate-100 cursor-pointer dark:hover:bg-gray-700 hover:bg-slate-50 transition-colors"
                       >
-                        <td className="px-5 py-3 text-slate-700 font-medium">{branchName}</td>
-                        <td className="px-5 py-3 text-slate-900 font-semibold">{count}</td>
+                        <td className="px-5 py-3 dark:text-gray-300 text-slate-700 font-medium">{branchName}</td>
+                        <td className="px-5 py-3 dark:text-gray-100 text-slate-900 font-semibold">{count}</td>
                         <td className="px-5 py-3 text-right">
                           <span className="text-xs text-blue-600 font-semibold">Ver envíos →</span>
                         </td>

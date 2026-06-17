@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { AlertCircle, CheckCircle2, Minus, Plus, Clock, RotateCcw, ShieldCheck, Mail } from "lucide-react";
+import { AlertCircle, CheckCircle2, Minus, Plus, Clock, RotateCcw, ShieldCheck, Mail, Map as MapIcon } from "lucide-react";
 import { systemConfigApi, type SystemConfig as SystemConfigType } from "../api/systemConfig";
 import { clockApi, type ClockState } from "../api/clock";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
@@ -147,7 +147,8 @@ export function SystemConfig() {
       draft.whatsapp_notifications_enabled !== config.whatsapp_notifications_enabled ||
       draft.max_reschedules !== config.max_reschedules ||
       draft.max_reschedule_days !== config.max_reschedule_days ||
-      draft.two_fa_cooldown_minutes !== config.two_fa_cooldown_minutes
+      draft.two_fa_cooldown_minutes !== config.two_fa_cooldown_minutes ||
+      draft.max_coverage_area_km2 !== config.max_coverage_area_km2
     );
 
   return (
@@ -183,7 +184,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.max_delivery_attempts}
                   </span>
                   <button
@@ -208,7 +209,7 @@ export function SystemConfig() {
                         d ? { ...d, max_delivery_attempts: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
               </div>
@@ -246,7 +247,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.draft_retention_days}
                   </span>
                   <button
@@ -271,7 +272,7 @@ export function SystemConfig() {
                         d ? { ...d, draft_retention_days: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
                 <p className="text-xs text-slate-400">
@@ -297,7 +298,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.draft_purge_days}
                   </span>
                   <button
@@ -322,7 +323,7 @@ export function SystemConfig() {
                         d ? { ...d, draft_purge_days: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
                 <p className="text-xs text-slate-400">
@@ -358,7 +359,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.pickup_deadline_days === 0 ? "∞" : draft.pickup_deadline_days}
                   </span>
                   <button
@@ -383,7 +384,7 @@ export function SystemConfig() {
                         d ? { ...d, pickup_deadline_days: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
                 {draft.pickup_deadline_days === 0 && (
@@ -416,11 +417,10 @@ export function SystemConfig() {
                     }
                   />
                   <div
-                    className={`w-11 h-6 rounded-full transition-colors ${draft.email_notifications_enabled ? "bg-[#1e3a5f]" : "bg-slate-200"}`}
+                    className={`w-11 h-6 rounded-full transition-colors ${draft.email_notifications_enabled ? "bg-[var(--sidebar-bg)]" : "bg-slate-200"}`}
                   />
                   <div
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform ${draft.email_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
-                    style={{ background: "#fff" }}
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform bg-white ${draft.email_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
                   />
                 </div>
                 <span className="text-sm font-semibold text-slate-700">Notificaciones por email</span>
@@ -437,11 +437,10 @@ export function SystemConfig() {
                     }
                   />
                   <div
-                    className={`w-11 h-6 rounded-full transition-colors ${draft.whatsapp_notifications_enabled ? "bg-[#1e3a5f]" : "bg-slate-200"}`}
+                    className={`w-11 h-6 rounded-full transition-colors ${draft.whatsapp_notifications_enabled ? "bg-[var(--sidebar-bg)]" : "bg-slate-200"}`}
                   />
                   <div
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform ${draft.whatsapp_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
-                    style={{ background: "#fff" }}
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform bg-white ${draft.whatsapp_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
                   />
                 </div>
                 <span className="text-sm font-semibold text-slate-700">Notificaciones por WhatsApp</span>
@@ -484,7 +483,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.max_reschedules}
                   </span>
                   <button
@@ -509,7 +508,7 @@ export function SystemConfig() {
                         d ? { ...d, max_reschedules: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
               </div>
@@ -558,7 +557,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.max_reschedule_days}
                   </span>
                   <button
@@ -583,7 +582,7 @@ export function SystemConfig() {
                         d ? { ...d, max_reschedule_days: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
               </div>
@@ -625,7 +624,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[60px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[60px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.two_fa_cooldown_minutes} min
                   </span>
                   <button
@@ -650,7 +649,7 @@ export function SystemConfig() {
                         d ? { ...d, two_fa_cooldown_minutes: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
               </div>
@@ -668,6 +667,54 @@ export function SystemConfig() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Detector de falta de sucursal: umbral de área de cobertura */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <MapIcon className="w-4 h-4 text-slate-500" />
+                <CardTitle>Cobertura de sucursales</CardTitle>
+              </div>
+              <CardDescription>
+                Área máxima de servicio (en km²) que puede cubrir una sucursal antes de marcarse como
+                zona sub-cubierta en el detector de falta de sucursal. El diagrama de cobertura abarca
+                todo el territorio nacional (~6,7 millones de km²), por lo que las celdas suelen medir
+                cientos de miles o millones de km². Cuanto menor el umbral, más exigente es la
+                detección de gaps. Rango permitido: 100–10.000.000 km².
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
+                  Área máxima por sucursal (km²)
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={100}
+                    max={10000000}
+                    step={1000}
+                    value={draft.max_coverage_area_km2}
+                    onChange={(e) =>
+                      setDraft((d) =>
+                        d ? { ...d, max_coverage_area_km2: Number(e.target.value) } : d
+                      )
+                    }
+                    className="w-40 px-3 py-2 rounded-lg border border-slate-200 bg-white text-lg font-bold text-[var(--sidebar-bg)] tabular-nums outline-none"
+                  />
+                  <span className="text-sm text-slate-500">km²</span>
+                </div>
+              </div>
+              <div className="mt-3 text-xs text-slate-500">
+                <p>
+                  Las celdas de cobertura que superen <strong>{draft.max_coverage_area_km2.toLocaleString("es-AR")} km²</strong> se
+                  marcarán como gap (leve / moderado / crítico según el múltiplo del umbral) en la
+                  pestaña <strong>Cobertura</strong> del dashboard.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Save / discard — always below all config cards */}
           <div className="space-y-2">
             {error && (
@@ -686,7 +733,7 @@ export function SystemConfig() {
               <button
                 onClick={handleSave}
                 disabled={saving || !isDirty}
-                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+                className="h-10 px-5 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
               >
                 {saving ? "Guardando…" : "Guardar cambios"}
               </button>
@@ -707,7 +754,7 @@ export function SystemConfig() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Clock className="w-5 h-5 text-[#1e3a5f]" />
+            <Clock className="w-5 h-5 text-[var(--sidebar-bg)]" />
             Reloj del sistema (testing)
           </CardTitle>
           <CardDescription>
@@ -729,7 +776,7 @@ export function SystemConfig() {
               Hora del sistema
             </div>
             <div
-              className={`text-3xl font-extrabold tabular-nums ${clockState?.is_active ? "text-rose-700" : "text-[#1e3a5f]"
+              className={`text-3xl font-extrabold tabular-nums ${clockState?.is_active ? "text-rose-700" : "text-[var(--sidebar-bg)]"
                 }`}
             >
               {displayedSystemNow ? fmtDateTimeSeconds(displayedSystemNow) : "—"}
@@ -751,13 +798,13 @@ export function SystemConfig() {
                 value={overrideInput}
                 onChange={(e) => setOverrideInput(e.target.value)}
                 disabled={clockSaving}
-                className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all tabular-nums"
+                className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all tabular-nums"
               />
             </div>
             <button
               onClick={handleSetOverride}
               disabled={clockSaving || !overrideInput}
-              className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+              className="h-10 px-5 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
             >
               {clockSaving ? "Aplicando…" : "Aplicar override"}
             </button>

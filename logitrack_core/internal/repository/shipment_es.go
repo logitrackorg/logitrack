@@ -28,9 +28,13 @@ func (r *eventSourcedShipmentRepository) Create(cmd CreateShipmentCmd) (model.Sh
 		ID:         uuid.NewString(),
 		TrackingID: cmd.Shipment.TrackingID,
 		EventType:  model.EventShipmentCreated,
-		Payload:    model.ShipmentCreatedPayload{Shipment: cmd.Shipment, Notes: cmd.Notes},
-		ChangedBy:  cmd.ChangedBy,
-		Timestamp:  cmd.Shipment.CreatedAt,
+		Payload: model.ShipmentCreatedPayload{
+			Shipment:            cmd.Shipment,
+			Notes:               cmd.Notes,
+			SecurityKeywordHash: cmd.Shipment.SecurityKeywordHash,
+		},
+		ChangedBy: cmd.ChangedBy,
+		Timestamp: cmd.Shipment.CreatedAt,
 	}
 	if err := r.store.Append(event); err != nil {
 		return model.Shipment{}, err
@@ -82,6 +86,7 @@ func (r *eventSourcedShipmentRepository) ConfirmDraft(cmd ConfirmDraftCmd) (mode
 			Price:               cmd.Price,
 			PriceBreakdown:      cmd.PriceBreakdown,
 			SecurityKeyword:     cmd.SecurityKeyword,
+			SecurityKeywordHash: cmd.SecurityKeywordHash,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
@@ -109,6 +114,9 @@ func (r *eventSourcedShipmentRepository) UpdateStatus(cmd StatusUpdateCmd) (mode
 			DriverID:            cmd.DriverID,
 			RejectedByRecipient: cmd.RejectedByRecipient,
 			ContingencyDelivery: cmd.ContingencyDelivery,
+			DeliveryPhotoPath:   cmd.DeliveryPhotoPath,
+			DeliveryPhotoName:   cmd.DeliveryPhotoName,
+			DeliveryPhotoMime:   cmd.DeliveryPhotoMime,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
@@ -242,9 +250,11 @@ func (r *eventSourcedShipmentRepository) ConfirmPayment(cmd ConfirmPaymentCmd) (
 			OldTrackingID:       cmd.OldTrackingID,
 			NewTrackingID:       cmd.NewTrackingID,
 			Amount:              cmd.Amount,
+			Method:              cmd.Method,
 			EstimatedDeliveryAt: cmd.EstimatedDeliveryAt,
 			Prediction:          cmd.Prediction,
 			SecurityKeyword:     cmd.SecurityKeyword,
+			SecurityKeywordHash: cmd.SecurityKeywordHash,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
@@ -348,7 +358,7 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 	case model.EventStatusChanged:
 		payload := de.Payload.(model.StatusChangedPayload)
 		from := payload.FromStatus
-		return model.ShipmentEvent{
+		ev := model.ShipmentEvent{
 			ID:         de.ID,
 			TrackingID: de.TrackingID,
 			FromStatus: &from,
@@ -357,7 +367,13 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			Location:   payload.Location,
 			Notes:      payload.Notes,
 			Timestamp:  de.Timestamp,
-		}, true
+		}
+		if payload.DeliveryPhotoPath != "" {
+			ev.HasDeliveryPhoto = true
+			ev.DeliveryPhotoName = payload.DeliveryPhotoName
+			ev.DeliveryPhotoPath = payload.DeliveryPhotoPath
+		}
+		return ev, true
 
 	case model.EventShipmentCorrected:
 		payload := de.Payload.(model.ShipmentCorrectedPayload)
@@ -416,7 +432,7 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			FromStatus: &from,
 			ToStatus:   model.StatusPendingPayment,
 			ChangedBy:  de.ChangedBy,
-			Notes:      "Pago solicitado vía Mercado Pago",
+			Notes:      "Pago solicitado — pendiente de acreditación",
 			Timestamp:  de.Timestamp,
 		}, true
 
@@ -429,7 +445,7 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			FromStatus: &from,
 			ToStatus:   model.StatusAtOriginHub,
 			ChangedBy:  de.ChangedBy,
-			Notes:      fmt.Sprintf("Pago aprobado — confirmado desde borrador %s", payload.OldTrackingID),
+			Notes:      fmt.Sprintf("Pago confirmado %s — desde borrador %s", paymentMethodLabel(payload.Method), payload.OldTrackingID),
 			Timestamp:  de.Timestamp,
 		}, true
 
@@ -809,5 +825,19 @@ func claimTypeLabel(ct model.ClaimType) string {
 		return "Otro"
 	default:
 		return string(ct)
+	}
+}
+
+
+func paymentMethodLabel(m model.PaymentMethod) string {
+	switch m {
+	case model.PaymentMethodMP:
+		return "vía Mercado Pago"
+	case model.PaymentMethodCash:
+		return "en efectivo"
+	case model.PaymentMethodTransfer:
+		return "por transferencia bancaria"
+	default:
+		return ""
 	}
 }

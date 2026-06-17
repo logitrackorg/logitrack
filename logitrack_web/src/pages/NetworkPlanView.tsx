@@ -72,7 +72,7 @@ export function NetworkPlanView({ embedded = false }: NetworkPlanViewProps = {})
           <button
             onClick={() => void regenerate()}
             disabled={regenerating}
-            className="h-10 px-4 rounded-lg bg-[#2563eb] text-white text-sm font-medium hover:bg-[#1d4ed8] disabled:opacity-50 flex items-center gap-2"
+            className="h-10 px-4 rounded-lg bg-[var(--brand)] text-white text-sm font-medium hover:bg-[var(--brand-strong)] disabled:opacity-50 flex items-center gap-2"
           >
             <RefreshCw className={`h-4 w-4 ${regenerating ? "animate-spin" : ""}`} />
             {regenerating ? "Regenerando…" : "Regenerar plan global"}

@@ -3,7 +3,7 @@ import { branchLabelById, type Branch } from "../../api/branches";
 import type { GlobalRoutingPlan, InterBranchAssignment, LastMileAssignment } from "../../api/routing";
 
 export const KIND_COLOR: Record<string, string> = {
-  inter_branch: "var(--brand-800,#1e3a5f)",
+  inter_branch: "var(--brand-800,var(--sidebar-bg))",
   last_mile:    "var(--ok,#10b981)",
 };
 
@@ -142,7 +142,7 @@ export function tripToFCEvent(trip: InterBranchTrip, branches: Branch[]): object
   const dep = trip.scheduled_departure_at ?? trip.created_at;
   const arr = trip.estimated_arrival_at
     ?? new Date(new Date(dep).getTime() + 30 * 60_000).toISOString();
-  const color = trip.kind === "last_mile" ? "#10b981" : "#1e3a5f";
+  const color = trip.kind === "last_mile" ? "#10b981" : "var(--sidebar-bg)";
   const label = routeLabel(trip, branches);
   return {
     id: trip.id,

@@ -77,7 +77,7 @@ export default function WeekCalendarView({
       .then(setTrips)
       .catch(() => setTrips([]))
       .finally(() => setLoading(false));
-  }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [branchId]);
 
   const handleDatesSet = (arg: DatesSetArg) => {
     fetchTrips(localYMD(arg.start), localYMD(arg.end));
@@ -158,8 +158,8 @@ export default function WeekCalendarView({
         start,
         end,
         backgroundColor: ev.kind === "last_mile" ? "rgba(16,185,129,0.25)" : "rgba(37,99,235,0.2)",
-        borderColor: ev.kind === "last_mile" ? "#10b981" : "#1e3a5f",
-        textColor: ev.kind === "last_mile" ? "#065f46" : "#1e3a5f",
+        borderColor: ev.kind === "last_mile" ? "#10b981" : "var(--sidebar-bg)",
+        textColor: ev.kind === "last_mile" ? "#065f46" : "var(--sidebar-bg)",
         classNames: ["fc-forecast"],
         extendedProps: { forecastEvent: ev },
       } as EventInput;

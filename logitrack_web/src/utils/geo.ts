@@ -1,5 +1,13 @@
 import type { Branch } from "../api/branches";
 
+// Keep in sync with model.GeofenceRadiusMeters in the Go backend.
+export const GEOFENCE_RADIUS_M = 300
+
+/** Haversine distance in meters between two WGS-84 coordinates. */
+export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  return haversineKm(lat1, lng1, lat2, lng2) * 1000
+}
+
 export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;

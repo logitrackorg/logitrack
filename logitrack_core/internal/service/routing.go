@@ -200,7 +200,7 @@ func (s *RoutingService) generatePlan(_ context.Context, pc *planContext) (model
 		}
 
 		if sh.FinalBranchID == branchID && sh.DeliveryMethod == model.DeliveryMethodLastMile &&
-			(sh.Status == model.StatusAtHub || sh.Status == model.StatusRedeliveryScheduled) {
+			(sh.Status == model.StatusAtHub || sh.Status == model.StatusAtOriginHub || sh.Status == model.StatusRedeliveryScheduled) {
 			// Si el destinatario solicitó explícitamente una fecha via chatbot y esa fecha
 			// aún no llegó, no incluir en el plan de hoy.
 			if scheduledDate := chatbotScheduledDate(sh); scheduledDate != nil && scheduledDate.After(now) {
@@ -1240,7 +1240,7 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 				items = append(items, failedItem(tid, target, "envio_no_pertenece_a_sucursal"))
 				continue
 			}
-			if sh.Status != model.StatusAtHub && sh.Status != model.StatusRedeliveryScheduled {
+			if sh.Status != model.StatusAtHub && sh.Status != model.StatusAtOriginHub && sh.Status != model.StatusRedeliveryScheduled {
 				items = append(items, failedItem(tid, target, "estado_cambio:"+string(sh.Status)))
 				continue
 			}
@@ -1264,7 +1264,7 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 			_, err = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
 				Status:    model.StatusLoaded,
 				ChangedBy: username,
-				Notes:     "Carga automática al aplicar plan de ruteo inter-sucursal",
+				Notes:     "Carga automática al aplicar plan de ruteo (última milla)",
 			})
 			if err != nil {
 				_ = s.vehicleRepo.RemoveShipment(v.ID, tid)
@@ -3857,13 +3857,20 @@ func (s *RoutingService) ApplyPlanItems(ctx context.Context, branchID string, ed
 				items = append(items, failedItem(tid, target, "envio_no_pertenece_a_sucursal"))
 				continue
 			}
-			if sh.Status != model.StatusAtHub && sh.Status != model.StatusRedeliveryScheduled {
+			if sh.Status != model.StatusAtHub && sh.Status != model.StatusAtOriginHub && sh.Status != model.StatusRedeliveryScheduled {
 				items = append(items, failedItem(tid, target, "estado_cambio:"+string(sh.Status)))
 				continue
 			}
 			if currentLoad+sh.WeightKg > v.CapacityKg {
 				items = append(items, failedItem(tid, target, "capacidad_excedida"))
 				continue
+			}
+			// Auto-move from Entrada to Salida if needed (US-05 CA-02)
+			if s.branchZoneSvc != nil && sh.CurrentZone != nil && *sh.CurrentZone == string(model.ZoneEntrada) {
+				if err := s.branchZoneSvc.MoveShipment(tid, username, branchID, "", model.ZoneSalida, model.RoleSupervisor); err != nil {
+					items = append(items, failedItem(tid, target, "error_auto_mover_a_salida"))
+					continue
+				}
 			}
 			if err := s.vehicleRepo.AddShipment(v.ID, tid); err != nil {
 				items = append(items, failedItem(tid, target, err.Error()))

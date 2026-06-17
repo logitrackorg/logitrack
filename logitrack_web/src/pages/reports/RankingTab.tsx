@@ -70,7 +70,7 @@ function SortHeader({
   );
 }
 
-export default function RankingTab({ dateFrom, dateTo, branchId }: RankingTabProps) {
+export function RankingTab({ dateFrom, dateTo, branchId }: RankingTabProps) {
   const [ranking, setRanking] = useState<BranchRankingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);

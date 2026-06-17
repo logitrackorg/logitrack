@@ -1,6 +1,7 @@
 import { Navigation, CheckCircle2, XCircle, MapPin, Clock, Map, Ban } from "lucide-react";
 import { googleMapsSingleStop, googleMapsRoute } from "../../utils/googleMaps";
 import type { GeoPoint } from "../../utils/googleMaps";
+import { Button } from "@/components/ui/button";
 
 export interface NextStop {
   sequence: number;
@@ -36,11 +37,11 @@ export function NextStopCard({
 
   if (!nextStop) {
     return (
-      <div className="nsc-root nsc-done">
-        <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0" />
+      <div className="bg-white dark:bg-gray-800 rounded-t-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 text-center py-6">
+        <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0 mx-auto mb-2" />
         <div>
-          <p className="text-sm font-bold text-slate-900">¡Ruta completada!</p>
-          <p className="text-xs text-slate-500 mt-0.5">Todas las paradas registradas.</p>
+          <p className="text-sm font-bold text-gray-900 dark:text-gray-100">¡Ruta completada!</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Todas las paradas registradas.</p>
         </div>
       </div>
     );
@@ -53,21 +54,23 @@ export function NextStopCard({
   });
 
   return (
-    <div className="nsc-root">
+    <div className="bg-white dark:bg-gray-800 rounded-t-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
       {/* Handle visual */}
-      <div className="nsc-handle" />
+      <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mb-3" />
 
       {/* Encabezado: nro de parada + info */}
-      <div className="nsc-header">
-        <div className="nsc-seq">{String(nextStop.sequence).padStart(2, "0")}</div>
-        <div className="nsc-info">
-          <p className="nsc-name">{nextStop.name}</p>
-          <p className="nsc-address">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-8 h-8 rounded-full bg-[var(--sidebar-bg)] text-white font-bold text-sm flex items-center justify-center shrink-0">
+          {String(nextStop.sequence).padStart(2, "0")}
+        </div>
+        <div className="min-w-0">
+          <p className="text-base font-semibold text-gray-900 dark:text-gray-100">{nextStop.name}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             <MapPin className="inline w-3 h-3 mr-0.5 opacity-50" />
             {nextStop.address}
           </p>
           {routeInfo && (
-            <p className="nsc-eta">
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
               <Clock className="inline w-3 h-3 mr-0.5 opacity-50" />
               {Math.round(routeInfo.duration / 60)} min · {(routeInfo.distance / 1000).toFixed(1)} km
             </p>
@@ -76,37 +79,37 @@ export function NextStopCard({
       </div>
 
       {/* Acciones principales */}
-      <div className="nsc-actions">
+      <div className="flex gap-2 mt-4">
         <a
           href={singleUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="nsc-btn nsc-navigate"
+          className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg py-2.5 px-4 text-sm font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-2 no-underline"
         >
           <Navigation className="w-4 h-4" />
           Navegar
         </a>
         {canAct && (
           <>
-            <button onClick={onDeliver} className="nsc-btn nsc-deliver">
+            <Button variant="default" onClick={onDeliver} className="flex-1 bg-green-500 hover:bg-green-600 py-2.5 px-4">
               <CheckCircle2 className="w-4 h-4" />
               Entregar
-            </button>
-            <button onClick={onFailed} className="nsc-btn nsc-failed">
+            </Button>
+            <Button variant="destructive" onClick={onFailed} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 px-4">
               <XCircle className="w-4 h-4" />
               No entregado
-            </button>
+            </Button>
           </>
         )}
       </div>
 
       {/* Acción secundaria: rechazo activo del destinatario */}
       {canAct && (
-        <div className="nsc-secondary-actions">
-          <button onClick={onRejected} className="nsc-btn nsc-rejected" style={{ width: "100%" }}>
+        <div className="flex gap-2 mt-2">
+          <Button variant="secondary" onClick={onRejected} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 px-3 text-xs">
             <Ban className="w-4 h-4" />
             Rechazado por destinatario
-          </button>
+          </Button>
         </div>
       )}
 
@@ -115,12 +118,12 @@ export function NextStopCard({
         href={fullRouteUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="nsc-full-route"
+        className="w-full text-center text-blue-600 dark:text-blue-400 text-xs py-2 cursor-pointer hover:underline flex items-center justify-center gap-1.5 mt-2 no-underline"
       >
         <Map className="w-3.5 h-3.5 shrink-0" />
         Abrir ruta completa en Google Maps
         {truncated && (
-          <span className="text-[10px] text-slate-400 ml-1">(primeras 9 paradas)</span>
+          <span className="text-[10px] text-gray-400 ml-1">(primeras 9 paradas)</span>
         )}
       </a>
     </div>

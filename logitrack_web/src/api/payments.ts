@@ -40,6 +40,8 @@ export interface Payment {
 export interface PaymentConfig {
   mp_enabled: boolean;
   mock_enabled: boolean;
+  transfer_enabled: boolean;
+  transfer_holder: string;
   mp_alias: string;
   mp_cvu: string;
 }

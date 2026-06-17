@@ -61,6 +61,7 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price_breakdown      JSONB;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price_currency       TEXT NOT NULL DEFAULT 'ARS';
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS chatbot_metadata     JSONB;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS created_by           TEXT NOT NULL DEFAULT '';
 
 		UPDATE shipments SET status = 'draft'          WHERE status = 'pending';
 		UPDATE shipments SET status = 'at_origin_hub'  WHERE status = 'in_progress';
@@ -390,6 +391,7 @@ func RunMigrations(db *sql.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_payments_status_created_at ON payments(status, created_at);
 		ALTER TABLE payments ADD COLUMN IF NOT EXISTS original_tracking_id TEXT;
 		UPDATE payments SET original_tracking_id = tracking_id WHERE original_tracking_id IS NULL;
+		ALTER TABLE payments ADD COLUMN IF NOT EXISTS method TEXT NOT NULL DEFAULT '';
 
 		-- Idempotencia de webhooks: evita procesar el mismo payment_id dos veces
 		CREATE TABLE IF NOT EXISTS payment_events (
@@ -436,6 +438,7 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_mime_type   TEXT;
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_upload_date TIMESTAMPTZ;
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS claimant_dni VARCHAR(20);
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS assigned_branch_id TEXT;
 
 		-- Ensure branches table exists before branch_zones FK can reference it
 		CREATE TABLE IF NOT EXISTS branches (
@@ -610,6 +613,11 @@ func RunMigrations(db *sql.DB) error {
 		-- Auditoría específica de eventos 2FA
 		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS ip_address TEXT;
 		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS user_agent TEXT;
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS role           TEXT NOT NULL DEFAULT '';
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS country        TEXT NOT NULL DEFAULT '';
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS city           TEXT NOT NULL DEFAULT '';
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS result         TEXT NOT NULL DEFAULT '';
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS failure_reason TEXT NOT NULL DEFAULT '';
 
 		-- Bloqueo de pantalla por alerta de fatiga (LOGITRACK-499)
 		CREATE TABLE IF NOT EXISTS fatigue_blocks (
@@ -664,6 +672,8 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_cvu            TEXT NOT NULL DEFAULT '';
 		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_access_token   TEXT NOT NULL DEFAULT '';
 		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_webhook_secret TEXT NOT NULL DEFAULT '';
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS transfer_enabled  BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS transfer_holder   TEXT NOT NULL DEFAULT '';
 
 		-- Métricas de calidad del ruteo
 		CREATE TABLE IF NOT EXISTS routing_plan_metrics (
@@ -692,6 +702,7 @@ func RunMigrations(db *sql.DB) error {
 		);
 
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS security_keyword      TEXT NOT NULL DEFAULT '';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS security_keyword_hash TEXT NOT NULL DEFAULT '';
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS keyword_attempts      INT  NOT NULL DEFAULT 0;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS contingency_delivery  BOOLEAN NOT NULL DEFAULT FALSE;
 
@@ -719,6 +730,118 @@ func RunMigrations(db *sql.DB) error {
 
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_login_failed_attempts INTEGER NOT NULL DEFAULT 0;
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_login_locked_until TIMESTAMPTZ;
+
+		-- Detector de falta de sucursal: umbral de área de cobertura por celda Voronoi.
+		-- Una celda cuya área supera este valor (km²) se marca como zona sub-cubierta (gap).
+		-- El diagrama usa un bounding box nacional fijo (~6.7M km²), por lo que las celdas
+		-- son del orden de cientos de miles a millones de km².
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_coverage_area_km2 DOUBLE PRECISION NOT NULL DEFAULT 1000000;
+		UPDATE system_config SET max_coverage_area_km2 = 1000000 WHERE id = 1 AND max_coverage_area_km2 IN (0, 1500);
+
+		-- Permisos de pestañas del dashboard por rol (supervisor y manager).
+		-- El admin puede cambiar estos valores en tiempo real desde /admin/dashboard-config.
+		CREATE TABLE IF NOT EXISTS role_metric_permissions (
+			role_name  TEXT        NOT NULL,
+			metric_id  TEXT        NOT NULL,
+			is_visible BOOLEAN     NOT NULL DEFAULT TRUE,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (role_name, metric_id)
+		);
+		-- Limpiar filas obsoletas (KPI card IDs y roles que ya no aplican).
+		DELETE FROM role_metric_permissions WHERE role_name IN ('operator', 'admin', 'driver');
+		DELETE FROM role_metric_permissions WHERE metric_id IN (
+			'total_envios','en_curso','entregados','problemas',
+			'tasa_exito','ciclo_promedio','incidentes_abiertos'
+		);
+		-- Seed: supervisor y manager ven todas las pestañas por defecto.
+		INSERT INTO role_metric_permissions (role_name, metric_id, is_visible) VALUES
+			('supervisor', 'resumen',        true),
+			('supervisor', 'choferes',       true),
+			('supervisor', 'reclamos',       true),
+			('supervisor', 'facturacion',    true),
+			('supervisor', 'ranking',        true),
+			('supervisor', 'volumen',        true),
+			('supervisor', 'tipo-envio',     true),
+			('supervisor', 'metodo-entrega', true),
+			('supervisor', 'retorno',        true),
+			('supervisor', 'exito',          true),
+			('supervisor', 'fatiga',         true),
+			('supervisor', 'sla',            true),
+			('supervisor', 'empleado-mes',   true),
+			('manager',    'resumen',        true),
+			('manager',    'choferes',       true),
+			('manager',    'reclamos',       true),
+			('manager',    'facturacion',    true),
+			('manager',    'ranking',        true),
+			('manager',    'volumen',        true),
+			('manager',    'tipo-envio',     true),
+			('manager',    'metodo-entrega', true),
+			('manager',    'retorno',        true),
+			('manager',    'exito',          true),
+			('manager',    'fatiga',         true),
+			('manager',    'sla',            true),
+			('manager',    'empleado-mes',   true)
+		ON CONFLICT (role_name, metric_id) DO NOTHING;
+
+		-- Excepciones de permisos por usuario individual.
+		-- Filas aquí sobreescriben la configuración del rol (user overrides role).
+		CREATE TABLE IF NOT EXISTS user_metric_permissions (
+			user_id    TEXT        NOT NULL,
+			metric_id  TEXT        NOT NULL,
+			is_visible BOOLEAN     NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (user_id, metric_id)
+		);
+		CREATE INDEX IF NOT EXISTS user_metric_perm_user_idx ON user_metric_permissions(user_id);
+
+		-- Auditoría de cambios de permisos de métricas (US-002).
+		CREATE EXTENSION IF NOT EXISTS pgcrypto;
+		CREATE TABLE IF NOT EXISTS permission_audit_logs (
+			id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+			created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			admin_user_id  TEXT        NOT NULL,
+			admin_username TEXT        NOT NULL,
+			batch_id       UUID        NOT NULL,
+			affected_role  TEXT        NOT NULL,
+			metric_id      TEXT        NOT NULL,
+			metric_name    TEXT        NOT NULL,
+			action         TEXT        NOT NULL,
+			previous_state BOOLEAN     NOT NULL,
+			new_state      BOOLEAN     NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS perm_audit_role_idx    ON permission_audit_logs(affected_role);
+		CREATE INDEX IF NOT EXISTS perm_audit_created_idx ON permission_audit_logs(created_at DESC);
+
+		-- Preferencias personales del usuario para el dashboard (US-003).
+		CREATE TABLE IF NOT EXISTS user_dashboard_preferences (
+			user_id    TEXT    NOT NULL,
+			metric_id  TEXT    NOT NULL,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			is_hidden  BOOLEAN NOT NULL DEFAULT FALSE,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (user_id, metric_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_udp_user_id ON user_dashboard_preferences(user_id);
+
+		-- Perfiles de dashboard guardados por el usuario (US-005).
+		CREATE EXTENSION IF NOT EXISTS pgcrypto;
+		CREATE TABLE IF NOT EXISTS user_dashboard_profiles (
+			id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id     TEXT        NOT NULL,
+			name        TEXT        NOT NULL,
+			preferences JSONB       NOT NULL DEFAULT '[]',
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_udprofiles_user_id ON user_dashboard_profiles(user_id);
+
+		-- Flag de reseteo del dashboard por admin (US — Reset de configuración).
+		-- Una fila por usuario; was_reset = true hasta que el usuario confirme la notificación.
+		CREATE TABLE IF NOT EXISTS user_dashboard_reset_flags (
+			user_id   TEXT        PRIMARY KEY,
+			was_reset BOOLEAN     NOT NULL DEFAULT FALSE,
+			reset_at  TIMESTAMPTZ,
+			reset_by  TEXT
+		);
 	`)
 	return err
 }

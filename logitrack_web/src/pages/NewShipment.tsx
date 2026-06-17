@@ -9,6 +9,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useAuth } from "../context/AuthContext";
 import { AddressAutocomplete, type AddressParts } from "../components/AddressAutocomplete";
 import { pricingApi, formatCurrencyARS, type QuoteResponse } from "../api/pricing";
+import { coverageApi, type BranchRecommendation, GAP_STYLE } from "../api/coverage";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } from "../components/ui/gradient-card";
 import PaymentMethodsPanel from "../components/PaymentMethodsPanel";
@@ -126,7 +127,6 @@ function findFinalBranch(recipientAddress: { province?: string; latitude?: numbe
   }
 
   // Fallback: nearest branch to the province centroid.
-  // Avoids the first-alphabetical-match problem when multiple branches share a province.
   if (recipientAddress.province) {
     const centroid = PROVINCE_CENTROIDS[recipientAddress.province];
     if (centroid) {
@@ -153,6 +153,9 @@ const initialForm: CreateShipmentPayload = {
   delivery_method: "ultima_milla",
   receiving_branch_id: "",
 };
+
+// Shared Tailwind class string for form inputs — mirrors the original `input` style object.
+const INPUT_CLASSES = "w-full px-3 py-2.5 rounded-lg border border-border bg-[var(--bg-card)] text-sm outline-none transition-colors";
 
 export function NewShipment() {
   const isMobile = useIsMobile();
@@ -205,9 +208,25 @@ export function NewShipment() {
     branchApi.getCapacity(form.receiving_branch_id).then(setBranchCapacity).catch(() => {});
   }, [form.receiving_branch_id]);
 
+  // Sugerencia de cobertura (no intrusiva): cuando el destinatario tiene
+  // coordenadas, consulta la sucursal óptima y si la zona está sub-cubierta.
+  const [coverageRec, setCoverageRec] = useState<BranchRecommendation | null>(null);
+  const recipLat = form.recipient.address.latitude;
+  const recipLng = form.recipient.address.longitude;
+  useEffect(() => {
+    if (recipLat == null || recipLng == null) {
+      setCoverageRec(null);
+      return;
+    }
+    let cancelled = false;
+    coverageApi
+      .branchForPoint(recipLat, recipLng)
+      .then((rec) => { if (!cancelled) setCoverageRec(rec); })
+      .catch(() => { if (!cancelled) setCoverageRec(null); });
+    return () => { cancelled = true; };
+  }, [recipLat, recipLng]);
+
   // Live pricing quote — debounced 400ms when relevant fields change.
-  // Origin is the receiving branch address (where the shipment departs from),
-  // falling back to the sender's address if no branch is selected yet.
   useEffect(() => {
     const selectedBranch = branches.find((b) => b.id === form.receiving_branch_id);
     const originAddress = selectedBranch
@@ -275,7 +294,6 @@ export function NewShipment() {
         } else {
           const saved = await shipmentApi.saveDraft(form);
           draftIdRef.current = saved.tracking_id;
-          // Refresh draft count in the banner
           setDrafts((prev) => [...prev, saved]);
         }
         setAutoSaveStatus("saved");
@@ -456,22 +474,22 @@ export function NewShipment() {
     <div className={`${isMobile ? "p-4" : "p-6 md:px-8"} max-w-3xl mx-auto`}>
       <button
         onClick={() => navigate("/")}
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 cursor-pointer"
+        className="inline-flex items-center gap-1.5 text-sm dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700 mb-4 cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
         Volver al listado
       </button>
 
-      <div className="flex items-start gap-3 mb-6 pb-4 border-b border-slate-200">
-        <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
+      <div className="flex items-start gap-3 mb-6 pb-4 border-b dark:border-gray-700 border-slate-200">
+        <div className="w-10 h-10 rounded-xl bg-[var(--sidebar-bg)]/8 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
           <PackagePlus className="w-5 h-5" />
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Nuevo envío</h1>
+            <h1 className="text-2xl font-bold dark:text-gray-100 text-slate-900 tracking-tight leading-tight">Nuevo envío</h1>
             {/* Auto-save status indicator */}
             {autoSaveStatus === "saving" && (
-              <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+              <span className="inline-flex items-center gap-1.5 text-xs dark:text-gray-500 text-slate-400">
                 <Loader2 className="w-3 h-3 animate-spin" />Guardando borrador…
               </span>
             )}
@@ -486,9 +504,9 @@ export function NewShipment() {
               </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm dark:text-gray-400 text-slate-500">
             Completá los datos para registrar un envío.{" "}
-            <span className="text-slate-400">El borrador se guarda automáticamente al ingresar el DNI del remitente y del destinatario.</span>
+            <span className="dark:text-gray-500 text-slate-400">El borrador se guarda automáticamente al ingresar el DNI del remitente y del destinatario.</span>
           </p>
         </div>
       </div>
@@ -531,8 +549,8 @@ export function NewShipment() {
         >
           <Row2>
             <Field label="DNI *">
-              <div style={{ position: "relative" }}>
-                <input style={input} required value={form.sender.dni}
+              <div className="relative">
+                <input className={INPUT_CLASSES} required value={form.sender.dni}
                   onChange={(e) => handleSenderDNI(e.target.value)} placeholder="Ej: 30123456" />
                 {senderSuggestion && (
                   <CustomerSuggestion customer={senderSuggestion} onApply={applySenderSuggestion} onDismiss={() => setSenderSuggestion(null)} />
@@ -540,30 +558,30 @@ export function NewShipment() {
               </div>
             </Field>
             <Field label="Nombre completo *">
-              <input style={{ ...input, borderColor: senderNameError ? "var(--danger-c)" : undefined }} required value={form.sender.name}
+              <input className={`${INPUT_CLASSES} ${senderNameError ? "border-red-500" : ""}`} required value={form.sender.name}
                 onChange={(e) => handleSenderName(e.target.value)} placeholder="ej: Carlos Mendez" />
-              {senderNameError && <span style={{ color: "var(--danger-c)", fontSize: 12 }}>{senderNameError}</span>}
+              {senderNameError && <span className="text-xs text-red-500">{senderNameError}</span>}
             </Field>
           </Row2>
           <Row2>
             <Field label="Teléfono *">
-              <div style={{ display: "flex", alignItems: "center", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-card)", overflow: "hidden" }}>
-                <span style={{ padding: "10px 10px", color: "var(--text-secondary)", fontSize: 14, borderRight: "1px solid var(--border)", whiteSpace: "nowrap", userSelect: "none" }}>+54 9</span>
-                <input style={{ ...input, border: "none", borderRadius: 0, flex: 1, width: "auto" }} required
+              <div className="flex items-center border border-border rounded-lg bg-[var(--bg-card)] overflow-hidden">
+                <span className="px-2.5 py-2.5 text-sm text-[var(--text-secondary)] border-r border-border whitespace-nowrap select-none">+54 9</span>
+                <input className="flex-1 w-auto border-none rounded-none px-3 py-2.5 text-sm bg-transparent outline-none" required
                   value={phoneLocalPart(form.sender.phone)}
                   onChange={(e) => { const d = e.target.value.replace(/\D/g, ""); setSender("phone", d ? "+549" + d : ""); }}
                   placeholder="11 1234 5678" />
               </div>
             </Field>
             <Field label="Email">
-              <input style={input} type="email" value={form.sender.email}
+              <input className={INPUT_CLASSES} type="email" value={form.sender.email}
                 onChange={(e) => setSender("email", e.target.value)} placeholder="opcional" />
             </Field>
           </Row2>
           <Row2>
             <Field label="Calle *">
               <AddressAutocomplete
-                style={input}
+                className={INPUT_CLASSES}
                 required
                 value={form.sender.address.street}
                 onChange={(street) => setSenderAddr("street", street)}
@@ -572,20 +590,20 @@ export function NewShipment() {
               />
             </Field>
             <Field label="Ciudad *">
-              <input style={input} required value={form.sender.address.city}
+              <input className={INPUT_CLASSES} required value={form.sender.address.city}
                 onChange={(e) => setSenderAddr("city", e.target.value)} placeholder="Buenos Aires" />
             </Field>
           </Row2>
           <Row2>
             <Field label="Provincia *">
-              <select style={input} required value={form.sender.address.province}
+              <select className={INPUT_CLASSES} required value={form.sender.address.province}
                 onChange={(e) => setSenderAddr("province", e.target.value)}>
                 <option value="">Seleccioná una provincia</option>
                 {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </Field>
             <Field label="Código postal *">
-              <input style={input} required value={form.sender.address.postal_code}
+              <input className={INPUT_CLASSES} required value={form.sender.address.postal_code}
                 onChange={(e) => setSenderAddr("postal_code", e.target.value)} placeholder="C1043" />
             </Field>
           </Row2>
@@ -595,8 +613,8 @@ export function NewShipment() {
         <Section title="Destinatario" icon={<UserCheck className="w-4 h-4" />}>
           <Row2>
             <Field label="DNI *">
-              <div style={{ position: "relative" }}>
-                <input style={input} required value={form.recipient.dni}
+              <div className="relative">
+                <input className={INPUT_CLASSES} required value={form.recipient.dni}
                   onChange={(e) => handleRecipientDNI(e.target.value)} placeholder="Ej: 28456789" />
                 {recipientSuggestion && (
                   <CustomerSuggestion customer={recipientSuggestion} onApply={applyRecipientSuggestion} onDismiss={() => setRecipientSuggestion(null)} />
@@ -604,30 +622,30 @@ export function NewShipment() {
               </div>
             </Field>
             <Field label="Nombre completo *">
-              <input style={{ ...input, borderColor: recipientNameError ? "var(--danger-c)" : undefined }} required value={form.recipient.name}
+              <input className={`${INPUT_CLASSES} ${recipientNameError ? "border-red-500" : ""}`} required value={form.recipient.name}
                 onChange={(e) => handleRecipientName(e.target.value)} placeholder="ej: Laura Gomez" />
-              {recipientNameError && <span style={{ color: "var(--danger-c)", fontSize: 12 }}>{recipientNameError}</span>}
+              {recipientNameError && <span className="text-xs text-red-500">{recipientNameError}</span>}
             </Field>
           </Row2>
           <Row2>
             <Field label="Teléfono *">
-              <div style={{ display: "flex", alignItems: "center", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-card)", overflow: "hidden" }}>
-                <span style={{ padding: "10px 10px", color: "var(--text-secondary)", fontSize: 14, borderRight: "1px solid var(--border)", whiteSpace: "nowrap", userSelect: "none" }}>+54 9</span>
-                <input style={{ ...input, border: "none", borderRadius: 0, flex: 1, width: "auto" }} required
+              <div className="flex items-center border border-border rounded-lg bg-[var(--bg-card)] overflow-hidden">
+                <span className="px-2.5 py-2.5 text-sm text-[var(--text-secondary)] border-r border-border whitespace-nowrap select-none">+54 9</span>
+                <input className="flex-1 w-auto border-none rounded-none px-3 py-2.5 text-sm bg-transparent outline-none" required
                   value={phoneLocalPart(form.recipient.phone)}
                   onChange={(e) => { const d = e.target.value.replace(/\D/g, ""); setRecipient("phone", d ? "+549" + d : ""); }}
                   placeholder="11 1234 5678" />
               </div>
             </Field>
             <Field label="Email">
-              <input style={input} type="email" value={form.recipient.email}
+              <input className={INPUT_CLASSES} type="email" value={form.recipient.email}
                 onChange={(e) => setRecipient("email", e.target.value)} placeholder="opcional" />
             </Field>
           </Row2>
           <Row2>
             <Field label="Calle *">
               <AddressAutocomplete
-                style={input}
+                className={INPUT_CLASSES}
                 required
                 value={form.recipient.address.street}
                 onChange={(street) => setRecipientAddr("street", street)}
@@ -636,37 +654,28 @@ export function NewShipment() {
               />
             </Field>
             <Field label="Ciudad *">
-              <input style={input} required value={form.recipient.address.city}
+              <input className={INPUT_CLASSES} required value={form.recipient.address.city}
                 onChange={(e) => setRecipientAddr("city", e.target.value)} placeholder="Córdoba" />
             </Field>
           </Row2>
           <Row2>
             <Field label="Provincia *">
-              <select style={input} required value={form.recipient.address.province}
+              <select className={INPUT_CLASSES} required value={form.recipient.address.province}
                 onChange={(e) => setRecipientAddr("province", e.target.value)}>
                 <option value="">Seleccioná una provincia</option>
                 {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </Field>
             <Field label="Código postal *">
-              <input style={input} required value={form.recipient.address.postal_code}
+              <input className={INPUT_CLASSES} required value={form.recipient.address.postal_code}
                 onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" />
             </Field>
           </Row2>
           {/* CA-05: Privacy notice — shown once the operator starts filling in recipient data */}
           {(form.recipient.name || form.recipient.dni) && (
-            <div style={{
-              marginTop: 8,
-              padding: "10px 14px",
-              borderRadius: 8,
-              border: "1px solid var(--info-border)",
-              background: "var(--info-bg)",
-              display: "flex",
-              gap: 10,
-              alignItems: "flex-start",
-            }}>
-              <Info className="w-4 h-4 shrink-0 mt-0.5" />
-              <p style={{ fontSize: 12, color: "var(--info-text)", margin: 0, lineHeight: 1.5 }}>
+            <div className="mt-2 px-3.5 py-2.5 rounded-lg border border-[var(--info-border)] bg-[var(--info-bg)] flex gap-2.5 items-start">
+              <Info className="w-4 h-4 shrink-0 mt-0.5 text-[var(--info-text)]" />
+              <p className="text-xs text-[var(--info-text)] m-0 leading-relaxed">
                 Los datos personales del destinatario se conservarán según la política de retención de borradores vigente y serán tratados conforme a la{" "}
                 <strong>Ley 25.326 de Protección de Datos Personales</strong>.{" "}
                 Si el borrador no se confirma, los datos serán eliminados automáticamente pasado el período de vigencia.
@@ -679,19 +688,19 @@ export function NewShipment() {
         <Section title="Sucursales" icon={<MapPin className="w-4 h-4" />}>
           {/* Sucursal de origen */}
           <div className="grid gap-1.5">
-            <label className="text-xs font-semibold text-slate-700">Sucursal de origen *</label>
+            <label className="text-xs font-semibold dark:text-gray-300 text-slate-700">Sucursal de origen *</label>
             {branchLocked ? (() => {
               const selected = branches.find(b => b.id === form.receiving_branch_id);
               return (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
-                  <p className="text-sm font-semibold text-[#1e3a5f]">{selected?.name ?? form.receiving_branch_id}</p>
-                  {selected && <p className="text-xs text-slate-600 mt-0.5">{selected.address.street}, {selected.address.city}</p>}
-                  <p className="mt-1.5 text-[11px] text-slate-500">Asignada a tu sucursal — no se puede cambiar.</p>
+                  <p className="text-sm font-semibold text-[var(--sidebar-bg)]">{selected?.name ?? form.receiving_branch_id}</p>
+                  {selected && <p className="text-xs dark:text-gray-400 text-slate-600 mt-0.5">{selected.address.street}, {selected.address.city}</p>}
+                  <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">Asignada a tu sucursal — no se puede cambiar.</p>
                 </div>
               );
             })() : (
               <>
-                <select style={input} required value={form.receiving_branch_id}
+                <select className={INPUT_CLASSES} required value={form.receiving_branch_id}
                   onChange={(e) => set("receiving_branch_id", e.target.value)}>
                   <option value="">Seleccioná una sucursal...</option>
                   {(() => {
@@ -720,8 +729,8 @@ export function NewShipment() {
                   if (!selected) return null;
                   return (
                     <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
-                      <p className="text-sm font-semibold text-[#1e3a5f]">{selected.name}</p>
-                      <p className="text-xs text-slate-600 mt-0.5">{selected.address.street}, {selected.address.city}</p>
+                      <p className="text-sm font-semibold text-[var(--sidebar-bg)]">{selected.name}</p>
+                      <p className="text-xs dark:text-gray-400 text-slate-600 mt-0.5">{selected.address.street}, {selected.address.city}</p>
                     </div>
                   );
                 })()}
@@ -735,11 +744,21 @@ export function NewShipment() {
             if (!finalBranch) return null;
             return (
               <div className="grid gap-1.5">
-                <label className="text-xs font-semibold text-slate-700">Sucursal final</label>
+                <label className="text-xs font-semibold dark:text-gray-300 text-slate-700">Sucursal final</label>
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-                  <p className="text-sm font-semibold text-[#1e3a5f]">{finalBranch.name}</p>
-                  <p className="text-xs text-slate-600 mt-0.5">{finalBranch.address.street}, {finalBranch.address.city}</p>
-                  <p className="mt-1.5 text-[11px] text-slate-500">Sucursal más cercana al domicilio del destinatario.</p>
+                  <p className="text-sm font-semibold text-[var(--sidebar-bg)]">{finalBranch.name}</p>
+                  <p className="text-xs dark:text-gray-400 text-slate-600 mt-0.5">{finalBranch.address.street}, {finalBranch.address.city}</p>
+                  <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">Sucursal más cercana al domicilio del destinatario.</p>
+                  {coverageRec?.is_gap && coverageRec.gap_severity && (
+                    <div className={`mt-2 flex items-start gap-1.5 rounded-md px-2 py-1.5 text-[11px] ${GAP_STYLE[coverageRec.gap_severity].badge}`}>
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                      <span>
+                        Zona con cobertura limitada: el domicilio queda lejos de la sucursal más cercana
+                        ({Math.round(coverageRec.area_km2).toLocaleString("es-AR")} km² de área de servicio).
+                        La entrega de última milla puede demorar más.
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -750,7 +769,7 @@ export function NewShipment() {
         <Section title="Paquete" icon={<Box className="w-4 h-4" />}>
           <Row2>
             <Field label="Peso (kg) *">
-              <input style={input} type="number" step="0.1" min="0.1" required
+              <input className={INPUT_CLASSES} type="number" step="0.1" min="0.1" required
                 value={form.weight_kg === 0 ? "" : form.weight_kg}
                 onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
             </Field>
@@ -758,7 +777,7 @@ export function NewShipment() {
               label="Tipo de paquete *"
               error={form.package_type === "envelope" && form.weight_kg > 5 ? "Máximo 5 kg para sobre" : undefined}
             >
-              <select style={input} required value={form.package_type}
+              <select className={INPUT_CLASSES} required value={form.package_type}
                 onChange={(e) => set("package_type", e.target.value as PackageType)}>
                 {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
@@ -766,14 +785,14 @@ export function NewShipment() {
           </Row2>
           <Row2>
             <Field label="Tipo de envío">
-              <select style={input} value={form.shipment_type ?? "normal"}
+              <select className={INPUT_CLASSES} value={form.shipment_type ?? "normal"}
                 onChange={(e) => set("shipment_type", e.target.value as ShipmentType)}>
                 {SHIPMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </Field>
             {form.delivery_method !== "retiro_sucursal" && (
               <Field label="Ventana horaria">
-                <select style={input} value={form.time_window ?? "flexible"}
+                <select className={INPUT_CLASSES} value={form.time_window ?? "flexible"}
                   onChange={(e) => set("time_window", e.target.value as TimeWindow)}>
                   {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
@@ -789,8 +808,8 @@ export function NewShipment() {
                     key={m.value}
                     className={`flex items-start gap-3 cursor-pointer rounded-lg border px-3 py-2.5 transition-colors ${
                       selected
-                        ? "border-[#2563eb] bg-blue-50"
-                        : "border-slate-200 bg-white hover:bg-slate-50"
+                        ? "border-[var(--brand)] bg-blue-50"
+                        : "dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:hover:bg-gray-700 hover:bg-slate-50"
                     }`}
                   >
                     <input
@@ -802,11 +821,11 @@ export function NewShipment() {
                         set("delivery_method", m.value);
                         if (m.value === "retiro_sucursal") set("time_window", "flexible");
                       }}
-                      className="mt-0.5 shrink-0 accent-[#2563eb]"
+                      className="mt-0.5 shrink-0 accent-[var(--brand)]"
                     />
                     <span className="flex flex-col gap-0.5">
-                      <span className="font-semibold text-sm text-slate-900">{m.label}</span>
-                      <span className="text-xs text-slate-500">{m.description}</span>
+                      <span className="font-semibold text-sm dark:text-gray-100 text-slate-900">{m.label}</span>
+                      <span className="text-xs dark:text-gray-400 text-slate-500">{m.description}</span>
                     </span>
                   </label>
                 );
@@ -814,19 +833,19 @@ export function NewShipment() {
             </div>
           </Field>
           <Field label="">
-            <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-slate-700 select-none">
+            <label className="inline-flex items-center gap-2 cursor-pointer text-sm dark:text-gray-300 text-slate-700 select-none">
               <input
                 type="checkbox"
                 checked={!!form.is_fragile}
                 onChange={(e) => set("is_fragile", e.target.checked)}
-                className="accent-[#2563eb]"
+                className="accent-[var(--brand)]"
               />
               <span className="font-medium">Contenido frágil</span>
-              <span className="text-slate-500 text-xs">(manipular con cuidado)</span>
+              <span className="dark:text-gray-400 text-slate-500 text-xs">(manipular con cuidado)</span>
             </label>
           </Field>
           <Field label="Instrucciones especiales">
-            <input style={input} value={form.special_instructions}
+            <input className={INPUT_CLASSES} value={form.special_instructions}
               onChange={(e) => set("special_instructions", e.target.value)}
               placeholder='ej: "Mantener vertical"' />
           </Field>
@@ -877,11 +896,11 @@ export function NewShipment() {
           const blocked = (atLimit && !capacityConfirmed) || envelopeTooHeavy;
           return (
             <div className="flex flex-col gap-2">
-              <p className="text-xs text-slate-400 text-center">Los cambios se guardan automáticamente</p>
+              <p className="text-xs dark:text-gray-500 text-slate-400 text-center">Los cambios se guardan automáticamente</p>
               <button
                 type="submit"
                 disabled={loading || blocked}
-                className="w-full h-11 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-sm font-bold text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                className="w-full h-11 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-sm font-bold text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
               >
                 {loading ? "Procesando…" : "Crear envío y pagar"}
               </button>
@@ -941,12 +960,7 @@ function PaymentModal({
         if (updated.status === "approved") {
           if (pollRef.current) clearInterval(pollRef.current);
           setPolling(false);
-          // The shipment tracking_id changed to LT-; we need to find it.
-          // Since the payment record stores the old BORRADOR- id,
-          // redirect to shipment list filtered by pending_payment and let the user navigate,
-          // or just go to the list. A cleaner approach: the backend could return new_tracking_id.
-          // For now, navigate to root and the user finds the confirmed shipment.
-          onApproved(updated.tracking_id); // tracking_id was updated to LT- in DB
+          onApproved(updated.tracking_id);
         }
         if (updated.status === "abandoned") {
           if (pollRef.current) clearInterval(pollRef.current);
@@ -962,21 +976,18 @@ function PaymentModal({
   }, [trackingId, onApproved, pollRef]);
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
-    }}>
-      <div style={{
-        background: "var(--bg-card)", borderRadius: 16, padding: 32, maxWidth: 420, width: "100%",
-        margin: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-      }}>
-        <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}><CreditCard className="w-8 h-8" /></div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-heading)", margin: 0 }}>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/55">
+      <div className="bg-[var(--bg-card)] rounded-2xl p-8 max-w-[420px] w-full m-4 shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+        <div className="text-center mb-5">
+          <div className="text-[32px] mb-2 flex justify-center">
+            <CreditCard className="w-8 h-8 text-[var(--text-primary)]" />
+          </div>
+          <h2 className="text-lg font-bold text-[var(--text-heading)] m-0">
             Pago pendiente
           </h2>
-          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 6 }}>
-            Monto a cobrar: <strong style={{ color: "var(--text-heading)" }}>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
+            Monto a cobrar:{" "}
+            <strong className="text-[var(--text-heading)]">
               {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(payment.amount)}
             </strong>
           </p>
@@ -994,12 +1005,12 @@ function PaymentModal({
               onError={setPaymentError}
             />
             {paymentError && (
-              <p style={{ fontSize: 12, color: "var(--danger-text)", textAlign: "center", marginTop: 10, marginBottom: 0 }}>
+              <p className="text-xs text-[var(--danger-text)] text-center mt-2.5 mb-0">
                 {paymentError}
               </p>
             )}
             {polling && payment.init_point && (
-              <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 14, marginBottom: 0 }}>
+              <p className="text-[11px] text-[var(--text-muted)] text-center mt-3.5 mb-0">
                 Esperando confirmación de pago…
               </p>
             )}
@@ -1007,23 +1018,15 @@ function PaymentModal({
         )}
 
         {status === "approved" && (
-          <div style={{
-            textAlign: "center", background: "var(--ok-bg)", borderRadius: 10,
-            padding: 16, marginTop: 16, marginBottom: 0, color: "var(--ok-text)", fontWeight: 600,
-          }}>
+          <div className="text-center bg-[var(--ok-bg)] rounded-[10px] p-4 mt-4 mb-0 text-[var(--ok-text)] font-semibold">
             ✓ Pago confirmado — redirigiendo…
           </div>
         )}
 
-        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+        <div className="mt-4 pt-4 border-t border-border">
           <button
             onClick={onBackToDraft}
-            style={{
-              width: "100%", padding: "10px 0",
-              border: "1px solid var(--border)", borderRadius: 10,
-              background: "var(--bg-card)", color: "var(--text-secondary)",
-              fontSize: 13, fontWeight: 600, cursor: "pointer",
-            }}
+            className="w-full py-2.5 border border-border rounded-[10px] bg-[var(--bg-card)] text-[var(--text-secondary)] text-[13px] font-semibold cursor-pointer hover:bg-[var(--bg-hover)] transition-colors"
           >
             ← Volver a editar el borrador
           </button>
@@ -1102,17 +1105,14 @@ function BreakdownRow({ label, value }: { label: React.ReactNode; value: string 
 
 function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Customer; onApply: () => void; onDismiss: () => void }) {
   return (
-    <div
-      className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 rounded-lg px-3 py-2.5 flex flex-col gap-2 shadow-lg"
-      style={{ background: "var(--bg-elevated)", border: "1px solid var(--brand-tint-border)" }}
-    >
-      <div className="text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>
+    <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 rounded-lg px-3 py-2.5 flex flex-col gap-2 shadow-lg bg-[var(--bg-elevated)] border border-[var(--brand-tint-border)]">
+      <div className="text-sm leading-relaxed text-[var(--text-primary)]">
         <span className="font-bold">{customer.name}</span>
-        <span className="mx-1.5" style={{ color: "var(--text-muted)" }}>·</span>
+        <span className="mx-1.5 text-[var(--text-muted)]">·</span>
         <span>{customer.phone}</span>
         {customer.address.city && (
           <>
-            <span className="mx-1.5" style={{ color: "var(--text-muted)" }}>·</span>
+            <span className="mx-1.5 text-[var(--text-muted)]">·</span>
             <span>{customer.address.city}, {customer.address.province}</span>
           </>
         )}
@@ -1121,15 +1121,14 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
         <button
           type="button"
           onClick={onApply}
-          className="h-7 px-3 rounded-md bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold cursor-pointer"
+          className="h-7 px-3 rounded-md bg-[var(--brand)] hover:bg-[var(--brand-strong)] text-white text-xs font-semibold cursor-pointer"
         >
           Usar datos
         </button>
         <button
           type="button"
           onClick={onDismiss}
-          className="h-7 px-3 rounded-md text-xs font-semibold cursor-pointer"
-          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+          className="h-7 px-3 rounded-md text-xs font-semibold cursor-pointer bg-[var(--bg-card)] border border-border text-[var(--text-secondary)]"
         >
           Ignorar
         </button>
@@ -1141,11 +1140,11 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
 function Section({ title, subtitle, children, icon }: { title: string; subtitle?: string; children: React.ReactNode; icon?: React.ReactNode }) {
   return (
     <Card>
-      <CardHeader className="flex items-start gap-2 border-b border-slate-100">
-        {icon && <span className="text-slate-500 mt-0.5">{icon}</span>}
+      <CardHeader className="flex items-start gap-2 border-b dark:border-gray-700 border-slate-100">
+        {icon && <span className="dark:text-gray-400 text-slate-500 mt-0.5">{icon}</span>}
         <div>
           <CardTitle>{title}</CardTitle>
-          {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+          {subtitle && <p className="text-xs dark:text-gray-500 text-slate-400 mt-0.5">{subtitle}</p>}
         </div>
       </CardHeader>
       <CardContent className="grid gap-4 pt-4">{children}</CardContent>
@@ -1163,7 +1162,7 @@ function Field({ label, children, error }: { label: string; children: React.Reac
     <div className="grid gap-1.5">
       {label && (
         <div className="flex items-center justify-between gap-2">
-          <label className="text-xs font-semibold text-slate-700">{label}</label>
+          <label className="text-xs font-semibold dark:text-gray-300 text-slate-700">{label}</label>
           {error && <span className="text-[11px] font-medium text-red-500 leading-tight">{error}</span>}
         </div>
       )}
@@ -1171,15 +1170,3 @@ function Field({ label, children, error }: { label: string; children: React.Reac
     </div>
   );
 }
-
-const input: React.CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 8,
-  border: "1px solid var(--border)",
-  fontSize: 14,
-  width: "100%",
-  boxSizing: "border-box",
-  background: "var(--bg-card)",
-  outline: "none", // focus ring provided via .new-shipment-form CSS rule
-  transition: "border-color 0.15s, box-shadow 0.15s",
-};

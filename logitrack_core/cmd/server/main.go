@@ -131,6 +131,10 @@ func main() {
 	sysConfigRepo := repository.NewPostgresSystemConfigRepository(database)
 	sysConfigSvc := service.NewSystemConfigService(sysConfigRepo)
 	sysConfigHandler := handler.NewSystemConfigHandler(sysConfigSvc)
+
+	// Detector de falta de sucursal: diagrama de cobertura (Voronoi) + gaps.
+	coverageSvc := service.NewCoverageService(branchRepo, sysConfigSvc)
+	coverageHandler := handler.NewCoverageHandler(coverageSvc)
 	draftLifecycleRepo := repository.NewPostgresDraftLifecycleRepository(database)
 	draftLifecycleSvc := service.NewDraftLifecycleService(draftLifecycleRepo, sysConfigSvc)
 	draftLifecycleHandler := handler.NewDraftLifecycleHandler(draftLifecycleSvc)
@@ -176,6 +180,7 @@ func main() {
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)
 	branchZoneSvc.SetShipmentService(shipmentSvc)
+	branchZoneSvc.SetCommentService(commentSvc)
 	paymentRepo := repository.NewPostgresPaymentRepository(database)
 	paymentSvc := service.NewPaymentService(paymentRepo, shipmentSvc, mpClient)
 	paymentHandler := handler.NewPaymentHandler(paymentSvc, mpClient, shipmentSvc)
@@ -264,6 +269,7 @@ func main() {
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
+	claimSvc.SetNotificationRepository(notifRepo)
 	claimHandler := handler.NewClaimHandler(claimSvc)
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo, twoFARepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
@@ -278,6 +284,23 @@ func main() {
 
 	statsExtendedSvc := service.NewStatsExtendedService(statsExtendedRepo, branchRepo)
 	statsExtendedHandler := handler.NewStatsExtendedHandler(statsExtendedSvc)
+
+	metricPermRepo := repository.NewPostgresMetricPermissionsRepository(database)
+	metricPermSvc := service.NewMetricPermissionsService(metricPermRepo)
+	permissionsHub := sse.NewPermissionsHub()
+	metricPermHandler := handler.NewMetricPermissionsHandler(metricPermSvc, permissionsHub)
+
+	dashPrefsRepo := repository.NewPostgresDashboardPreferencesRepository(database)
+	dashPrefsSvc := service.NewDashboardPreferencesService(dashPrefsRepo, metricPermSvc)
+	dashPrefsHandler := handler.NewDashboardPreferencesHandler(dashPrefsSvc)
+
+	dashProfilesRepo := repository.NewPostgresDashboardProfilesRepository(database)
+	dashProfilesSvc := service.NewDashboardProfilesService(dashProfilesRepo)
+	dashProfilesHandler := handler.NewDashboardProfilesHandler(dashProfilesSvc)
+
+	dashResetRepo := repository.NewPostgresDashboardResetRepository(database)
+	dashResetSvc := service.NewDashboardResetService(dashResetRepo)
+	dashResetHandler := handler.NewDashboardResetHandler(dashResetSvc)
 	twoFAHandler := handler.NewTwoFAHandler(twoFAService, accessLogRepo)
 
 	// Reportes automáticos (LOGITRACK — US gerente): manager + admin configuran
@@ -319,6 +342,8 @@ func main() {
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
 	shipmentHandler.SetRoutingService(routingSvc)
+	shipmentHandler.SetIncidentService(incidentSvc)
+	shipmentHandler.SetNotificationService(notifSvc)
 
 	// Motor de detección de anomalías SLA y repriorización automática (AC1-AC3).
 	priorityLogRepo := repository.NewPriorityLogRepository()
@@ -345,10 +370,14 @@ func main() {
 	}
 	fleetMLSvc := ml.NewFleetMLService(fleetModelPath)
 
-	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc, fleetMLSvc)
-	// Attach to the clock callback so every admin clock tick triggers a check.
+	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc, fleetMLSvc, branchRepo)
+	// Heartbeat autónomo: corre el Collector/Executor cada minuto en tiempo real,
+	// independiente de /admin/clock (que es solo una herramienta de testing).
+	slaAnomalySvc.Start()
+
+	// Attach to the clock callback so every admin clock tick also triggers a
+	// check immediately (útil para time-travel testing sin esperar al heartbeat).
 	// The service runs in its own goroutine and is mutex-guarded against overlap.
-	_ = slaAnomalySvc // referenced via closure below
 	origSLARiskChecker := slaRiskChecker
 	slaRiskChecker = func() {
 		if origSLARiskChecker != nil {
@@ -420,8 +449,21 @@ func main() {
 		}
 	}
 
+	// Empleado del Mes — ranking mensual de empleados por categoría.
+	eomRepo := repository.NewPostgresEmployeeOfMonthRepository(database)
+	seed.LoadEmployeeOfMonthWinners(eomRepo)
+	checkinRepoEOM := repository.NewCheckinRepository()
+	eomSvc := service.NewEmployeeOfMonthService(
+		branchRepo, shipmentRepo, routeRepo, interBranchTripRepo,
+		claimRepo, authRepo, checkinRepoEOM, fatigueConfigSvc, eomRepo,
+	)
+	eomHandler := handler.NewEmployeeOfMonthHandler(eomSvc)
+	userHandler.SetEmployeeOfMonthService(eomSvc)
+
 	// Scheduler: genera el plan global de ruteo todos los días a las 08:00 ART.
+	// También calcula el Empleado del Mes el primer día de cada mes a las 00:00.
 	sched := scheduler.New(routingSvc)
+	sched.SetEmployeeOfMonthService(eomSvc)
 	if err := sched.Start(); err != nil {
 		log.Fatalf("error iniciando scheduler: %v", err)
 	}
@@ -485,7 +527,10 @@ func main() {
 	shipmentDetailRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleDriver)
 	shipmentWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
 	claimRead := middleware.RequireRoles(model.RoleAdmin, model.RoleOperator, model.RoleSupervisor, model.RoleManager)
-	claimWrite := middleware.RequireRoles(model.RoleAdmin, model.RoleOperator, model.RoleSupervisor)
+	// Solo supervisores (y admin) pueden atender reclamos: derivar a área,
+	// resolver, solicitar info al cliente, marcar en revisión. Los operadores
+	// pueden verlos (claimRead) pero no accionar sobre ellos.
+	claimWrite := middleware.RequireRoles(model.RoleAdmin, model.RoleSupervisor)
 
 	// Branches — list/search: management roles incl. admin, create/update/status: admin only, capacity: management roles
 	canManageBranch := middleware.RequireRoles(model.RoleAdmin)
@@ -494,6 +539,7 @@ func main() {
 	protected.POST("/branches", canManageBranch, branchHandler.Create)
 	protected.PATCH("/branches/:id", canManageBranch, branchHandler.Update)
 	protected.PATCH("/branches/:id/status", canManageBranch, branchHandler.UpdateStatus)
+	protected.PATCH("/branches/:id/employee-of-month", canManageBranch, branchHandler.UpdateEmployeeOfMonth)
 	protected.GET("/branches/:id/capacity", mgmtNonDriver, branchHandler.GetCapacity)
 
 	// Vehicles — fleet management: list/create/admin actions include admin; operational vehicle actions exclude admin.
@@ -552,10 +598,14 @@ func main() {
 	protected.GET("/claims/:id/events", claimRead, claimHandler.GetClaimEvents)
 	protected.GET("/claims/:id/evidence/download", claimRead, claimHandler.DownloadClaimEvidence)
 	protected.GET("/claims/:id/response-evidence/download", claimRead, claimHandler.DownloadClaimResponseEvidence)
-	protected.PATCH("/claims/:id/category", claimWrite, claimHandler.UpdateClaimCategory)
+	protected.POST("/claims/:id/comment", claimWrite, claimHandler.AddClaimComment)
 	protected.POST("/claims/:id/resolve", claimWrite, claimHandler.ResolveClaim)
 	protected.POST("/claims/:id/request-info", claimWrite, claimHandler.RequestCustomerInfo)
 	protected.POST("/claims/:id/review", claimWrite, claimHandler.MarkClaimInReview)
+	claimSupervisor := middleware.RequireRoles(model.RoleSupervisor)
+	protected.POST("/claims/:id/transfer", claimSupervisor, claimHandler.TransferClaim)
+	protected.POST("/claims/:id/accept-transfer", claimSupervisor, claimHandler.AcceptTransfer)
+	protected.POST("/claims/:id/reject-transfer", claimSupervisor, claimHandler.RejectTransfer)
 
 	// Correct / cancel shipment — operator, supervisor (branch check enforced in handler/service)
 	protected.PATCH("/shipments/:tracking_id/correct", shipmentWrite, shipmentHandler.CorrectShipment)
@@ -585,6 +635,14 @@ func main() {
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
 	protected.GET("/supervisor/priority-logs", canViewStats, priorityLogHandler.List)
 	protected.GET("/stats/sla-metrics", canViewStats, slaMetricsHandler.Get)
+	// Detector de falta de sucursal: diagrama de cobertura (dashboard) +
+	// sucursal óptima para una coordenada (form de nuevo envío).
+	protected.GET("/coverage/diagram", canViewStats, coverageHandler.GetDiagram)
+	protected.GET("/coverage/branch-for", shipmentWrite, coverageHandler.BranchForPoint)
+	protected.GET("/coverage/diagnose", canViewStats, coverageHandler.Diagnose)
+	protected.POST("/coverage/snap-to-city", canViewStats, coverageHandler.SnapToCity)
+	protected.POST("/coverage/project", canViewStats, coverageHandler.Project)
+	protected.POST("/admin/fleet-ml/retrain", adminOnly, slaMetricsHandler.RetrainFleetML)
 	protected.GET("/admin/sla-settings", adminOnly, slaSettingsHandler.Get)
 	protected.PUT("/admin/sla-settings", adminOnly, slaSettingsHandler.Update)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
@@ -613,6 +671,9 @@ func main() {
 	protected.GET("/admin/routing/forecast/quality", managerAdmin, routingForecastHandler.GetForecastQuality)
 	protected.GET("/admin/routing/rolling-plan", managerAdmin, routingForecastHandler.GetRollingPlan)
 
+	// Delivery photo — operator, supervisor, manager (read access to delivery evidence)
+	protected.GET("/shipments/:tracking_id/delivery-photo", shipmentRead, shipmentHandler.GetDeliveryPhoto)
+
 	// Keyword delivery — driver only
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
 	protected.POST("/shipments/:tracking_id/deliver", driverOnly, shipmentHandler.DeliverShipment)
@@ -631,6 +692,7 @@ func main() {
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
 	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)
 	protected.POST("/driver/history-request", driverOnly, driverHandler.RequestHistory)
+	protected.POST("/driver/history-deletion-request", driverOnly, driverHandler.RequestHistoryDeletion)
 	protected.GET("/driver/history", driverOnly, driverHandler.GetPersonalHistory)
 	protected.POST("/dev/simulator/fast-forward-time", driverOnly, driverHandler.FastForwardCheckinTime) // DEV: simula paso de 2h
 	protected.GET("/driver/fatigue/block-status", driverOnly, driverHandler.GetFatigueBlockStatus)       // LOGITRACK-499
@@ -659,6 +721,8 @@ func main() {
 	protected.GET("/users/drivers", shipmentWrite, userHandler.ListDrivers)
 	protected.GET("/users/me", authenticated, userHandler.GetMe)
 	protected.POST("/users/me/password", authenticated, userHandler.ChangePassword)
+	// Employee profile (for badge display) — read-only, all authenticated roles.
+	protected.GET("/users/:id", authenticated, userHandler.GetByID)
 
 	// Customers — autocomplete by DNI used during shipment creation
 	protected.GET("/customers", shipmentWrite, customerHandler.GetByDNI)
@@ -670,6 +734,10 @@ func main() {
 	// System config — admin only
 	protected.GET("/system/config", adminOnly, sysConfigHandler.Get)
 	protected.PATCH("/system/config", adminOnly, sysConfigHandler.Update)
+
+	// Empleado del Mes — ranking mensual. Lectura: supervisor/manager/admin; cálculo manual: admin.
+	protected.GET("/employee-of-month", canViewStats, eomHandler.GetWinners)
+	protected.POST("/admin/employee-of-month/run", adminOnly, eomHandler.Run)
 
 	// System clock override — GET is open to all authenticated users (read-only, safe).
 	// PATCH/DELETE are admin-only (mutations).
@@ -697,11 +765,30 @@ func main() {
 
 	// Notifications — standard routes on the protected group.
 	notifHandler.RegisterRoutes(protected, authenticated)
-	// SSE stream is registered on the public api group (not protected) so the
+	// SSE streams are registered on the public api group (not protected) so the
 	// group-level header-only Auth middleware doesn't block EventSource clients.
 	// sseAuth validates the token from ?token= query param as a fallback.
 	sseAuth := middleware.AuthWithQueryParam(authRepo)
 	notifHandler.RegisterStreamRoute(api, sseAuth)
+	api.GET("/events/permissions", sseAuth, metricPermHandler.Stream)
+
+	// Metric permissions — admin manages the matrix; any authenticated user reads their own.
+	protected.GET("/admin/metric-permissions", adminOnly, metricPermHandler.GetMatrix)
+	protected.PATCH("/admin/metric-permissions", adminOnly, metricPermHandler.SetPermission)
+	protected.POST("/admin/metric-permissions/batch", adminOnly, metricPermHandler.SetBatchPermissions)
+	protected.GET("/admin/metric-permissions/audit-logs", adminOnly, metricPermHandler.GetAuditLogs)
+	protected.GET("/admin/user-metric-permissions", adminOnly, metricPermHandler.GetUserOverrides)
+	protected.PATCH("/admin/user-metric-permissions", adminOnly, metricPermHandler.SetUserOverride)
+	protected.DELETE("/admin/user-metric-permissions", adminOnly, metricPermHandler.DeleteUserOverride)
+	protected.GET("/metric-permissions/me", authenticated, metricPermHandler.GetForMe)
+	protected.GET("/preferences/dashboard", authenticated, dashPrefsHandler.Get)
+	protected.PUT("/preferences/dashboard", authenticated, dashPrefsHandler.Save)
+	protected.GET("/profiles", authenticated, dashProfilesHandler.List)
+	protected.POST("/profiles", authenticated, dashProfilesHandler.Create)
+	protected.DELETE("/profiles/:id", authenticated, dashProfilesHandler.Delete)
+	protected.POST("/admin/reset-dashboard", adminOnly, dashResetHandler.ResetDashboard)
+	protected.GET("/preferences/dashboard/reset-status", authenticated, dashResetHandler.GetResetStatus)
+	protected.PATCH("/preferences/dashboard/clear-reset", authenticated, dashResetHandler.ClearResetFlag)
 
 	// Zones — read: all authenticated; write: admin only
 	protected.GET("/zones", authenticated, zoneHandler.List)

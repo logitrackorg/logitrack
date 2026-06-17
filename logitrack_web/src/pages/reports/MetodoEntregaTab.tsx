@@ -30,7 +30,7 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 const METHOD_COLORS: Record<string, string> = {
-  ultima_milla: "#2563eb",
+  ultima_milla: "var(--brand)",
   retiro_sucursal: "#22c55e",
 };
 
@@ -41,7 +41,7 @@ const METHOD_BG: Record<string, string> = {
 
 const METHOD_ORDER = ["ultima_milla", "retiro_sucursal"];
 
-export default function MetodoEntregaTab({ dateFrom, dateTo, branchId }: MetodoEntregaTabProps) {
+export function MetodoEntregaTab({ dateFrom, dateTo, branchId }: MetodoEntregaTabProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
   const [total, setTotal] = useState(0);

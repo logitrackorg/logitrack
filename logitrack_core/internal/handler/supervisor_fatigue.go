@@ -337,9 +337,16 @@ func fatigueRiskScore(checkin model.DriverCheckin, cfg model.FatigueConfig) (sco
 		parts = append(parts, testData{math.Min(float64(total)*10.0, 100.0), cfg.TactileWeight})
 	}
 
-	// ── PVT latency — 0 ms = 0 risk, ≥ 500 ms = 100 risk ───────────────────
+	// ── PVT — use composite pvt_score when available (100=ideal → invert to
+	// risk), fall back to raw latency for legacy records without pvt_score.
 	if cfg.PVTEnabled && checkin.PVTMetrics != nil {
-		parts = append(parts, testData{math.Min(checkin.PVTMetrics.LatenciaPromedioMs/5.0, 100.0), cfg.PVTWeight})
+		var pvtRisk float64
+		if checkin.PVTMetrics.PVTScore != nil {
+			pvtRisk = float64(100 - *checkin.PVTMetrics.PVTScore)
+		} else {
+			pvtRisk = math.Min(checkin.PVTMetrics.LatenciaPromedioMs/5.0, 100.0)
+		}
+		parts = append(parts, testData{pvtRisk, cfg.PVTWeight})
 	}
 
 	if len(parts) == 0 {
@@ -571,19 +578,33 @@ func (h *SupervisorFatigueHandler) ListHistoryRequests(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"requests": result, "total": len(result)})
 }
 
-// ReviewHistoryRequest approves or rejects a driver's history access request.
-// Body: { "action": "approve" | "reject", "note": "..." (optional) }
+// ReviewHistoryRequest approves or rejects a driver's history governance
+// request — either an access request (sharing) or a deletion request
+// (revocation). Body: { "action": "approve" | "reject", "type": "access" |
+// "deletion" (optional, defaults to "access" for backward compatibility),
+// "note": "..." (optional) }.
+//
+// Approving a DELETION request revokes sharing entirely: it deletes both the
+// access and the deletion records, resetting the driver back to "no active
+// permissions" (Caso A) so a future cycle starts clean — an approved deletion
+// record left behind would otherwise dangle with nothing left to revoke.
 func (h *SupervisorFatigueHandler) ReviewHistoryRequest(c *gin.Context) {
 	reviewer := c.MustGet(middleware.UserKey).(model.User)
 	driverID := c.Param("driver_id")
 
 	var body struct {
 		Action string `json:"action" binding:"required"`
+		Type   string `json:"type"`
 		Note   string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "se requiere el campo 'action'"})
 		return
+	}
+
+	reqType := model.HistoryRequestTypeAccess
+	if body.Type == string(model.HistoryRequestTypeDeletion) {
+		reqType = model.HistoryRequestTypeDeletion
 	}
 
 	var newStatus model.HistoryRequestStatus
@@ -597,7 +618,7 @@ func (h *SupervisorFatigueHandler) ReviewHistoryRequest(c *gin.Context) {
 		return
 	}
 
-	req, ok := h.historyRepo.Get(driverID)
+	req, ok := h.historyRepo.Get(driverID, reqType)
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "no existe una solicitud para este chofer"})
 		return
@@ -612,6 +633,19 @@ func (h *SupervisorFatigueHandler) ReviewHistoryRequest(c *gin.Context) {
 	req.ReviewedBy = reviewer.Username
 	req.ReviewedAt = &now
 	req.ReviewNote = body.Note
+
+	if reqType == model.HistoryRequestTypeDeletion && newStatus == model.HistoryRequestApproved {
+		if err := h.historyRepo.Delete(driverID, model.HistoryRequestTypeAccess); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo revocar el acceso"})
+			return
+		}
+		if err := h.historyRepo.Delete(driverID, model.HistoryRequestTypeDeletion); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar la revisión"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "request": req})
+		return
+	}
 
 	if err := h.historyRepo.Upsert(req); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar la revisión"})

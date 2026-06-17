@@ -24,6 +24,9 @@ export interface PVTMetricsData {
   latencia_promedio_ms: number;
   aciertos: number;
   errores: number;
+  game_errors?: number;
+  /** Composite quality score 0–100 (higher = better). Null/absent for legacy records. */
+  pvt_score?: number | null;
   recorded_at: string;
 }
 
@@ -47,6 +50,9 @@ export interface CheckinRecord {
   voice_metrics: VoiceMetricsSnapshot | null;
   pvt_metrics?: PVTMetricsData | null;
   touch_events?: TouchEventRecord[] | null;
+  /** Coordenadas capturadas al momento de la prueba — null si no se pudo obtener ubicación. */
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface DriverFatigueStatus {
@@ -104,8 +110,14 @@ export interface FatigueHistoryResponse {
 
 export type HistoryRequestStatus = "pending" | "approved" | "rejected";
 
+// "access"   → el chofer pide compartir su historial con supervisores.
+// "deletion" → el chofer pide revocar/eliminar el acceso ya otorgado.
+// Ausente (legado) se interpreta como "access".
+export type HistoryRequestType = "access" | "deletion";
+
 export interface HistoryAccessRequest {
   driver_id: string;
+  type?: HistoryRequestType;
   status: HistoryRequestStatus;
   request_date: string;
   reviewed_by?: string;
@@ -152,9 +164,9 @@ export const supervisorFatigueApi = {
       .get<{ requests: HistoryAccessRequest[]; total: number }>("/supervisor/history-requests", { params })
       .then((r) => r.data);
   },
-  reviewHistoryRequest: (driverID: string, action: "approve" | "reject", note?: string) =>
+  reviewHistoryRequest: (driverID: string, action: "approve" | "reject", type: HistoryRequestType, note?: string) =>
     api
-      .patch<{ ok: boolean; request: HistoryAccessRequest }>(`/supervisor/history-requests/${driverID}`, { action, note })
+      .patch<{ ok: boolean; request: HistoryAccessRequest }>(`/supervisor/history-requests/${driverID}`, { action, type, note })
       .then((r) => r.data),
   getBlockedDrivers: (branchId?: string) => {
     const params = branchId ? { branch_id: branchId } : {};

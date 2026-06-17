@@ -174,21 +174,21 @@ func TestMoveShipment_EntradaToRevision(t *testing.T) {
 	}
 }
 
-func TestMoveShipment_SalidaToRevision(t *testing.T) {
+func TestMoveShipment_SalidaIsTerminal_ToRevision(t *testing.T) {
 	svc, _, eventStore, proj := setupMoveTest(t)
 	setShipmentZone(t, eventStore, proj, "LT-AAAA", model.ZoneSalida)
 	err := svc.MoveShipment("LT-AAAA", "op1", "branch_a", "control calidad", model.ZoneRevision, model.RoleOperator)
-	if err != nil {
-		t.Fatalf("expected ok, got: %v", err)
+	if err == nil {
+		t.Fatal("expected error: Salida is terminal, cannot move to Revisión")
 	}
 }
 
-func TestMoveShipment_SalidaToEntrada(t *testing.T) {
+func TestMoveShipment_SalidaIsTerminal_ToEntrada(t *testing.T) {
 	svc, _, eventStore, proj := setupMoveTest(t)
 	setShipmentZone(t, eventStore, proj, "LT-AAAA", model.ZoneSalida)
 	err := svc.MoveShipment("LT-AAAA", "op1", "branch_a", "reingreso", model.ZoneEntrada, model.RoleOperator)
-	if err != nil {
-		t.Fatalf("expected ok, got: %v", err)
+	if err == nil {
+		t.Fatal("expected error: Salida is terminal, cannot move to Entrada")
 	}
 }
 
@@ -205,6 +205,70 @@ func TestMoveShipment_DevolucionDirect_Blocked(t *testing.T) {
 	err := svc.MoveShipment("LT-AAAA", "op1", "branch_a", "", model.ZoneDevolucion, model.RoleOperator)
 	if err == nil {
 		t.Fatal("expected error for direct devolucion, got nil")
+	}
+}
+
+// createReturningTestShipment crea un envío en modo devolución (is_returning) en Entrada.
+func createReturningTestShipment(t *testing.T, shipmentRepo repository.ShipmentRepository, eventStore repository.EventStore, proj projection.Projector, trackingID, branchID string) {
+	t.Helper()
+	now := time.Now().UTC()
+	sh := model.Shipment{
+		TrackingID:        trackingID,
+		Status:            model.StatusAtHub,
+		ReceivingBranchID: branchID,
+		IsReturning:       true,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		Recipient:         model.Customer{Name: "Test", DNI: "12345678"},
+		Sender:            model.Customer{Name: "Sender", DNI: "87654321"},
+		WeightKg:          5,
+	}
+	event := model.DomainEvent{
+		ID:         uuid.New().String(),
+		TrackingID: trackingID,
+		EventType:  model.EventShipmentCreated,
+		Payload:    model.ShipmentCreatedPayload{Shipment: sh},
+		Timestamp:  now,
+	}
+	if err := eventStore.Append(event); err != nil {
+		t.Fatal(err)
+	}
+	proj.Apply(event)
+}
+
+func TestMoveShipment_Returning_EntradaToDevolucion(t *testing.T) {
+	svc, _, shipmentRepo, eventStore, proj := newBranchZoneTestSvc()
+	createReturningTestShipment(t, shipmentRepo, eventStore, proj, "LT-RET1", "branch_a")
+	err := svc.MoveShipment("LT-RET1", "op1", "branch_a", "devolución solicitada", model.ZoneDevolucion, model.RoleOperator)
+	if err != nil {
+		t.Fatalf("expected ok for returning Entrada→Devolución, got: %v", err)
+	}
+}
+
+func TestMoveShipment_Returning_EntradaToRevision(t *testing.T) {
+	svc, _, shipmentRepo, eventStore, proj := newBranchZoneTestSvc()
+	createReturningTestShipment(t, shipmentRepo, eventStore, proj, "LT-RET2", "branch_a")
+	err := svc.MoveShipment("LT-RET2", "op1", "branch_a", "revisar paquete", model.ZoneRevision, model.RoleOperator)
+	if err != nil {
+		t.Fatalf("expected ok for returning Entrada→Revisión, got: %v", err)
+	}
+}
+
+func TestMoveShipment_Returning_EntradaToSalida_Blocked(t *testing.T) {
+	svc, _, shipmentRepo, eventStore, proj := newBranchZoneTestSvc()
+	createReturningTestShipment(t, shipmentRepo, eventStore, proj, "LT-RET3", "branch_a")
+	err := svc.MoveShipment("LT-RET3", "op1", "branch_a", "", model.ZoneSalida, model.RoleOperator)
+	if err == nil {
+		t.Fatal("expected error: returning shipment cannot go from Entrada to Salida")
+	}
+}
+
+func TestMoveShipment_NonReturning_EntradaToDevolucion_Blocked(t *testing.T) {
+	svc, _, _, _ := setupMoveTest(t)
+	// LT-AAAA no está en devolución → Devolución no disponible.
+	err := svc.MoveShipment("LT-AAAA", "op1", "branch_a", "", model.ZoneDevolucion, model.RoleOperator)
+	if err == nil {
+		t.Fatal("expected error: non-returning shipment cannot move to Devolución")
 	}
 }
 
@@ -230,6 +294,14 @@ func TestRevision_SupervisorCanApprove(t *testing.T) {
 	err := svc.ApproveFromRevision("LT-AAAA", "sup1", "branch_a", "aprobado")
 	if err != nil {
 		t.Fatalf("expected ok, got: %v", err)
+	}
+}
+
+func TestRevision_ApproveRequiresResolutionComment(t *testing.T) {
+	svc, _, _ := setupRevisionTest(t)
+	err := svc.ApproveFromRevision("LT-AAAA", "sup1", "branch_a", "   ")
+	if err == nil {
+		t.Fatal("expected error: approving from Revisión requires a resolution comment")
 	}
 }
 
@@ -358,5 +430,81 @@ func TestClassifyShipment_WrongBranch(t *testing.T) {
 	err := svc.ClassifyShipment("LT-AAAA", "sup1", "branch_b", "lost", "")
 	if err == nil {
 		t.Fatal("expected error for wrong branch, got nil")
+	}
+}
+
+// ── AssignToEntrada tests (US-02 CA-01/CA-02) ────────────────────────────────────
+
+func TestAssignToEntrada_FromNilZone(t *testing.T) {
+	svc, _, shipmentRepo, eventStore, proj := newBranchZoneTestSvc()
+	// Shipment arriving via end-trip in the manual flow has no prior zone (nil).
+	createTestShipment(t, shipmentRepo, eventStore, proj, "LT-EEEE", "branch_a", model.StatusAtHub)
+
+	if err := svc.AssignToEntrada("LT-EEEE", "branch_a", "sys"); err != nil {
+		t.Fatalf("expected ok, got: %v", err)
+	}
+	sh, _ := shipmentRepo.GetByTrackingID("LT-EEEE")
+	if sh.CurrentZone == nil || *sh.CurrentZone != string(model.ZoneEntrada) {
+		t.Fatalf("expected current_zone=entrada, got %v", sh.CurrentZone)
+	}
+}
+
+// ── Dispatch guard tests (US-02 CA-03) ───────────────────────────────────────────
+
+// setupDispatchGuardTest builds a real ShipmentService plus an at_hub shipment, so we can
+// assert that dispatching is blocked while the shipment sits in Entrada/Revisión.
+func setupDispatchGuardTest(t *testing.T) (*ShipmentService, repository.EventStore, projection.Projector) {
+	t.Helper()
+	shipmentRepo, eventStore, proj := repository.NewInMemoryShipmentRepositoryWithDeps()
+	branchRepo := repository.NewInMemoryBranchRepository()
+	branchRepo.Add(model.Branch{
+		ID: "branch_a", Name: "BRANCH-A", Status: model.BranchStatusActive,
+		Province: "Buenos Aires", Address: model.Address{City: "Buenos Aires"},
+	})
+	customerRepo := repository.NewInMemoryCustomerRepository()
+	commentRepo := repository.NewInMemoryCommentRepository()
+	commentSvc := NewCommentService(commentRepo, shipmentRepo)
+	shipmentSvc := NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, NewMLService(""))
+	shipmentSvc.SetSystemConfig(&stubSystemConfig{})
+
+	createTestShipment(t, shipmentRepo, eventStore, proj, "LT-DDDD", "branch_a", model.StatusAtHub)
+	return shipmentSvc, eventStore, proj
+}
+
+func TestUpdateStatus_BlockedFromEntrada(t *testing.T) {
+	shipmentSvc, eventStore, proj := setupDispatchGuardTest(t)
+	setShipmentZone(t, eventStore, proj, "LT-DDDD", model.ZoneEntrada)
+
+	_, err := shipmentSvc.UpdateStatus("LT-DDDD", model.UpdateStatusRequest{
+		Status: model.StatusOutForDelivery, ChangedBy: "op1", DriverID: "drv1",
+	})
+	if err == nil {
+		t.Fatal("expected dispatch from Entrada to be blocked, got nil")
+	}
+}
+
+func TestUpdateStatus_BlockedFromRevision(t *testing.T) {
+	shipmentSvc, eventStore, proj := setupDispatchGuardTest(t)
+	setShipmentZone(t, eventStore, proj, "LT-DDDD", model.ZoneRevision)
+
+	_, err := shipmentSvc.UpdateStatus("LT-DDDD", model.UpdateStatusRequest{
+		Status: model.StatusLoaded, ChangedBy: "op1",
+	})
+	if err == nil {
+		t.Fatal("expected dispatch from Revisión to be blocked, got nil")
+	}
+}
+
+func TestUpdateStatus_AllowedFromSalida(t *testing.T) {
+	shipmentSvc, eventStore, proj := setupDispatchGuardTest(t)
+	setShipmentZone(t, eventStore, proj, "LT-DDDD", model.ZoneSalida)
+
+	// From Salida the zone guard must NOT trigger; any error here must come from
+	// downstream transition rules, not from the "movido a Salida" guard.
+	_, err := shipmentSvc.UpdateStatus("LT-DDDD", model.UpdateStatusRequest{
+		Status: model.StatusOutForDelivery, ChangedBy: "op1", DriverID: "drv1",
+	})
+	if err != nil && err.Error() == "El envío debe ser movido a Salida antes de despacharlo" {
+		t.Fatalf("dispatch from Salida should not be blocked by zone guard, got: %v", err)
 	}
 }

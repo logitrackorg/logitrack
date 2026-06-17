@@ -49,8 +49,9 @@ const ReturnETAExtraDays = 10
 // Payload types — each event type carries its own typed payload.
 
 type ShipmentCreatedPayload struct {
-	Shipment Shipment
-	Notes    string
+	Shipment            Shipment
+	Notes               string
+	SecurityKeywordHash string // stored explicitly because Shipment.SecurityKeywordHash is json:"-"
 }
 
 type DraftSavedPayload struct {
@@ -69,6 +70,7 @@ type DraftConfirmedPayload struct {
 	Price               *float64
 	PriceBreakdown      *PriceBreakdown
 	SecurityKeyword     string // set when delivery_method == ultima_milla
+	SecurityKeywordHash string // bcrypt hash of SecurityKeyword for offline validation
 }
 
 type StatusChangedPayload struct {
@@ -79,6 +81,10 @@ type StatusChangedPayload struct {
 	DriverID            string
 	RejectedByRecipient bool // delivery_failed: recipient explicitly refused
 	ContingencyDelivery bool // delivered via DNI fallback after exhausting keyword attempts
+	// Delivery photo evidence (última milla only)
+	DeliveryPhotoPath string
+	DeliveryPhotoName string
+	DeliveryPhotoMime string
 }
 
 type ShipmentCorrectedPayload struct {
@@ -117,9 +123,11 @@ type PaymentConfirmedPayload struct {
 	OldTrackingID       string
 	NewTrackingID       string
 	Amount              float64
+	Method              PaymentMethod
 	EstimatedDeliveryAt *time.Time
 	Prediction          *PriorityPrediction
 	SecurityKeyword     string
+	SecurityKeywordHash string // bcrypt hash of SecurityKeyword for offline validation
 }
 
 type ReturnedToDraftPayload struct {

@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"math/big"
 	"strings"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // demoMasterKeyword is always accepted as valid for demo purposes.
@@ -28,8 +30,9 @@ var keywordWords = []string{
 	"SURUBI", "TIMBO", "URUBÚ", "VIZCACHA", "ÑANDÚ", "AGUARA", "BOYERO", "CAPITAN",
 }
 
-// generateSecurityKeyword returns a random real Spanish word from the pool.
-func generateSecurityKeyword() string {
+// GenerateSecurityKeyword returns a random real Spanish word from the pool.
+// Exported so the seed package can populate keyword + hash on seed shipments.
+func GenerateSecurityKeyword() string {
 	n, err := rand.Int(rand.Reader, big.NewInt(int64(len(keywordWords))))
 	if err != nil {
 		return keywordWords[0]
@@ -41,4 +44,15 @@ func generateSecurityKeyword() string {
 // (case-insensitive) or equals the demo master keyword.
 func keywordMatches(input, stored string) bool {
 	return strings.EqualFold(input, stored) || strings.EqualFold(input, demoMasterKeyword)
+}
+
+// HashKeyword returns a bcrypt hash of keyword (uppercased) for offline validation caching.
+// Cost 10 (~100ms): slow enough to deter enumeration of the 112-word pool, fast enough for
+// single-shipment generation at create/confirm time.
+func HashKeyword(keyword string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(strings.ToUpper(keyword)), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
 }

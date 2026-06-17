@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useRef, useState, useCallback, useImperativeHandle } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState, useCallback, useImperativeHandle } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, ArrowRight, Package, Truck, CheckCircle2, AlertCircle,
@@ -47,7 +47,7 @@ const statusConfig: Record<ShipmentStatus, { label: string; tone: "default" | "s
   pending_payment: { label: "Pago pendiente", tone: "warning" },
 };
 
-const BRANCH_COLORS = ["#2563eb","#f97316","#22c55e","#ef4444","#8b5cf6","#06b6d4","#ec4899","#84cc16"];
+const BRANCH_COLORS = ["var(--brand)","#f97316","#22c55e","#ef4444","#8b5cf6","#06b6d4","#ec4899","#84cc16"];
 const TOOLTIP_STYLE = { fontSize:12, borderRadius:10, border:"1px solid #e2e8f0", boxShadow:"0 8px 24px rgba(0,0,0,0.1)", padding:"10px 14px", background:"rgba(255,255,255,0.97)" };
 const thClass = "px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider";
 const tdClass = "px-4 py-3 text-slate-700";
@@ -160,15 +160,18 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
   const delivered = stats?.by_status?.delivered??0;
   const issues = (stats?.by_status?.delivery_failed??0)+(stats?.by_status?.lost??0)+(stats?.by_status?.destroyed??0);
 
-  const chartData: {date:string;creados:number;entregados:number}[] = [];
-  if (dateFrom && dateTo) {
-    const cur = new Date(dateFrom+"T00:00:00"), end = new Date(dateTo+"T00:00:00");
-    while (cur <= end) {
-      const k = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}-${String(cur.getDate()).padStart(2,"0")}`;
-      chartData.push({ date:k, creados: stats?.by_day?.[k]??0, entregados: stats?.by_day_delivered?.[k]??0 });
-      cur.setDate(cur.getDate()+1);
+  const chartData = useMemo(() => {
+    const result: {date:string;creados:number;entregados:number}[] = [];
+    if (dateFrom && dateTo) {
+      const cur = new Date(dateFrom+"T00:00:00"), end = new Date(dateTo+"T00:00:00");
+      while (cur <= end) {
+        const k = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}-${String(cur.getDate()).padStart(2,"0")}`;
+        result.push({ date:k, creados: stats?.by_day?.[k]??0, entregados: stats?.by_day_delivered?.[k]??0 });
+        cur.setDate(cur.getDate()+1);
+      }
     }
-  }
+    return result;
+  }, [dateFrom, dateTo, stats?.by_day, stats?.by_day_delivered]);
 
   const doughnutItems: DoughnutDataItem[] = stats?.by_branch
     ? Object.entries(stats.by_branch).map(([id,count],i)=>({ name:branches.find(b=>b.id===id)?.name??id, value:count, color:BRANCH_COLORS[i%BRANCH_COLORS.length] }))
@@ -313,7 +316,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
                   interval={Math.max(0,Math.floor(chartData.length/12))} axisLine={{stroke:"#e2e8f0"}} tickLine={false} />
                 <YAxis tick={{fontSize:10,fill:"#94a3b8"}} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l)=>toDateLabel(l as string)} formatter={(v, n) => [v, n]} />
-                <Bar dataKey="creados" fill="#2563eb" radius={[3,3,0,0]} name="Creados" maxBarSize={32} />
+                <Bar dataKey="creados" fill="var(--brand)" radius={[3,3,0,0]} name="Creados" maxBarSize={32} />
                 <Bar dataKey="entregados" fill="#10b981" radius={[3,3,0,0]} name="Entregados" maxBarSize={32} />
               </BarChart>
             </ResponsiveContainer>
@@ -405,9 +408,9 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
               <YAxis type="category" dataKey="label" tick={{fontSize:11,fill:"#475569",fontWeight:500}} axisLine={false} tickLine={false} width={120} />
               <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v)=>[`${Number(v).toFixed(1)}h`,"Promedio"]} labelFormatter={(l)=>l} />
               <Bar dataKey="avg_hours" name="Tiempo promedio" radius={[0,4,4,0]} maxBarSize={28}
-                shape={(p: { x?: number; y?: number; width?: number; height?: number; payload?: { is_bottleneck?: boolean; avg_hours?: number } })=>{const x=p.x??0,y=p.y??0,width=p.width??0,height=p.height??0,payload=p.payload; const fill=payload?.is_bottleneck?"#f59e0b":"#1e3a5f";
+                shape={(p: { x?: number; y?: number; width?: number; height?: number; payload?: { is_bottleneck?: boolean; avg_hours?: number } })=>{const x=p.x??0,y=p.y??0,width=p.width??0,height=p.height??0,payload=p.payload; const fill=payload?.is_bottleneck?"#f59e0b":"var(--sidebar-bg)";
                   return <g><rect x={x} y={y} width={width} height={height} rx={4} fill={fill} /><text x={x+width+6} y={y+height/2+4} fontSize={11} fill="#475569" fontWeight={600} textAnchor="start">{Number(payload?.avg_hours??0).toFixed(1)}h</text></g>;}}>
-                {avgTimeData.map((e)=><Cell key={e.status} fill={e.is_bottleneck?"#f59e0b":"#1e3a5f"} />)}
+                {avgTimeData.map((e)=><Cell key={e.status} fill={e.is_bottleneck?"#f59e0b":"var(--sidebar-bg)"} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -455,7 +458,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
                     <StatusBadge status={s.status} label={shipmentStatusLabelOverride(s)} />
                     {s.contingency_delivery && (
                       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                        ⚠️ Contingencia DNI
+                        <AlertTriangle size={14} className="inline text-amber-500" /> Contingencia DNI
                       </span>
                     )}
                   </div>
@@ -485,4 +488,4 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
   );
 });
 
-export default ResumenTab;
+export { ResumenTab };
