@@ -412,6 +412,7 @@ func main() {
 	seed.LoadBranchGraph(branchGraphRepo, branchRepo)
 	routingSvc.SetBranchGraphService(branchGraphSvc)
 	shipmentSvc.SetBranchGraphService(branchGraphSvc)
+	claimSvc.SetRouteServices(branchGraphSvc, branchRepo)
 
 	// Shared metrics repo
 	metricsRepo := repository.NewPostgresRoutingMetricsRepository(database)
@@ -603,6 +604,7 @@ func main() {
 	protected.POST("/claims/:id/request-info", claimWrite, claimHandler.RequestCustomerInfo)
 	protected.POST("/claims/:id/review", claimWrite, claimHandler.MarkClaimInReview)
 	claimSupervisor := middleware.RequireRoles(model.RoleSupervisor)
+	protected.GET("/claims/:id/transfer-branches", claimSupervisor, claimHandler.TransferBranches)
 	protected.POST("/claims/:id/transfer", claimSupervisor, claimHandler.TransferClaim)
 	protected.POST("/claims/:id/accept-transfer", claimSupervisor, claimHandler.AcceptTransfer)
 	protected.POST("/claims/:id/reject-transfer", claimSupervisor, claimHandler.RejectTransfer)

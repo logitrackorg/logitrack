@@ -31,6 +31,8 @@ type ClaimService struct {
 	claimEmailSvc  ClaimEmailSender
 	claimWASvc     ClaimWASender
 	notifRepo      repository.NotificationRepository
+	branchGraphSvc *BranchGraphService
+	branchRepo     repository.BranchRepository
 }
 
 // ClaimEmailSender sends customer-facing claim notifications by email.
@@ -75,6 +77,59 @@ func (s *ClaimService) SetClaimWAService(svc ClaimWASender) {
 // SetNotificationRepository wires the notification repository for supervisor in-app notifications.
 func (s *ClaimService) SetNotificationRepository(repo repository.NotificationRepository) {
 	s.notifRepo = repo
+}
+
+// SetRouteServices wires the branch graph (for the shipment route) and the branch
+// repository, used to restrict claim transfer targets to the branches that belong
+// to the shipment's route (origin, intermediate hubs and destination).
+func (s *ClaimService) SetRouteServices(branchGraphSvc *BranchGraphService, branchRepo repository.BranchRepository) {
+	s.branchGraphSvc = branchGraphSvc
+	s.branchRepo = branchRepo
+}
+
+// TransferTargetBranches returns the active branches a claim may be transferred to:
+// only the branches that belong to the shipment's route (origin → intermediate
+// hubs → destination), excluding the branch that currently owns the claim.
+func (s *ClaimService) TransferTargetBranches(claimID, branchID string) ([]model.Branch, error) {
+	claim, err := s.GetByIDForBranch(claimID, branchID)
+	if err != nil {
+		return nil, err
+	}
+	shipment, err := s.shipmentRepo.GetByTrackingID(claim.TrackingID)
+	if err != nil {
+		return nil, repository.ErrClaimNotFound
+	}
+
+	// Build the set of branches that belong to the shipment's route.
+	route := map[string]bool{}
+	if shipment.OriginBranchID != "" {
+		route[shipment.OriginBranchID] = true
+	}
+	dest := shipment.FinalBranchID
+	if dest == "" {
+		dest = shipment.ReceivingBranchID
+	}
+	if dest != "" {
+		route[dest] = true
+	}
+	if s.branchGraphSvc != nil && shipment.OriginBranchID != "" && dest != "" {
+		for _, b := range s.branchGraphSvc.ShortestPath(shipment.OriginBranchID, dest) {
+			route[b] = true
+		}
+	}
+	// Exclude the branch that currently holds the claim (the caller's branch).
+	delete(route, branchID)
+
+	// Return only active branches that belong to the route.
+	out := []model.Branch{}
+	if s.branchRepo != nil {
+		for _, b := range s.branchRepo.ListActive() {
+			if route[b.ID] {
+				out = append(out, b)
+			}
+		}
+	}
+	return out, nil
 }
 
 func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evidence *ClaimEvidenceUpload) (model.Claim, error) {
