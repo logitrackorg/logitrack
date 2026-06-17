@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Navigate, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -1598,8 +1597,7 @@ function RouteCompletedView({ data }: { data: DriverRouteResponse }) {
 
   const tripActive = qrLoading || tripId !== null;
 
-  return createPortal(
-    <div className="fixed inset-0 z-[1001] bg-[var(--bg-page)] overflow-y-auto">
+  return (
     <div className="px-4 py-4 max-w-2xl mx-auto pb-12">
 
       <div className="rounded-2xl bg-gradient-to-br from-[var(--ok)] to-emerald-600 text-white p-5 mb-5 shadow-sm">
@@ -1710,8 +1708,6 @@ function RouteCompletedView({ data }: { data: DriverRouteResponse }) {
         })}
       </div>
     </div>
-    </div>,
-    document.body
   );
 }
 
