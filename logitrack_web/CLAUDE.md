@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Package manager
+
+Always use **pnpm** with the mirror registry for installs:
+```bash
+pnpm install --registry https://registry.npmmirror.com
+pnpm add <pkg> --registry https://registry.npmmirror.com
+```
+Never use `npm install` to add or install packages in this project.
+
 ## Commands
 
 ```bash
