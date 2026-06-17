@@ -840,6 +840,7 @@ function LastMileView() {
                 onFastForwardTime: () => driverApi.fastForwardCheckinTime().catch(() => {}),
               }}
               zones={zones}
+              dangerZones={activeDangerZones}
               onRouteInfoChange={setRouteInfo}
               onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
             />
@@ -889,29 +890,6 @@ function LastMileView() {
           </>
         )}
       </div>
-
-      {/* Vista Mapa — padding y max-width consistentes con la lista */}
-      {viewMode === 'map' && (
-        <div className="px-4 max-w-2xl mx-auto w-full flex-1 flex flex-col mb-2">
-          <MapView
-            waypoints={waypoints}
-            origin={origin}
-            userLocation={userLocation ?? undefined}
-            simulationMode={simulationMode}
-            simulationControls={{
-              isPaused, pause, play, reset,
-              onExit: () => { setSimActive(false); setSpeedMultiplier(1); },
-              speedMultiplier,
-              onCycleSpeed: cycleSpeedMultiplier,
-              onFastForwardTime: () => driverApi.fastForwardCheckinTime().catch(() => {}),
-            }}
-            zones={zones}
-            dangerZones={activeDangerZones}
-            onRouteInfoChange={setRouteInfo}
-            onWaypointClick={(trackingId) => navigate(`/driver/shipments/${trackingId}`)}
-          />
-        </div>
-      )}
 
       {/* Card próxima parada (solo en vista mapa con ruta en curso) */}
       {viewMode === 'map' && canAct && (
@@ -1004,35 +982,37 @@ function LastMileView() {
       {/* Modal de advertencia de geofence */}
       {geoWarning && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
+          <div className="w-full max-w-sm rounded-2xl bg-[var(--bg-card)] shadow-2xl overflow-hidden">
             <div className="flex items-start gap-3 px-5 pt-5 pb-4">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              <div className="w-10 h-10 rounded-xl bg-[var(--warn-bg)] flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-[var(--warn)]" />
               </div>
               <div className="flex-1">
-                <p className="font-bold text-slate-900 dark:text-gray-100">Ubicación fuera de rango</p>
-                <p className="mt-1 text-sm text-slate-600 dark:text-gray-400 leading-relaxed">
-                  Estás a <span className="font-semibold text-amber-700">{Math.round(geoWarning.distanceM)} m</span> del domicilio del destinatario
+                <p className="font-bold text-[var(--text-primary)]">Ubicación fuera de rango</p>
+                <p className="mt-1 text-sm text-[var(--text-secondary)] leading-relaxed">
+                  Estás a <span className="font-semibold text-[var(--warn-text)]">{Math.round(geoWarning.distanceM)} m</span> del domicilio del destinatario
                   (máximo {GEOFENCE_RADIUS_M} m).
                 </p>
-                <p className="mt-2 text-xs text-slate-500 dark:text-gray-500">
+                <p className="mt-2 text-xs text-[var(--text-muted)]">
                   Si confirmás, se registrará un incidente en el envío para revisión del supervisor.
                 </p>
               </div>
             </div>
             <div className="flex gap-2 px-5 pb-5">
-              <button
+              <Button
+                variant="outline"
                 onClick={() => setGeoWarning(null)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold border dark:border-gray-700 border-slate-200 dark:text-gray-300 text-slate-700 dark:hover:bg-gray-800 hover:bg-slate-50 transition-all"
+                className="flex-1 py-2.5 rounded-xl"
               >
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="accent"
                 onClick={geoWarning.onConfirm}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-all"
+                className="flex-1 py-2.5 rounded-xl"
               >
                 Confirmar igual
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1564,7 +1544,7 @@ function InterBranchTripView() {
   // ---------- Estado completado ----------
   if (trip.status === "completado") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--bg-page)]">
+    <div className="flex flex-col items-center justify-center p-6 py-20">
         <div className="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-5">
           <CheckCircle2 className="w-10 h-10 text-emerald-600 dark:text-emerald-400" />
         </div>
@@ -2556,7 +2536,7 @@ function QRModal({
 function NoTripView() {
   const navigate = useNavigate();
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--bg-page)]">
+    <div className="flex flex-col items-center justify-center p-6 py-20">
       <div className="w-24 h-24 rounded-full bg-[var(--bg-muted)] flex items-center justify-center mb-6">
         <Package className="w-12 h-12 text-[var(--text-muted)]" />
       </div>
