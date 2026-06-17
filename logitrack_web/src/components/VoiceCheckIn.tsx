@@ -240,7 +240,7 @@ export function VoiceCheckIn({ onDone }: Props) {
           </div>
 
           {/* Control phrase */}
-          <div className="mb-6 px-4 py-4 rounded-xl bg-slate-800 border border-slate-600">
+          <div className="mb-6 px-4 py-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border)]">
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
               Frase de control
             </p>

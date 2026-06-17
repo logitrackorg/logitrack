@@ -28,9 +28,9 @@ const MAX_DELAY_MS = 3000;
 
 function latencyInterpretation(avg: number): { text: string; colorClass: string } {
   if (avg === 0)    return { text: "Sin datos — no hubo aciertos",                  colorClass: "text-slate-400" };
-  if (avg <= 800)   return { text: "Aceptable — dentro del rango esperado",         colorClass: "text-emerald-400" };
-  if (avg <= 1100)  return { text: "Media — considerá descansar",                   colorClass: "text-amber-400" };
-  return              { text: "Lento — se recomienda descansar antes de conducir",  colorClass: "text-rose-400" };
+  if (avg <= 800)   return { text: "Aceptable — dentro del rango esperado",         colorClass: "text-[var(--ok)]" };
+  if (avg <= 1100)  return { text: "Media — considerá descansar",                   colorClass: "text-[var(--warn)]" };
+  return              { text: "Lento — se recomienda descansar antes de conducir",  colorClass: "text-[var(--danger-text)]" };
 }
 
 // ── interfaces ────────────────────────────────────────────────────────────────
@@ -242,10 +242,10 @@ export function PVTCheckIn({ onDone }: Props) {
                 </div>
               </div>
 
-              <div className="mb-6 px-4 py-4 rounded-xl bg-slate-800 border border-slate-600 space-y-3">
+              <div className="mb-6 px-4 py-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border)] space-y-3">
                 <p className="text-sm font-semibold text-white">¿Cómo funciona?</p>
                 <ol className="list-decimal list-inside space-y-2 text-sm text-slate-300 leading-relaxed">
-                  <li>Aparecerá un <span className="text-emerald-400 font-semibold">círculo verde</span> en una posición aleatoria.</li>
+                  <li>Aparecerá un <span className="text-[var(--ok)] font-semibold">círculo verde</span> en una posición aleatoria.</li>
                   <li>Tocá el círculo lo más rápido que puedas.</li>
                   <li>Si tocás la pantalla sin que haya círculo, se registra como error.</li>
                   <li>La prueba dura <strong className="text-white">15 segundos</strong> en total.</li>
@@ -279,7 +279,7 @@ export function PVTCheckIn({ onDone }: Props) {
                 <span className="text-xs text-slate-400">Tiempo restante</span>
                 <span className="text-sm font-bold text-white tabular-nums">{timeLeft}s</span>
               </div>
-              <div className="h-2 w-full rounded-full bg-slate-700 overflow-hidden">
+              <div className="h-2 w-full rounded-full bg-[var(--bg-inset)] overflow-hidden">
                 <div
                   className="h-full rounded-full transition-[width] duration-1000"
                   style={{
@@ -292,13 +292,13 @@ export function PVTCheckIn({ onDone }: Props) {
 
             {/* Marcador */}
             <div className="flex gap-3 mb-4 shrink-0">
-              <div className="flex-1 px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-center">
+              <div className="flex-1 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border)] text-center">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Aciertos</p>
-                <p className="text-2xl font-black text-emerald-400 tabular-nums leading-tight">{hitCount}</p>
+                <p className="text-2xl font-black text-[var(--ok)] tabular-nums leading-tight">{hitCount}</p>
               </div>
-              <div className="flex-1 px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-center">
+              <div className="flex-1 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border)] text-center">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Errores</p>
-                <p className="text-2xl font-black text-rose-400 tabular-nums leading-tight">{errorCount}</p>
+                <p className="text-2xl font-black text-[var(--danger-text)] tabular-nums leading-tight">{errorCount}</p>
               </div>
             </div>
 
@@ -306,7 +306,7 @@ export function PVTCheckIn({ onDone }: Props) {
             <div
               ref={boxRef}
               onPointerDown={handleBoxPointerDown}
-              className="relative flex-1 rounded-xl border-2 border-yellow-500/40 bg-slate-900 overflow-hidden select-none"
+              className="relative flex-1 rounded-xl border-2 border-yellow-500/40 bg-[var(--bg-page)] overflow-hidden select-none"
               style={{ minHeight: 220, touchAction: "none" }}
             >
               {/* Indicador de fondo cuando no hay estímulo */}
@@ -330,7 +330,7 @@ export function PVTCheckIn({ onDone }: Props) {
                     left: circlePos.x - CIRCLE_RADIUS,
                     top: circlePos.y - CIRCLE_RADIUS,
                     background: "var(--ok)",             // emerald-400
-                    boxShadow: "0 0 24px rgba(52,211,153,0.55)",
+                    boxShadow: "0 0 24px var(--ok)",
                     touchAction: "none",
                   }}
                 />
@@ -359,7 +359,7 @@ export function PVTCheckIn({ onDone }: Props) {
             </div>
 
             {/* Latencia promedio */}
-            <div className="mb-4 px-4 py-4 rounded-xl bg-slate-800 border border-slate-600">
+            <div className="mb-4 px-4 py-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border)]">
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                 Latencia promedio de respuesta
               </p>
@@ -378,13 +378,13 @@ export function PVTCheckIn({ onDone }: Props) {
 
             {/* Aciertos y errores */}
             <div className="grid grid-cols-2 gap-3 mb-6">
-              <div className="px-4 py-3 rounded-xl bg-slate-800 border border-slate-600 text-center">
+              <div className="px-4 py-3 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border)] text-center">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Aciertos</p>
-                <p className="text-3xl font-black text-emerald-400 tabular-nums">{results.hits}</p>
+                <p className="text-3xl font-black text-[var(--ok)] tabular-nums">{results.hits}</p>
               </div>
-              <div className="px-4 py-3 rounded-xl bg-slate-800 border border-slate-600 text-center">
+              <div className="px-4 py-3 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border)] text-center">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Toques erróneos</p>
-                <p className="text-3xl font-black text-rose-400 tabular-nums">{results.errors}</p>
+                <p className="text-3xl font-black text-[var(--danger-text)] tabular-nums">{results.errors}</p>
               </div>
             </div>
 

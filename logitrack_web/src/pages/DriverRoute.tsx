@@ -428,7 +428,7 @@ function LastMileView() {
         <div className="h-2 w-full rounded-full dark:bg-gray-700/50 bg-slate-100 overflow-hidden">
           <div
             ref={el => { if (el) el.style.width = `${progressPct}%`; }}
-            className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-[width] duration-500"
+            className="h-full bg-gradient-to-r from-emerald-400 to-[var(--ok)] transition-[width] duration-500"
           />
         </div>
       </div>
@@ -914,7 +914,7 @@ function InterBranchTripView() {
       const icon = (bg: string, content: string) =>
         L.divIcon({
           className: "",
-          html: `<div style="background:${bg};color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.3)">${content}</div>`,
+          html: `<div style="background:${bg};color:var(--text-on-brand,#fff);border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.3)">${content}</div>`,
           iconSize: [30, 30],
           iconAnchor: [15, 15],
         });
@@ -1382,7 +1382,7 @@ function InterBranchTripView() {
       {/* Overlay de bloqueo por fatiga — fixed encima de todo, no desmonta el mapa */}
       {fatigueBlocked && (
         <div className="fixed inset-0 z-[9999] bg-[var(--sidebar-bg)] flex flex-col items-center justify-center p-8 text-center gap-6">
-          <AlertTriangle size={64} className="text-red-500" />
+          <AlertTriangle size={64} className="text-[var(--danger-c)]" />
           <h2 className="text-white text-[22px] font-bold m-0">
             Alerta de fatiga detectada
           </h2>
@@ -1612,7 +1612,7 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
         </div>
       </div>
 
-      <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white p-5 mb-5 shadow-sm">
+      <div className="rounded-2xl bg-gradient-to-br from-[var(--ok)] to-emerald-600 text-white p-5 mb-5 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
             <CheckCircle2 className="w-7 h-7" />
@@ -1848,7 +1848,7 @@ function StepperBar({
                     isCompleted
                       ? "bg-emerald-500 dark:bg-emerald-600"
                       : isCurrent
-                        ? "bg-gradient-to-r from-emerald-500 to-[var(--border)]"
+                        ? "bg-gradient-to-r from-[var(--ok)] to-[var(--border)]"
                         : "bg-[var(--border)]"
                   }`}
                 />

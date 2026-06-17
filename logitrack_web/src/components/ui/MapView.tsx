@@ -382,12 +382,12 @@ export function MapView({
 
     if (splitIdx > 0) {
       doneRouteLayer.current = L.polyline(full.slice(0, splitIdx + 1), {
-        color: "#94a3b8", weight: 4, opacity: 0.6, dashArray: "8, 6",
+        color: "var(--text-muted)", weight: 4, opacity: 0.6, dashArray: "8, 6",
       }).addTo(mapInstance.current!);
     }
     if (splitIdx < full.length - 1) {
       pendingRouteLayer.current = L.polyline(full.slice(splitIdx), {
-        color: "#f97316", weight: 4, opacity: 0.8,
+        color: "var(--warn)", weight: 4, opacity: 0.8,
       }).addTo(mapInstance.current!);
     }
   };
@@ -442,17 +442,17 @@ export function MapView({
           const doneResult = await fetchOsrm(donePoints);
           if (doneResult) {
             doneRouteLayer.current = L.polyline(doneResult.coords, {
-              color: "#94a3b8", weight: 4, opacity: 0.6, dashArray: "8, 6",
+              color: "var(--text-muted)", weight: 4, opacity: 0.6, dashArray: "8, 6",
             }).addTo(mapInstance.current!);
           }
         }
         if (pendingResult) {
           pendingRouteLayer.current = L.polyline(pendingResult.coords, {
-            color: "#f97316", weight: 4, opacity: 0.8,
+            color: "var(--warn)", weight: 4, opacity: 0.8,
           }).addTo(mapInstance.current!);
         } else if (fullResult) {
           pendingRouteLayer.current = L.polyline(fullResult.coords, {
-            color: "#f97316", weight: 4, opacity: 0.8,
+            color: "var(--warn)", weight: 4, opacity: 0.8,
           }).addTo(mapInstance.current!);
         }
       }
@@ -623,7 +623,7 @@ export function MapView({
       {loading && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[var(--bg-card)] px-8 py-5 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col items-center z-[2000]">
           <div className="w-6 h-6 border-[3px] border-[var(--border)] border-t-[var(--warn)] rounded-full animate-spin" />
-          <p className="text-xs text-slate-600 dark:text-[var(--text-secondary)] mt-2">Calculando ruta...</p>
+          <p className="text-xs text-[var(--text-secondary)] mt-2">Calculando ruta...</p>
         </div>
       )}
     </div>
