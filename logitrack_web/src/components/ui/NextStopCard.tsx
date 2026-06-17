@@ -1,4 +1,5 @@
 import { Navigation, CheckCircle2, XCircle, MapPin, Clock, Map, Ban } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { googleMapsSingleStop, googleMapsRoute } from "../../utils/googleMaps";
 import type { GeoPoint } from "../../utils/googleMaps";
 
@@ -91,32 +92,32 @@ export function NextStopCard({
                 href={singleUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 h-9 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-1.5 no-underline"
+                className="flex-1 h-9 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-semibold cursor-pointer border-none transition-all flex items-center justify-center gap-1.5 no-underline focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:translate-y-px"
               >
                 <Navigation className="w-4 h-4" />
                 Navegar
               </a>
-              <button
+              <Button
                 onClick={onDeliver}
-                className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-1.5"
+                className="flex-1 h-9 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold gap-1.5"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 Entregar
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={onFailed}
-                className="h-9 w-9 bg-red-500 hover:bg-red-600 text-white rounded-xl cursor-pointer border-none transition-colors flex items-center justify-center shrink-0"
+                className="h-9 w-9 rounded-xl bg-red-500 hover:bg-red-600 text-white"
                 title="No entregado"
               >
                 <XCircle className="w-4 h-4" />
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={onRejected}
-                className="h-9 w-9 bg-orange-500 hover:bg-orange-600 text-white rounded-xl cursor-pointer border-none transition-colors flex items-center justify-center shrink-0"
+                className="h-9 w-9 rounded-xl bg-orange-500 hover:bg-orange-600 text-white"
                 title="Rechazado"
               >
                 <Ban className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
           )}
 
@@ -125,7 +126,7 @@ export function NextStopCard({
               href={singleUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-3 h-9 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-1 no-underline"
+              className="mt-3 h-9 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-semibold cursor-pointer border-none transition-all flex items-center justify-center gap-1 no-underline focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:translate-y-px"
             >
               <Navigation className="w-3.5 h-3.5" />
               Navegar
