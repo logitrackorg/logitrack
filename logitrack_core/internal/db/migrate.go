@@ -841,6 +841,15 @@ func RunMigrations(db *sql.DB) error {
 			reset_at  TIMESTAMPTZ,
 			reset_by  TEXT
 		);
+
+		-- Geographic regions for the coverage simulator (predefined + user-drawn).
+		CREATE TABLE IF NOT EXISTS regions (
+			id          TEXT        PRIMARY KEY,
+			name        TEXT        NOT NULL,
+			type        TEXT        NOT NULL DEFAULT 'custom',
+			coordinates JSONB       NOT NULL DEFAULT '[]',
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
 	`)
 	return err
 }

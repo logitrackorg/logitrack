@@ -29,6 +29,7 @@ import {
   type BranchProjection,
   GAP_STYLE,
 } from "../../api/coverage";
+import { regionsApi, type Region as CoverageRegion } from "../../api/regions";
 import { VoronoiCoverageMap, type VoronoiCoverageMapHandle } from "../../components/VoronoiCoverageMap";
 import { CoverageSimulatorPanel, SIM_AREA_DEFAULT } from "../../components/CoverageSimulatorPanel";
 import { CollapsiblePanel } from "../../components/CollapsiblePanel";
@@ -1024,6 +1025,15 @@ export function CoberturaTab() {
   const [customBoundary, setCustomBoundary] = useState<[number, number][] | null>(null);
   const [isDrawingBoundary, setIsDrawingBoundary] = useState(false);
 
+  // Zonas guardadas (predefinidas + zonas del usuario).
+  const [regions, setRegions] = useState<CoverageRegion[]>([]);
+  const [selectedRegionId, setSelectedRegionId] = useState<string>("national");
+  // Modal para guardar una zona dibujada nueva.
+  const [showSaveRegionModal, setShowSaveRegionModal] = useState(false);
+  const [pendingRegionBoundary, setPendingRegionBoundary] = useState<[number, number][] | null>(null);
+  const [savingRegionName, setSavingRegionName] = useState("");
+  const [savingRegion, setSavingRegion] = useState(false);
+
   // Sync refs used by diagnoseCore (stable callback, reads values without closures).
   useEffect(() => { simResultRef.current = simResult; }, [simResult]);
   useEffect(() => { visualAreaRef.current = visualArea; }, [visualArea]);
@@ -1035,30 +1045,82 @@ export function CoberturaTab() {
   // Fetch all branches (including inactive) for the simulation panel.
   useEffect(() => { branchApi.list().then(setAllBranches).catch(() => {}); }, []);
 
-  const handleTerritoryModeChange = useCallback((mode: "national" | "custom") => {
-    setTerritoryMode(mode);
-    if (mode === "custom" && !customBoundary) {
-      setIsDrawingBoundary(true);
-    }
-    if (mode === "national") {
+  // Fetch saved regions (predefined + custom) for the zone selector.
+  useEffect(() => { regionsApi.list().then(setRegions).catch(() => {}); }, []);
+
+  const handleRegionChange = useCallback((id: string) => {
+    setSelectedRegionId(id);
+    if (id === "national") {
       setCustomBoundary(null);
+      setTerritoryMode("national");
       setIsDrawingBoundary(false);
+      return;
     }
-  }, [customBoundary]);
+    const region = regions.find((r) => r.id === id);
+    if (!region) return;
+    const coords: [number, number][] = region.coordinates.map((c) => [c.lat, c.lng]);
+    setCustomBoundary(coords);
+    setTerritoryMode("custom");
+    setIsDrawingBoundary(false);
+    coverageMapRef.current?.fitBoundsToPolygon(coords);
+  }, [regions]);
+
+  const handleStartDrawNewRegion = useCallback(() => {
+    setSelectedRegionId("national");
+    setCustomBoundary(null);
+    setTerritoryMode("custom");
+    setIsDrawingBoundary(true);
+  }, []);
 
   const handleBoundaryComplete = useCallback((pts: [number, number][]) => {
     setCustomBoundary(pts);
     setIsDrawingBoundary(false);
+    setPendingRegionBoundary(pts);
+    setShowSaveRegionModal(true);
   }, []);
 
   const handleBoundaryCancel = useCallback(() => {
     setIsDrawingBoundary(false);
-    if (!customBoundary) setTerritoryMode("national");
+    if (!customBoundary) {
+      setTerritoryMode("national");
+      setSelectedRegionId("national");
+    }
   }, [customBoundary]);
 
   const handleClearBoundary = useCallback(() => {
     setCustomBoundary(null);
+    setSelectedRegionId("national");
     setIsDrawingBoundary(true);
+  }, []);
+
+  const handleSaveNewRegion = useCallback(async () => {
+    if (!pendingRegionBoundary || !savingRegionName.trim()) return;
+    setSavingRegion(true);
+    try {
+      const newRegion = await regionsApi.create({
+        name: savingRegionName.trim(),
+        coordinates: pendingRegionBoundary.map(([lat, lng]) => ({ lat, lng })),
+      });
+      const updated = await regionsApi.list();
+      setRegions(updated);
+      setSelectedRegionId(newRegion.id);
+      setCustomBoundary(pendingRegionBoundary);
+      setTerritoryMode("custom");
+    } finally {
+      setSavingRegion(false);
+      setShowSaveRegionModal(false);
+      setSavingRegionName("");
+      setPendingRegionBoundary(null);
+    }
+  }, [pendingRegionBoundary, savingRegionName]);
+
+  const handleCancelSaveRegion = useCallback(() => {
+    setShowSaveRegionModal(false);
+    setSavingRegionName("");
+    setPendingRegionBoundary(null);
+    setCustomBoundary(null);
+    setTerritoryMode("national");
+    setSelectedRegionId("national");
   }, []);
 
   // "Proyección de Impacto": cobertura actual vs. proyectada de cada sucursal
@@ -1453,10 +1515,13 @@ export function CoberturaTab() {
                 scopeLabel={simScopeLabel}
                 disabled={isFetchingCities}
                 territoryMode={territoryMode}
-                onTerritoryModeChange={handleTerritoryModeChange}
                 customBoundaryPoints={customBoundary?.length ?? 0}
                 isDrawingBoundary={isDrawingBoundary}
                 onClearBoundary={handleClearBoundary}
+                regions={regions}
+                selectedRegionId={selectedRegionId}
+                onRegionChange={handleRegionChange}
+                onStartDrawNewRegion={handleStartDrawNewRegion}
               />
               {simResult !== null && (
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -1704,6 +1769,48 @@ export function CoberturaTab() {
         </button>
       </div>
       {body}
+
+      {/* ── Modal: guardar zona dibujada ─────────────────────────────────────── */}
+      {showSaveRegionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-sm mx-4 rounded-xl bg-white dark:bg-gray-900 shadow-2xl border border-slate-200 dark:border-gray-700 p-6 space-y-4">
+            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+              Guardar zona personalizada
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Asigná un nombre a esta zona para reutilizarla en futuros análisis.
+            </p>
+            <input
+              type="text"
+              value={savingRegionName}
+              onChange={(e) => setSavingRegionName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") void handleSaveNewRegion(); }}
+              placeholder="Ej. Patagonia, GBA Norte…"
+              autoFocus
+              maxLength={60}
+              className="w-full text-sm px-3 py-2 rounded-lg border border-slate-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleCancelSaveRegion}
+                disabled={savingRegion}
+                className="px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-gray-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveNewRegion()}
+                disabled={savingRegion || !savingRegionName.trim()}
+                className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingRegion ? "Guardando…" : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

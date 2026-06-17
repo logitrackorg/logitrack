@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Globe, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
+import type { Region } from "../api/regions";
 
 export const SIM_AREA_MIN = 100;
 export const SIM_AREA_MAX = 1_000_000;
@@ -13,32 +14,25 @@ const MIN_POP_DEFAULT = 0;
 export type TerritoryMode = "national" | "custom";
 
 interface CoverageSimulatorPanelProps {
-  /** Área simulada en km² — estado "instantáneo" que sigue al slider sin llamar al servidor. */
   areaKm2: number;
-  /** Se llama en cada movimiento del slider; solo actualiza la previsualización local. */
   onAreaChange: (areaKm2: number) => void;
-  /** Se llama al confirmar con el área y la población mínima elegidas. */
   onConfirm: (areaKm2: number, minPopulation: number) => void;
-  /**
-   * Notifica al padre en cada movimiento del slider de población mínima, no
-   * solo al confirmar. Necesario para que "Reintentar sugerencias pendientes"
-   * use el valor actual del slider y no el de la última confirmación.
-   */
   onMinPopulationChange?: (minPopulation: number) => void;
-  /** A qué sucursal(es) se aplica el círculo de previsualización. */
   scopeLabel: string;
-  /** Bloquea el slider y el botón de confirmación (p.ej. mientras se geocodifican sugerencias). */
   disabled?: boolean;
-  /** Modo de territorio: "national" = Argentina completa, "custom" = área dibujada. */
+  /** Current territory mode — used to show the drawing-in-progress indicator. */
   territoryMode?: TerritoryMode;
-  /** Notifica al padre cuando el usuario cambia el modo de territorio. */
-  onTerritoryModeChange?: (mode: TerritoryMode) => void;
-  /** Cantidad de vértices del polígono personalizado actualmente dibujado (0 = no dibujado). */
   customBoundaryPoints?: number;
-  /** true cuando el usuario está en proceso de dibujar el polígono en el mapa. */
   isDrawingBoundary?: boolean;
-  /** Limpia el polígono personalizado y reactiva el modo de dibujo. */
   onClearBoundary?: () => void;
+  /** List of available regions from the backend. */
+  regions?: Region[];
+  /** Currently selected region ID, or "national" for full Argentina. */
+  selectedRegionId?: string;
+  /** Called when the user picks a different region from the dropdown. */
+  onRegionChange?: (id: string) => void;
+  /** Called when the user clicks "Dibujar nueva zona". */
+  onStartDrawNewRegion?: () => void;
 }
 
 export function CoverageSimulatorPanel({
@@ -49,44 +43,63 @@ export function CoverageSimulatorPanel({
   scopeLabel,
   disabled = false,
   territoryMode = "national",
-  onTerritoryModeChange,
   customBoundaryPoints = 0,
   isDrawingBoundary = false,
   onClearBoundary,
+  regions = [],
+  selectedRegionId = "national",
+  onRegionChange,
+  onStartDrawNewRegion,
 }: CoverageSimulatorPanelProps) {
   const [minPopulation, setMinPopulation] = useState(MIN_POP_DEFAULT);
 
   const hasBoundary = customBoundaryPoints >= 3;
+  const predefined = regions.filter((r) => r.type === "predefined");
+  const custom = regions.filter((r) => r.type === "custom");
 
   return (
     <div className="space-y-3">
-      {/* Toggle Territorio Nacional / Área Personalizada */}
-      <div className="flex rounded-md overflow-hidden border border-slate-200 dark:border-gray-600 text-xs font-medium">
-        <button
-          type="button"
-          onClick={() => onTerritoryModeChange?.("national")}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 transition-colors cursor-pointer ${
-            territoryMode === "national"
-              ? "bg-slate-700 text-white"
-              : "bg-white dark:bg-gray-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700"
-          }`}
-        >
-          <Globe className="w-3 h-3" /> Territorio Nacional
-        </button>
-        <button
-          type="button"
-          onClick={() => onTerritoryModeChange?.("custom")}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-gray-600 ${
-            territoryMode === "custom"
-              ? "bg-blue-600 text-white"
-              : "bg-white dark:bg-gray-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700"
-          }`}
-        >
-          <Pencil className="w-3 h-3" /> Área Personalizada
-        </button>
+      {/* Selector de zona de análisis */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+          Zona de análisis
+        </label>
+        <div className="flex gap-1.5">
+          <select
+            value={selectedRegionId}
+            onChange={(e) => onRegionChange?.(e.target.value)}
+            disabled={isDrawingBoundary}
+            className="flex-1 text-xs px-2 py-1.5 rounded-md border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <option value="national">Nacional (Completo)</option>
+            {predefined.length > 0 && (
+              <optgroup label="Zonas Predefinidas">
+                {predefined.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </optgroup>
+            )}
+            {custom.length > 0 && (
+              <optgroup label="Mis Zonas">
+                {custom.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+          <button
+            type="button"
+            onClick={onStartDrawNewRegion}
+            disabled={isDrawingBoundary || disabled}
+            title="Dibujar nueva zona personalizada"
+            className="shrink-0 flex items-center gap-1 px-2 py-1.5 text-xs rounded-md border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Pencil className="w-3 h-3" /> Nueva
+          </button>
+        </div>
       </div>
 
-      {/* Estado del área personalizada */}
+      {/* Estado del área personalizada (dibujo en progreso / activa) */}
       {territoryMode === "custom" && (
         <div className={`rounded-md px-3 py-2 text-xs ${
           isDrawingBoundary
@@ -97,23 +110,25 @@ export function CoverageSimulatorPanel({
         }`}>
           {isDrawingBoundary ? (
             <>
-              <span className="font-semibold">Dibujando área...</span> Hacé clic en el mapa para agregar vértices.{" "}
+              <span className="font-semibold">Dibujando zona...</span> Hacé clic en el mapa para agregar vértices.{" "}
               <span className="opacity-75">Enter cierra · Esc cancela · ⌘Z deshace</span>
             </>
           ) : hasBoundary ? (
             <div className="flex items-center justify-between gap-2">
-              <span><span className="font-semibold">Área activa</span> · {customBoundaryPoints} vértices</span>
-              <button
-                type="button"
-                onClick={onClearBoundary}
-                className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer transition-colors"
-                title="Limpiar área y volver a dibujar"
-              >
-                <Trash2 className="w-3 h-3" /> Limpiar
-              </button>
+              <span><span className="font-semibold">Zona activa</span> · {customBoundaryPoints} vértices</span>
+              {selectedRegionId === "national" && (
+                <button
+                  type="button"
+                  onClick={onClearBoundary}
+                  className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer transition-colors"
+                  title="Limpiar zona activa"
+                >
+                  <Trash2 className="w-3 h-3" /> Limpiar
+                </button>
+              )}
             </div>
           ) : (
-            <span>Cambiá al mapa y hacé clic para comenzar a dibujar el área.</span>
+            <span>Cambiá al mapa y hacé clic para comenzar a dibujar la zona.</span>
           )}
         </div>
       )}
@@ -162,8 +177,13 @@ export function CoverageSimulatorPanel({
 
       <p className="text-xs text-slate-500 dark:text-slate-400">
         Previsualizando sobre: <strong>{scopeLabel}</strong>
-        {territoryMode === "custom" && hasBoundary && (
-          <span className="ml-1 text-blue-600 dark:text-blue-400">(área personalizada)</span>
+        {territoryMode === "custom" && hasBoundary && selectedRegionId !== "national" && (
+          <span className="ml-1 text-blue-600 dark:text-blue-400">
+            ({regions.find((r) => r.id === selectedRegionId)?.name ?? "zona personalizada"})
+          </span>
+        )}
+        {territoryMode === "custom" && hasBoundary && selectedRegionId === "national" && (
+          <span className="ml-1 text-blue-600 dark:text-blue-400">(zona dibujada)</span>
         )}
       </p>
 
@@ -174,7 +194,6 @@ export function CoverageSimulatorPanel({
       >
         Confirmar y Diagnosticar
       </button>
-
     </div>
   );
 }

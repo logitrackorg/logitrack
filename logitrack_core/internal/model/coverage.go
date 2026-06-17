@@ -94,6 +94,16 @@ type SimulationResult struct {
 	SimulatedAreaKm2   float64               `json:"simulated_area_km2"`
 	Cells              []SimulationDiagnosis `json:"cells"`
 	SuggestedLocations []SuggestedLocation   `json:"suggested_locations"`
+
+	// MathematicalSuggestions are Pole-of-Inaccessibility points derived from
+	// the global uncovered void: (TierraFértil − ∪ coverage circles). Unlike
+	// SuggestedLocations (which are per-cell and per-fragment), these come from
+	// the single united uncovered area so they never cluster around cell
+	// boundaries and require no deduplication. Empty when no dangerous zones
+	// are active and all cells are within the simulated radius, or when no
+	// simulation area has been set.
+	MathematicalSuggestions []SuggestedLocation `json:"mathematical_suggestions,omitempty"`
+
 	// DiagramCells carries the Voronoi cells (with polygon geometry) that were
 	// used for this diagnosis run. The frontend uses these to redraw the map
 	// with the correct shapes after branches are excluded from the simulation.
@@ -158,11 +168,21 @@ type DiagnoseRequest struct {
 	ExcludedBranchIDs []string `json:"excluded_branch_ids,omitempty"`
 
 	// CustomBoundingArea is an optional polygon (ordered lat/lng vertices,
-	// minimum 3) drawn by the user on the map. When provided, Voronoi cells
-	// are clipped against this polygon instead of Argentina's national outline,
-	// so the diagnosis and new-branch suggestions are restricted to the drawn
-	// region (e.g. AMBA, a specific province).
+	// minimum 3) drawn by the user on the map or loaded from a saved region.
+	// When provided, Voronoi cells are clipped against this polygon instead of
+	// Argentina's national outline, so the diagnosis and new-branch suggestions
+	// are restricted to the selected region (e.g. AMBA, a specific province).
 	CustomBoundingArea []LatLng `json:"custom_bounding_area,omitempty"`
+
+	// DangerousZones is an optional list of polygons representing restricted or
+	// undesirable areas (e.g. flood zones, border strips, nature reserves) that
+	// should be excluded from branch placement. Each polygon must have at least
+	// 3 vertices. The zones are subtracted from CustomBoundingArea (or from
+	// Argentina's national outline when no boundary is set) via a DIFFERENCE
+	// operation before the Voronoi diagram is built — the resulting "Tierra
+	// Fértil" is used as the clipping canvas for both the Voronoi cells and the
+	// MathematicalSuggestions Pole-of-Inaccessibility search.
+	DangerousZones [][]LatLng `json:"dangerous_zones,omitempty"`
 
 	// IncludeInactive, when true, includes branches with status "inactivo" or
 	// "fuera_de_servicio" in the Voronoi computation — the "Incluir sucursales

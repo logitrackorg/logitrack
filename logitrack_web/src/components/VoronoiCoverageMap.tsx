@@ -12,6 +12,8 @@ import {
 export interface VoronoiCoverageMapHandle {
   /** Animate the map to the given coordinates and zoom level. */
   flyTo(lat: number, lng: number, zoom?: number): void;
+  /** Fit the viewport to a polygon (e.g. a selected region boundary). */
+  fitBoundsToPolygon(points: [number, number][]): void;
 }
 
 interface VoronoiCoverageMapProps {
@@ -108,6 +110,11 @@ function VoronoiCoverageMap({
   useImperativeHandle(ref, () => ({
     flyTo(lat, lng, zoom = 8) {
       mapRef.current?.flyTo([lat, lng], zoom, { duration: 1.5 });
+    },
+    fitBoundsToPolygon(points) {
+      if (mapRef.current && points.length >= 2) {
+        mapRef.current.fitBounds(L.latLngBounds(points), { padding: [24, 24], animate: true });
+      }
     },
   }));
   const cellsLayer = useRef<L.LayerGroup | null>(null);

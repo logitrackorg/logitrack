@@ -279,7 +279,7 @@ func TestCoverage_Diagnose_PercentageAndDeficit(t *testing.T) {
 	}
 	simArea := minArea / 4
 
-	res := svc.Diagnose(simArea, nil, false)
+	res := svc.Diagnose(simArea, nil, nil, false)
 	if res.SimulatedAreaKm2 != simArea {
 		t.Fatalf("SimulatedAreaKm2 = %v, esperado %v", res.SimulatedAreaKm2, simArea)
 	}
@@ -336,7 +336,7 @@ func TestCoverage_Diagnose_AdequateWhenSimulatedAreaCoversCell(t *testing.T) {
 		areaByBranch[c.BranchID] = c.AreaKm2
 	}
 
-	res := svc.Diagnose(simArea, nil, false)
+	res := svc.Diagnose(simArea, nil, nil, false)
 	for _, sc := range res.Cells {
 		// Bug 1: el porcentaje nunca puede superar el 100%, ni siquiera por
 		// errores de redondeo del recorte de polígonos.
@@ -380,7 +380,7 @@ func TestCoverage_Diagnose_SuggestedLocationsForCriticalGap(t *testing.T) {
 	}
 	simArea := minArea / 100
 
-	res := svc.Diagnose(simArea, nil, false)
+	res := svc.Diagnose(simArea, nil, nil, false)
 
 	criticalBranches := make(map[string]bool)
 	for _, sc := range res.Cells {
@@ -456,7 +456,7 @@ func TestCoverage_Diagnose_IterativeGreedyCoveringFillsLargeGap(t *testing.T) {
 	simArea := minArea / 100
 	radiusKm := math.Sqrt(simArea / math.Pi)
 
-	res := svc.Diagnose(simArea, nil, false)
+	res := svc.Diagnose(simArea, nil, nil, false)
 
 	byBranch := make(map[string][]model.SuggestedLocation)
 	for _, sug := range res.SuggestedLocations {
@@ -503,7 +503,7 @@ func TestCoverage_Diagnose_NoSuggestionsWhenAdequate(t *testing.T) {
 
 	const simArea = 1.25e8
 
-	res := svc.Diagnose(simArea, nil, false)
+	res := svc.Diagnose(simArea, nil, nil, false)
 	if len(res.SuggestedLocations) != 0 {
 		t.Fatalf("no se esperaban sugerencias con cobertura adecuada, dio %+v", res.SuggestedLocations)
 	}
@@ -514,6 +514,123 @@ func TestCoverage_Diagnose_NoSuggestionsWhenAdequate(t *testing.T) {
 	// simulada grande no produce sugerencias.
 	if res.SuggestedLocations == nil {
 		t.Fatal("SuggestedLocations no debe ser nil (debe serializar como [] en JSON, no null)")
+	}
+}
+
+// TestMathematicalSuggestions_SmallCustomZone is the regression test for the
+// original bug: computeMathematicalSuggestions returned nothing for small custom
+// zones (e.g. AMBA ~10 600 km²) because the hardcoded 50 000 km² threshold
+// blocked every void fragment. The adaptive threshold (2 % of TierraFértil area,
+// floor 200 km²) must generate at least one suggestion when a branch's coverage
+// circle leaves meaningful uncovered area inside the zone.
+func TestMathematicalSuggestions_SmallCustomZone(t *testing.T) {
+	// One branch inside a small zone. A modest coverage radius (radius ≈ 56 km,
+	// area = 10 000 km²) leaves a visible void in the ~10 600 km² AMBA polygon.
+	svc := newCoverageSvc(
+		coverageBranch("caba", "CABA", "Buenos Aires", -34.60, -58.38),
+		coverageBranch("cordoba", "CORD", "Córdoba", -31.42, -64.18),
+		coverageBranch("mendoza", "MEND", "Mendoza", -32.89, -68.82),
+	)
+
+	// Approximate AMBA bounding box as the custom boundary.
+	amba := []model.LatLng{
+		{Lat: -34.22, Lng: -59.05},
+		{Lat: -34.22, Lng: -57.90},
+		{Lat: -35.20, Lng: -57.90},
+		{Lat: -35.20, Lng: -59.05},
+	}
+
+	// 10 000 km² → radius ≈ 56 km. Covers ~9 852 km² of AMBA's ~10 600 km²,
+	// leaving a void of ~750 km² — well above the adaptive floor of 200 km².
+	const simArea = 10_000.0
+
+	res := svc.Diagnose(simArea, amba, nil, false)
+
+	if len(res.MathematicalSuggestions) == 0 {
+		t.Fatal("se esperaba al menos una MathematicalSuggestion para la zona AMBA con cobertura parcial")
+	}
+
+	// Every suggestion must fall inside the AMBA polygon.
+	ambaProj := newProjector(-34.71, -58.475)
+	ambaPoly := projectRings([][]model.LatLng{amba}, ambaProj)
+	for i, s := range res.MathematicalSuggestions {
+		pt := ambaProj.project(s.Lat, s.Lng)
+		inAMBA := false
+		for _, c := range ambaPoly {
+			ring := make(geometry.Polygon, len(c))
+			for j, v := range c {
+				ring[j] = geometry.Point{X: v.X, Y: v.Y}
+			}
+			if ring.Contains(pt) {
+				inAMBA = true
+				break
+			}
+		}
+		if !inAMBA {
+			t.Errorf("sugerencia[%d] %+v cae fuera del polígono AMBA", i, s.LatLng)
+		}
+	}
+}
+
+// TestMathematicalSuggestions_ZeroBranches verifies that when no branches
+// exist the entire TierraFértil is the void and at least one suggestion is
+// produced (the pole of the entire zone).
+func TestMathematicalSuggestions_ZeroBranches(t *testing.T) {
+	svc := newCoverageSvc() // no branches
+
+	amba := []model.LatLng{
+		{Lat: -34.22, Lng: -59.05},
+		{Lat: -34.22, Lng: -57.90},
+		{Lat: -35.20, Lng: -57.90},
+		{Lat: -35.20, Lng: -59.05},
+	}
+
+	res := svc.Diagnose(10_000.0, amba, nil, false)
+
+	// With 0 branches the void = entire AMBA; the pole must be found.
+	if len(res.MathematicalSuggestions) == 0 {
+		t.Fatal("con 0 sucursales se esperaba al menos una MathematicalSuggestion")
+	}
+}
+
+// TestMathematicalSuggestions_DangerousZoneExcluded verifies that dangerous
+// zones are correctly subtracted from TierraFértil: no suggestion may fall
+// inside a dangerous-zone polygon.
+func TestMathematicalSuggestions_DangerousZoneExcluded(t *testing.T) {
+	svc := newCoverageSvc(
+		coverageBranch("caba", "CABA", "Buenos Aires", -34.60, -58.38),
+	)
+
+	amba := []model.LatLng{
+		{Lat: -34.22, Lng: -59.05},
+		{Lat: -34.22, Lng: -57.90},
+		{Lat: -35.20, Lng: -57.90},
+		{Lat: -35.20, Lng: -59.05},
+	}
+	// A dangerous zone covering the south half of AMBA.
+	danger := []model.LatLng{
+		{Lat: -34.71, Lng: -59.05},
+		{Lat: -34.71, Lng: -57.90},
+		{Lat: -35.20, Lng: -57.90},
+		{Lat: -35.20, Lng: -59.05},
+	}
+
+	res := svc.Diagnose(10_000.0, amba, [][]model.LatLng{danger}, false)
+
+	// No suggestion should fall inside the dangerous zone.
+	dangerProj := newProjector(-34.955, -58.475)
+	dangerPoly := projectRings([][]model.LatLng{danger}, dangerProj)
+	for i, s := range res.MathematicalSuggestions {
+		pt := dangerProj.project(s.Lat, s.Lng)
+		for _, c := range dangerPoly {
+			ring := make(geometry.Polygon, len(c))
+			for j, v := range c {
+				ring[j] = geometry.Point{X: v.X, Y: v.Y}
+			}
+			if ring.Contains(pt) {
+				t.Errorf("sugerencia[%d] %+v cae dentro de la zona peligrosa", i, s.LatLng)
+			}
+		}
 	}
 }
 
