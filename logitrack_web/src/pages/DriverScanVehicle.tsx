@@ -17,6 +17,8 @@ export function DriverScanVehicle() {
   const [loading, setLoading] = useState(false);
   const [manualToken, setManualToken] = useState("");
   const qrRef = useRef<Html5Qrcode | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   // Gate de fatiga post-escaneo: se activa solo cuando el chofer ya completó
   // al menos una ruta hoy (segunda ruta en adelante). Para la primera ruta del
@@ -67,29 +69,32 @@ export function DriverScanVehicle() {
   // para que CompletedRoutesToday quede incrementado ANTES de que el chofer
   // vuelva a esta pantalla para una eventual segunda ruta.
   const claimAndNavigate = async (token: string) => {
+    if (!mountedRef.current) return;
     setLoading(true);
     setError("");
     try {
       const trip = await interBranchTripsApi.claimByVehicleQR(token);
       stopScanner();
       if (trip.kind === "last_mile") {
-        // Marcar inicio de ruta antes de navegar. La llamada es fire-and-forget.
         driverApi.markRouteStarted().catch(() => {});
         goToRoute(`Vehículo ${trip.license_plate} asignado. Iniciando ruta…`);
       } else {
         navigate("/driver/trip", { replace: true });
       }
     } catch (err: unknown) {
+      if (!mountedRef.current) return;
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "";
       if (msg.includes("no hay viaje activo")) {
         try {
           await driverApi.startRoute();
+          if (!mountedRef.current) return;
           stopScanner();
           driverApi.markRouteStarted().catch(() => {});
           goToRoute("Ruta iniciada.");
           return;
         } catch (routeErr: unknown) {
+          if (!mountedRef.current) return;
           const routeMsg =
             (routeErr as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "";
           if (routeMsg.includes("no tenés una ruta")) {
@@ -107,30 +112,34 @@ export function DriverScanVehicle() {
       }
       setError(msg || "No se pudo reclamar el vehículo.");
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   };
 
   const handleToken = async (token: string) => {
     if (loading) return;
 
-    // Solo para choferes de última milla: evaluar si corresponde el gate de
-    // fatiga antes de reclamar el vehículo.
-    // El gate aplica únicamente para la SEGUNDA ruta en adelante del día;
-    // para la primera ruta el backend devuelve requires_fatigue_test: false.
-    // Los choferes intersucursales tienen su propio gate en DriverInterBranchTrip.
-    if (user?.driver_type !== "intersucursal") {
-      const gateStatus = await driverApi.getCheckinGateStatus();
-      if (gateStatus.needs_test) {
-        stopScanner();
-        setPendingToken(token);
-        setRequiresSleepData(gateStatus.requires_sleep_data);
-        setShowGate(true);
-        return;
+    try {
+      if (user?.driver_type !== "intersucursal") {
+        const gateStatus = await driverApi.getCheckinGateStatus();
+        if (!mountedRef.current) return;
+        if (gateStatus.needs_test) {
+          stopScanner();
+          setPendingToken(token);
+          setRequiresSleepData(gateStatus.requires_sleep_data);
+          setShowGate(true);
+          return;
+        }
       }
-    }
 
-    await claimAndNavigate(token);
+      await claimAndNavigate(token);
+    } catch (err: unknown) {
+      if (!mountedRef.current) return;
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "";
+      setError(msg || "Error al procesar el vehículo. Intentá de nuevo.");
+      setLoading(false);
+    }
   };
 
   const startScanner = async () => {
