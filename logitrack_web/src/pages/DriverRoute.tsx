@@ -70,7 +70,7 @@ export function DriverRoute() {
   // BUG-43: velocidad GPS real del chofer (sin fallback permisivo). El valor
   // efectivo y la fuente se computan más abajo, una vez conocido el estado del
   // simulador (ver simulationActive / effectiveSpeed).
-  const { speedKmh: gpsSpeedKmh, locationReady, requestLocation } = useCurrentSpeed();
+  const { speedKmh: gpsSpeedKmh, locationReady, requesting: locationRequesting, locationErrorMsg, requestLocation } = useCurrentSpeed();
 
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -990,6 +990,8 @@ export function DriverRoute() {
         blockMessage={blockMessage}
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
+        locationRequesting={locationRequesting}
+        locationErrorMsg={locationErrorMsg}
         error={actionError}
         photo={deliveryPhoto}
         onRetakePhoto={() => setCameraOpen(true)}
@@ -1009,6 +1011,8 @@ export function DriverRoute() {
         blockMessage={blockMessage}
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
+        locationRequesting={locationRequesting}
+        locationErrorMsg={locationErrorMsg}
       />
       <RejectedSheet
         open={!!rejectedShipment}
@@ -1024,6 +1028,8 @@ export function DriverRoute() {
         blockMessage={blockMessage}
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
+        locationRequesting={locationRequesting}
+        locationErrorMsg={locationErrorMsg}
       />
 
       {/* Overlay de bloqueo por fatiga — fixed encima de todo (LOGITRACK-499) */}
@@ -1363,6 +1369,8 @@ function DeliverSheet({
   blockMessage,
   needsLocation,
   onRequestLocation,
+  locationRequesting = false,
+  locationErrorMsg = null,
   error,
   photo,
   onRetakePhoto,
@@ -1383,6 +1391,8 @@ function DeliverSheet({
   blockMessage: string;
   needsLocation: boolean;
   onRequestLocation: () => void;
+  locationRequesting?: boolean;
+  locationErrorMsg?: string | null;
   error: string;
   photo: Blob | null;
   onRetakePhoto: () => void;
@@ -1566,12 +1576,18 @@ function DeliverSheet({
         <div className="mt-2.5 text-center">
           <p className="text-xs font-semibold text-amber-600">{blockMessage}</p>
           {needsLocation && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
-              className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer"
-            >
-              Activar ubicación
-            </button>
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
+                disabled={locationRequesting}
+                className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer disabled:opacity-50"
+              >
+                {locationRequesting ? "Solicitando…" : "Activar ubicación"}
+              </button>
+              {locationErrorMsg && (
+                <p className="mt-1 text-[11px] text-red-500 px-2">{locationErrorMsg}</p>
+              )}
+            </>
           )}
         </div>
       )}
@@ -1593,6 +1609,8 @@ function FailedSheet({
   blockMessage,
   needsLocation,
   onRequestLocation,
+  locationRequesting = false,
+  locationErrorMsg = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -1607,6 +1625,8 @@ function FailedSheet({
   blockMessage: string;
   needsLocation: boolean;
   onRequestLocation: () => void;
+  locationRequesting?: boolean;
+  locationErrorMsg?: string | null;
 }) {
   if (!shipment) return null;
   const { name } = recipientView(shipment);
@@ -1671,12 +1691,18 @@ function FailedSheet({
         <div className="mt-2.5 text-center">
           <p className="text-xs font-semibold text-amber-600">{blockMessage}</p>
           {needsLocation && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
-              className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer"
-            >
-              Activar ubicación
-            </button>
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
+                disabled={locationRequesting}
+                className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer disabled:opacity-50"
+              >
+                {locationRequesting ? "Solicitando…" : "Activar ubicación"}
+              </button>
+              {locationErrorMsg && (
+                <p className="mt-1 text-[11px] text-red-500 px-2">{locationErrorMsg}</p>
+              )}
+            </>
           )}
         </div>
       )}
@@ -1699,6 +1725,8 @@ function RejectedSheet({
   blockMessage,
   needsLocation,
   onRequestLocation,
+  locationRequesting = false,
+  locationErrorMsg = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -1713,6 +1741,8 @@ function RejectedSheet({
   blockMessage: string;
   needsLocation: boolean;
   onRequestLocation: () => void;
+  locationRequesting?: boolean;
+  locationErrorMsg?: string | null;
 }) {
   if (!shipment) return null;
   const { name } = recipientView(shipment);
@@ -1779,12 +1809,18 @@ function RejectedSheet({
         <div className="mt-2.5 text-center">
           <p className="text-xs font-semibold text-amber-600">{blockMessage}</p>
           {needsLocation && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
-              className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer"
-            >
-              Activar ubicación
-            </button>
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
+                disabled={locationRequesting}
+                className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer disabled:opacity-50"
+              >
+                {locationRequesting ? "Solicitando…" : "Activar ubicación"}
+              </button>
+              {locationErrorMsg && (
+                <p className="mt-1 text-[11px] text-red-500 px-2">{locationErrorMsg}</p>
+              )}
+            </>
           )}
         </div>
       )}

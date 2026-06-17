@@ -11,6 +11,10 @@ export interface CurrentSpeedResult {
   locationReady: boolean;
   /** true si el último error de geolocalización fue por permiso denegado (code 1). */
   permissionDenied: boolean;
+  /** true mientras se está esperando respuesta del sistema de permisos/GPS. */
+  requesting: boolean;
+  /** Mensaje de error legible del último intento de activación. null = sin error. */
+  locationErrorMsg: string | null;
   /** Re-dispara la petición de permiso/lectura de ubicación (reutiliza el flujo BUG-46). */
   requestLocation: () => void;
 }
@@ -29,23 +33,34 @@ export function useCurrentSpeed(): CurrentSpeedResult {
   const [speedKmh, setSpeedKmh] = useState(0);
   const [locationReady, setLocationReady] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [locationErrorMsg, setLocationErrorMsg] = useState<string | null>(null);
   const warnedRef = useRef(false);
 
   const applyPosition = useCallback((pos: GeolocationPosition) => {
     setLocationReady(true);
     setPermissionDenied(false);
+    setRequesting(false);
+    setLocationErrorMsg(null);
     const raw = pos.coords.speed; // m/s o null
     if (raw === null || Number.isNaN(raw)) {
-      // Fix válido pero sin velocidad: vehículo detenido → 0 km/h.
       setSpeedKmh(0);
       return;
     }
-    setSpeedKmh(Math.max(0, raw) * 3.6); // m/s → km/h, clamp negativos
+    setSpeedKmh(Math.max(0, raw) * 3.6);
   }, []);
 
   const applyError = useCallback((err: GeolocationPositionError) => {
     setLocationReady(false);
+    setRequesting(false);
     setPermissionDenied(err.code === err.PERMISSION_DENIED);
+    const msg =
+      err.code === err.PERMISSION_DENIED
+        ? "Permiso de ubicación denegado. Habilitalo en Ajustes > Apps > Permisos > Ubicación."
+        : err.code === err.POSITION_UNAVAILABLE
+          ? "GPS desactivado. Activá la ubicación en la configuración del dispositivo."
+          : "No se pudo obtener la ubicación. Verificá que el GPS esté activo.";
+    setLocationErrorMsg(msg);
     if (!warnedRef.current) {
       console.warn(`[useCurrentSpeed] Sin fix de ubicación (${err.message}). Entrega bloqueada hasta obtener GPS.`);
       warnedRef.current = true;
@@ -56,6 +71,7 @@ export function useCurrentSpeed(): CurrentSpeedResult {
     if (!navigator.geolocation) {
       console.warn("[useCurrentSpeed] Geolocalización no soportada por el dispositivo.");
       setLocationReady(false);
+      setLocationErrorMsg("Este dispositivo no soporta GPS.");
       return;
     }
     const watchId = navigator.geolocation.watchPosition(applyPosition, applyError, {
@@ -66,11 +82,16 @@ export function useCurrentSpeed(): CurrentSpeedResult {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [applyPosition, applyError]);
 
-  // Re-petición explícita (botón "Activar ubicación"). Vuelve a disparar el
-  // prompt del navegador si el permiso aún no fue decidido.
+  // Re-petición explícita (botón "Activar ubicación"). Muestra feedback inmediato
+  // y vuelve a disparar el prompt del sistema si el permiso aún no fue decidido.
   const requestLocation = useCallback(() => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      setLocationErrorMsg("Este dispositivo no soporta GPS.");
+      return;
+    }
     warnedRef.current = false;
+    setRequesting(true);
+    setLocationErrorMsg(null);
     navigator.geolocation.getCurrentPosition(applyPosition, applyError, {
       enableHighAccuracy: true,
       timeout: 10000,
@@ -78,5 +99,5 @@ export function useCurrentSpeed(): CurrentSpeedResult {
     });
   }, [applyPosition, applyError]);
 
-  return { speedKmh, locationReady, permissionDenied, requestLocation };
+  return { speedKmh, locationReady, permissionDenied, requesting, locationErrorMsg, requestLocation };
 }
