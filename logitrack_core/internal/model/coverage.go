@@ -91,9 +91,14 @@ type SuggestedLocation struct {
 // diagnosis for a single simulated coverage area, plus any new-branch location
 // suggestions derived from "crítico" gaps.
 type SimulationResult struct {
-	SimulatedAreaKm2   float64              `json:"simulated_area_km2"`
+	SimulatedAreaKm2   float64               `json:"simulated_area_km2"`
 	Cells              []SimulationDiagnosis `json:"cells"`
 	SuggestedLocations []SuggestedLocation   `json:"suggested_locations"`
+	// DiagramCells carries the Voronoi cells (with polygon geometry) that were
+	// used for this diagnosis run. The frontend uses these to redraw the map
+	// with the correct shapes after branches are excluded from the simulation.
+	// Omitted when no branches are excluded (client already has the diagram).
+	DiagramCells []CoverageCell `json:"diagram_cells,omitempty"`
 }
 
 // SnappedCity is the result of "Snap to City": resolving a geometric
@@ -158,6 +163,11 @@ type DiagnoseRequest struct {
 	// so the diagnosis and new-branch suggestions are restricted to the drawn
 	// region (e.g. AMBA, a specific province).
 	CustomBoundingArea []LatLng `json:"custom_bounding_area,omitempty"`
+
+	// IncludeInactive, when true, includes branches with status "inactivo" or
+	// "fuera_de_servicio" in the Voronoi computation — the "Incluir sucursales
+	// Inactivas/Fuera de servicio en la simulación" toggle in the frontend.
+	IncludeInactive bool `json:"include_inactive,omitempty"`
 }
 
 // ProjectionRequest is the body of POST /coverage/project: the simulated

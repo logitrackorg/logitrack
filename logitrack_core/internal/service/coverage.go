@@ -366,6 +366,15 @@ func (s *CoverageService) store(d *model.CoverageDiagram) {
 	s.mu.Unlock()
 }
 
+// listBranches returns the branch list for simulation, optionally including
+// inactive ("inactivo" / "fuera_de_servicio") branches.
+func (s *CoverageService) listBranches(includeInactive bool) []model.Branch {
+	if includeInactive {
+		return s.branchRepo.List()
+	}
+	return s.branchRepo.ListActive()
+}
+
 // Diagnose evaluates a hypothetical new-branch coverage radius — expressed as
 // an area in km², chosen via the frontend simulator slider — against every
 // branch's real, post-clip Voronoi area.
@@ -374,9 +383,9 @@ func (s *CoverageService) store(d *model.CoverageDiagram) {
 // against the drawn polygon instead of Argentina's national outline, so the
 // diagnosis is restricted to the user-drawn region (e.g. AMBA, a province).
 // A nil/empty slice uses the cached national-boundary diagram.
-func (s *CoverageService) Diagnose(simulatedAreaKm2 float64, customBoundary []model.LatLng) model.SimulationResult {
+func (s *CoverageService) Diagnose(simulatedAreaKm2 float64, customBoundary []model.LatLng, includeInactive bool) model.SimulationResult {
 	if len(customBoundary) >= 3 {
-		branches := s.branchRepo.ListActive()
+		branches := s.listBranches(includeInactive)
 		var sites []voronoiSite
 		for _, b := range branches {
 			if b.Latitude == nil || b.Longitude == nil {
@@ -399,15 +408,15 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64, customBoundary []mo
 // removing the listed branch IDs — the "Simulador de cierre de sucursales"
 // feature. An empty slice is equivalent to calling Diagnose directly.
 // customBoundary follows the same semantics as in Diagnose.
-func (s *CoverageService) DiagnoseExcluding(simulatedAreaKm2 float64, excludedBranchIDs []string, customBoundary []model.LatLng) model.SimulationResult {
+func (s *CoverageService) DiagnoseExcluding(simulatedAreaKm2 float64, excludedBranchIDs []string, customBoundary []model.LatLng, includeInactive bool) model.SimulationResult {
 	if len(excludedBranchIDs) == 0 {
-		return s.Diagnose(simulatedAreaKm2, customBoundary)
+		return s.Diagnose(simulatedAreaKm2, customBoundary, includeInactive)
 	}
 	excluded := make(map[string]bool, len(excludedBranchIDs))
 	for _, id := range excludedBranchIDs {
 		excluded[id] = true
 	}
-	branches := s.branchRepo.ListActive()
+	branches := s.listBranches(includeInactive)
 	var sites []voronoiSite
 	for _, b := range branches {
 		if b.Latitude == nil || b.Longitude == nil || excluded[b.ID] {
@@ -522,6 +531,7 @@ func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCe
 		SimulatedAreaKm2:   simulatedAreaKm2,
 		Cells:              diagCells,
 		SuggestedLocations: suggestions,
+		DiagramCells:       coverageCells,
 	}
 }
 
@@ -659,7 +669,7 @@ func (s *CoverageService) ProjectScenario(simulatedAreaKm2 float64, suggestions 
 		radiusKm = math.Sqrt(simulatedAreaKm2 / math.Pi)
 	}
 
-	current := s.Diagnose(simulatedAreaKm2, nil)
+	current := s.Diagnose(simulatedAreaKm2, nil, false)
 	currentByID := make(map[string]float64, len(current.Cells))
 	for _, c := range current.Cells {
 		currentByID[c.BranchID] = c.CoveragePercentage

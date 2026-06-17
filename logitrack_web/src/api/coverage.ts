@@ -96,6 +96,9 @@ export interface SimulationResult {
   simulated_area_km2: number;
   cells: SimulationDiagnosis[];
   suggested_locations: SuggestedLocation[];
+  /** Voronoi cells with polygon geometry from this diagnosis run. Only present
+   *  when branches were excluded — the client uses them to update map shapes. */
+  diagram_cells?: CoverageCell[];
 }
 
 /**
@@ -162,12 +165,13 @@ export const coverageApi = {
    * excludedBranchIds: IDs de sucursales a excluir del cálculo (simulación de cierre).
    * customBoundingArea: polígono dibujado por el usuario — recorta el diagnóstico a esa zona.
    */
-  diagnose: (areaKm2: number, excludedBranchIds?: string[], customBoundingArea?: LatLng[]) =>
+  diagnose: (areaKm2: number, excludedBranchIds?: string[], customBoundingArea?: LatLng[], includeInactive?: boolean) =>
     api
       .post<SimulationResult>("/coverage/diagnose", {
         area_km2: areaKm2,
         ...(excludedBranchIds?.length ? { excluded_branch_ids: excludedBranchIds } : {}),
         ...(customBoundingArea?.length ? { custom_bounding_area: customBoundingArea } : {}),
+        ...(includeInactive ? { include_inactive: true } : {}),
       })
       .then((r) => r.data),
 

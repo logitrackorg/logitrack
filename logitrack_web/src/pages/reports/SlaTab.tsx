@@ -3,7 +3,8 @@ import {
   AlertCircle, RefreshCw, ShieldCheck, ShieldAlert,
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
   ChevronDown, ChevronUp, UserPlus, UserMinus, Info, MapPin,
-  Eye, EyeOff, X, AlertTriangle, Lightbulb, Gauge, Maximize2, Minimize2, Target, Trash2, ExternalLink,
+  Eye, EyeOff, X, AlertTriangle, Gauge, Maximize2, Minimize2, Target, Trash2, ExternalLink,
+  Power, RotateCcw, Building2,
 } from "lucide-react";
 import type { FleetStatus, FleetDiagnosis, BranchFleetDiagnosis } from "../../api/slaMetrics";
 import {
@@ -11,7 +12,7 @@ import {
   LineChart, Line, CartesianGrid,
 } from "recharts";
 import { slaMetricsApi, type SLAMetrics } from "../../api/slaMetrics";
-import { branchApi, branchLabelById, type Branch } from "../../api/branches";
+import { branchApi, branchLabelById, type Branch, statusLabel as branchStatusLabel } from "../../api/branches";
 import { useAuth } from "../../context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { SelectMenu } from "../../components/ui/SelectMenu";
@@ -995,16 +996,39 @@ export function CoberturaTab() {
   // reintentos anteriores; se envían al backend para que no sean seleccionados.
   const [blacklistedCities, setBlacklistedCities] = useState<string[]>([]);
 
-  // Feature: Ocultar sucursales del diagrama — simula el cierre de una
-  // sucursal para ver cómo quedaría la cobertura sin ella. Filtra la vista
-  // del mapa al instante (client-side); el diagnóstico recalcula al confirmar.
-  const [hiddenBranches, setHiddenBranches] = useState<string[]>([]);
+  // Feature: Control de sucursales en la simulación.
+  // closedBranchIds → excluidas del cálculo Voronoi (backend-side) y del mapa.
+  // hiddenBranchIds → solo ocultas del mapa; el Voronoi las sigue usando.
+  // includeInactive → incluye sucursales Inactivas/FDS en la base del cálculo.
+  const [closedBranchIds, setClosedBranchIds] = useState<string[]>([]);
+  const [hiddenBranchIds, setHiddenBranchIds] = useState<string[]>([]);
+  const [includeInactive, setIncludeInactive] = useState(false);
+  const [allBranches, setAllBranches] = useState<Branch[]>([]);
+
+  // Refs para diagnoseCore (evita stale closures en toggleClosedBranch / handleToggleIncludeInactive).
+  const simResultRef = useRef<SimulationResult | null>(null);
+  const visualAreaRef = useRef(SIM_AREA_DEFAULT);
+  const customBoundaryRef = useRef<[number, number][] | null>(null);
+  const territoryModeRef = useRef<"national" | "custom">("national");
+  const includeInactiveRef = useRef(false);
+  const closedBranchIdsRef = useRef<string[]>([]);
 
   // Feature: Área de simulación personalizada — el usuario dibuja un polígono
   // en el mapa para restringir el diagnóstico a esa zona (ej. AMBA, Patagonia).
   const [territoryMode, setTerritoryMode] = useState<"national" | "custom">("national");
   const [customBoundary, setCustomBoundary] = useState<[number, number][] | null>(null);
   const [isDrawingBoundary, setIsDrawingBoundary] = useState(false);
+
+  // Sync refs used by diagnoseCore (stable callback, reads values without closures).
+  useEffect(() => { simResultRef.current = simResult; }, [simResult]);
+  useEffect(() => { visualAreaRef.current = visualArea; }, [visualArea]);
+  useEffect(() => { customBoundaryRef.current = customBoundary; }, [customBoundary]);
+  useEffect(() => { territoryModeRef.current = territoryMode; }, [territoryMode]);
+  useEffect(() => { includeInactiveRef.current = includeInactive; }, [includeInactive]);
+  useEffect(() => { closedBranchIdsRef.current = closedBranchIds; }, [closedBranchIds]);
+
+  // Fetch all branches (including inactive) for the simulation panel.
+  useEffect(() => { branchApi.list().then(setAllBranches).catch(() => {}); }, []);
 
   const handleTerritoryModeChange = useCallback((mode: "national" | "custom") => {
     setTerritoryMode(mode);
@@ -1039,34 +1063,48 @@ export function CoberturaTab() {
   const [projectionLoading, setProjectionLoading] = useState(false);
   const [projectionError, setProjectionError] = useState<string | null>(null);
 
+  // diagnoseCore: stable callback (reads from refs) — safe to call from state
+  // updaters (e.g. toggleClosedBranch / handleToggleIncludeInactive) without
+  // stale-closure issues. Declared before `load` so `load` can close over it.
+  const diagnoseCore = useCallback((area: number, closed: string[]) => {
+    const mode = territoryModeRef.current;
+    const boundary = customBoundaryRef.current;
+    const inactive = includeInactiveRef.current;
+    const boundingArea =
+      mode === "custom" && boundary && boundary.length >= 3
+        ? boundary.map(([lat, lng]) => ({ lat, lng }))
+        : undefined;
+    setSimError(null);
+    setSnappedCities(null);
+    setSnapError(null);
+    setBlacklistedCities([]);
+    coverageApi
+      .diagnose(area, closed.length > 0 ? closed : undefined, boundingArea, inactive || undefined)
+      .then(setSimResult)
+      .catch(() => setSimError("No se pudo calcular el diagnóstico en este momento."));
+  }, []); // intentionally empty deps — reads from refs only
+
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
     coverageApi
       .getDiagram()
-      .then(setDiagram)
+      .then((d) => {
+        setDiagram(d);
+        // Auto-diagnose on first load so description cards populate immediately.
+        diagnoseCore(visualAreaRef.current, closedBranchIdsRef.current);
+      })
       .catch(() => setError("No se pudo calcular la cobertura en este momento."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [diagnoseCore]);
 
   useEffect(() => load(), [load]);
 
   // Diagnóstico: compara el área simulada contra el área Voronoi real (post-recorte) de cada sucursal.
   const handleConfirmSimulation = useCallback((area: number, minPopulation: number) => {
-    setSimError(null);
-    setSnappedCities(null);
-    setSnapError(null);
-    setBlacklistedCities([]);
     setSnapMinPopulation(minPopulation);
-    const boundingArea =
-      territoryMode === "custom" && customBoundary && customBoundary.length >= 3
-        ? customBoundary.map(([lat, lng]) => ({ lat, lng }))
-        : undefined;
-    coverageApi
-      .diagnose(area, hiddenBranches.length > 0 ? hiddenBranches : undefined, boundingArea)
-      .then(setSimResult)
-      .catch(() => setSimError("No se pudo calcular el diagnóstico en este momento."));
-  }, [hiddenBranches, territoryMode, customBoundary]);
+    diagnoseCore(area, closedBranchIds);
+  }, [diagnoseCore, closedBranchIds]);
 
   // Sugerencias que todavía no aterrizaron en una ciudad real: solo estas se
   // vuelven a enviar al backend en cada click (evita re-consultar Overpass
@@ -1148,13 +1186,30 @@ export function CoberturaTab() {
     });
   }, [simResult]);
 
-  // Toggle de visibilidad de una sucursal para la simulación de cierre.
-  // Solo afecta el mapa (client-side) hasta el próximo "Confirmar y Diagnosticar".
+  // Ocultar/mostrar en mapa (sin afectar el cálculo Voronoi).
   const toggleHiddenBranch = useCallback((id: string) => {
-    setHiddenBranches((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+    setHiddenBranchIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   }, []);
 
-  const restoreAllBranches = useCallback(() => setHiddenBranches([]), []);
+  // Cerrar/restaurar en la simulación: excluye del Voronoi y re-diagnostica siempre.
+  const toggleClosedBranch = useCallback((id: string) => {
+    setClosedBranchIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      diagnoseCore(visualAreaRef.current, next);
+      return next;
+    });
+  }, [diagnoseCore]);
+
+  // Toggle includeInactive: sincroniza el ref ANTES de llamar a diagnoseCore para que
+  // la nueva función estable lea el valor actualizado (el efecto de sync corre después).
+  const handleToggleIncludeInactive = useCallback(() => {
+    setIncludeInactive((v) => {
+      const next = !v;
+      includeInactiveRef.current = next;
+      diagnoseCore(visualAreaRef.current, closedBranchIdsRef.current);
+      return next;
+    });
+  }, [diagnoseCore]);
 
   // Pausa/reanuda una sugerencia (análisis "What-If"): no la elimina, solo la
   // excluye temporalmente del mapa y de la Proyección de Impacto.
@@ -1178,18 +1233,62 @@ export function CoberturaTab() {
     return snappedCities.filter((c) => !c.is_paused);
   }, [snappedCities]);
 
-  // Celdas visibles del mapa: excluye las sucursales "cerradas" en la simulación.
-  const visibleCells = useMemo(() => {
-    if (!diagram) return [];
-    if (hiddenBranches.length === 0) return diagram.cells;
-    return diagram.cells.filter((c) => !hiddenBranches.includes(c.branch_id));
-  }, [diagram, hiddenBranches]);
+  // Cuando hay sucursales cerradas, simResult.diagram_cells tiene las formas
+  // Voronoi recalculadas (las celdas vecinas se expanden para cubrir el
+  // territorio de las cerradas). Se enriquecen con la severidad de simulación
+  // para que el mapa las coloree correctamente.
+  const activeDiagramCells = useMemo<CoverageCell[]>(() => {
+    if (!simResult?.diagram_cells?.length) {
+      return diagram?.cells ?? [];
+    }
+    const diagByBranch = new Map(simResult.cells.map((c) => [c.branch_id, c]));
+    return simResult.diagram_cells.map((cell) => {
+      const diag = diagByBranch.get(cell.branch_id);
+      return diag ? { ...cell, is_gap: diag.is_gap, gap_severity: diag.severity } : cell;
+    });
+  }, [simResult, diagram]);
 
-  // Lista de sucursales para el panel del simulador (derivada del diagrama).
-  const simulatorBranches = useMemo(() => {
+  // Celdas visibles del mapa: excluye las sucursales ocultas o cerradas.
+  const visibleCells = useMemo(() => {
+    const hidden = new Set([...hiddenBranchIds, ...closedBranchIds]);
+    if (hidden.size === 0) return activeDiagramCells;
+    return activeDiagramCells.filter((c) => !hidden.has(c.branch_id));
+  }, [activeDiagramCells, hiddenBranchIds, closedBranchIds]);
+
+  // Lista unificada para el panel "Sucursales" — siempre incluye las celdas
+  // del diagrama (activas); agrega las inactivas cuando el toggle está on.
+  const panelBranches = useMemo((): PanelBranchItem[] => {
     if (!diagram) return [];
-    return diagram.cells.map((c) => ({ id: c.branch_id, label: c.branch_name }));
-  }, [diagram]);
+    const diagramIds = new Set(diagram.cells.map((c) => c.branch_id));
+
+    const items: PanelBranchItem[] = diagram.cells.map((cell) => {
+      const simCell = simResult?.cells.find((c) => c.branch_id === cell.branch_id);
+      const severity = simCell
+        ? simCell.severity
+        : cell.is_gap ? cell.gap_severity : "";
+      return {
+        id: cell.branch_id,
+        name: cell.branch_name,
+        status: "activo" as const,
+        severity,
+        isInactive: false,
+        coveragePercentage: simCell?.coverage_percentage,
+        deficitKm2: simCell?.deficit_km2,
+      };
+    });
+
+    if (includeInactive) {
+      allBranches
+        .filter((b) => b.status !== "activo" && !diagramIds.has(b.id) && b.latitude != null && b.longitude != null)
+        .forEach((b) => items.push({ id: b.id, name: b.name, status: b.status, severity: null, isInactive: true }));
+    }
+
+    const RANK: Record<string, number> = { critico: 3, moderado: 2, leve: 1, "": 0 };
+    return items.sort((a, b) => {
+      if (a.isInactive !== b.isInactive) return a.isInactive ? 1 : -1;
+      return (RANK[b.severity ?? ""] ?? 0) - (RANK[a.severity ?? ""] ?? 0);
+    });
+  }, [diagram, simResult, allBranches, includeInactive]);
 
   // Resumen de fallos por tipo de error en el último lote de snapping.
   const failureSummary = useMemo(() => {
@@ -1332,10 +1431,6 @@ export function CoberturaTab() {
                 onMinPopulationChange={setSnapMinPopulation}
                 scopeLabel={simScopeLabel}
                 disabled={isFetchingCities}
-                branches={simulatorBranches}
-                hiddenBranchIds={hiddenBranches}
-                onToggleBranch={toggleHiddenBranch}
-                onRestoreAllBranches={restoreAllBranches}
                 territoryMode={territoryMode}
                 onTerritoryModeChange={handleTerritoryModeChange}
                 customBoundaryPoints={customBoundary?.length ?? 0}
@@ -1487,16 +1582,19 @@ export function CoberturaTab() {
             <CollapsiblePanel
               title={
                 <>
-                  <Lightbulb className="w-4 h-4 text-amber-500" /> Recomendaciones
+                  <Building2 className="w-4 h-4 text-blue-500" /> Sucursales
                 </>
               }
             >
-              <Recommendations gaps={gaps} highlighted={highlighted} onHighlight={setHighlighted} />
-              {simResult && (
-                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-gray-700">
-                  <SimulationRecommendations simResult={simResult} highlighted={highlighted} />
-                </div>
-              )}
+              <BranchSimulationPanel
+                branches={panelBranches}
+                hiddenBranchIds={hiddenBranchIds}
+                closedBranchIds={closedBranchIds}
+                includeInactive={includeInactive}
+                onToggleIncludeInactive={handleToggleIncludeInactive}
+                onToggleHide={toggleHiddenBranch}
+                onToggleClose={toggleClosedBranch}
+              />
             </CollapsiblePanel>
           </Card>
         </div>
@@ -1643,62 +1741,6 @@ function SeverityPill({
   );
 }
 
-function Recommendations({
-  gaps,
-  highlighted,
-  onHighlight,
-}: {
-  gaps: CoverageCell[];
-  highlighted: string | null;
-  onHighlight: (id: string) => void;
-}) {
-  if (gaps.length === 0) {
-    return (
-      <p className="text-sm text-slate-500 dark:text-slate-400">
-        No hay acciones pendientes. Mantené el monitoreo de cobertura a medida que cambie la demanda.
-      </p>
-    );
-  }
-  return (
-    <ul className="space-y-2.5">
-      {gaps.map((g) => {
-        const s = g.gap_severity ? GAP_STYLE[g.gap_severity] : null;
-        const isActive = g.branch_id === highlighted;
-        return (
-          <li key={g.branch_id}>
-            <button
-              onClick={() => onHighlight(g.branch_id)}
-              className={`w-full text-left p-3 rounded-lg border transition-colors cursor-pointer ${
-                isActive
-                  ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20"
-                  : "border-slate-200 dark:border-gray-700 hover:bg-slate-100 dark:hover:bg-gray-700/40"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  {g.branch_name}
-                </span>
-                {s && (
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.badge}`}>
-                    {s.label}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Cobertura de {formatKm2(g.area_km2)}. Evaluar abrir una sucursal cerca de{" "}
-                {g.suggestion
-                  ? `${g.suggestion.lat.toFixed(3)}, ${g.suggestion.lng.toFixed(3)}`
-                  : "el centro de la zona"}{" "}
-                para reducir el área de servicio.
-              </p>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
 /**
  * Tarjeta de sugerencia "aterrizada": ciudad real candidata a nueva sucursal,
  * con un enlace a Google Maps y el detalle de impacto operativo (cobertura
@@ -1791,61 +1833,183 @@ function SuggestionCard({
   );
 }
 
+// ── Branch simulation panel ───────────────────────────────────────────────────
+
+interface PanelBranchItem {
+  id: string;
+  name: string;
+  status: Branch["status"];
+  /** Coverage severity from simResult or diagram. null = inactive (no coverage data). */
+  severity: string | null;
+  isInactive: boolean;
+  /** Populated from simResult when a diagnosis has been run. */
+  coveragePercentage?: number;
+  deficitKm2?: number;
+}
+
+function BranchSimulationPanel({
+  branches,
+  hiddenBranchIds,
+  closedBranchIds,
+  includeInactive,
+  onToggleIncludeInactive,
+  onToggleHide,
+  onToggleClose,
+}: {
+  branches: PanelBranchItem[];
+  hiddenBranchIds: string[];
+  closedBranchIds: string[];
+  includeInactive: boolean;
+  onToggleIncludeInactive: () => void;
+  onToggleHide: (id: string) => void;
+  onToggleClose: (id: string) => void;
+}) {
+  const closedCount = closedBranchIds.length;
+  const hiddenCount = hiddenBranchIds.length;
+  return (
+    <div className="space-y-3">
+      {/* Toggle includeInactive */}
+      <label className="flex items-center gap-2 cursor-pointer select-none group">
+        <input
+          type="checkbox"
+          checked={includeInactive}
+          onChange={onToggleIncludeInactive}
+          className="w-3.5 h-3.5 rounded accent-slate-600 cursor-pointer"
+        />
+        <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-800 dark:group-hover:text-slate-100 transition-colors">
+          Incluir sucursales Inactivas y Fuera de servicio en la simulación
+        </span>
+      </label>
+
+      {branches.length === 0 ? (
+        <p className="text-sm text-slate-400">No hay sucursales disponibles.</p>
+      ) : (
+        <ul className="space-y-2">
+          {branches.map((b) => (
+            <BranchSimulationCard
+              key={b.id}
+              branch={b}
+              isHidden={hiddenBranchIds.includes(b.id)}
+              isClosed={closedBranchIds.includes(b.id)}
+              onToggleHide={() => onToggleHide(b.id)}
+              onToggleClose={() => onToggleClose(b.id)}
+            />
+          ))}
+        </ul>
+      )}
+
+      {(closedCount > 0 || hiddenCount > 0) && (
+        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+          {closedCount > 0 && `${closedCount} excluida${closedCount !== 1 ? "s" : ""} del cálculo${closedCount > 0 && hiddenCount > 0 ? " · " : "."}`}
+          {hiddenCount > 0 && `${hiddenCount} oculta${hiddenCount !== 1 ? "s" : ""} del mapa.`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+const INACTIVE_BADGE: Record<string, string> = {
+  inactivo: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  fuera_de_servicio: "bg-slate-100 text-slate-600 dark:bg-gray-700 dark:text-gray-300",
+};
+
+function BranchSimulationCard({
+  branch,
+  isHidden,
+  isClosed,
+  onToggleHide,
+  onToggleClose,
+}: {
+  branch: PanelBranchItem;
+  isHidden: boolean;
+  isClosed: boolean;
+  onToggleHide: () => void;
+  onToggleClose: () => void;
+}) {
+  const isDimmed = isHidden || isClosed;
+
+  const coverageBadge = (() => {
+    if (branch.severity === null) {
+      return {
+        label: branchStatusLabel(branch.status),
+        className: INACTIVE_BADGE[branch.status] ?? "bg-slate-100 text-slate-600",
+      };
+    }
+    if (!branch.severity) return { label: "Adecuada", className: ADEQUATE_BADGE };
+    const style = GAP_STYLE[branch.severity as keyof typeof GAP_STYLE];
+    return style ? { label: style.label, className: style.badge } : null;
+  })();
+
+  return (
+    <li
+      className={`p-3 rounded-lg border transition-all ${
+        isClosed
+          ? "border-rose-200 dark:border-rose-800/40 bg-rose-50/40 dark:bg-rose-900/10"
+          : isHidden
+          ? "border-slate-200 dark:border-gray-700 bg-slate-100/50 dark:bg-gray-800/30"
+          : "border-slate-200 dark:border-gray-700"
+      } ${isDimmed ? "opacity-50" : ""}`}
+    >
+      {/* Top row */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-sm font-semibold truncate text-slate-800 dark:text-slate-100">
+            {branch.name}
+          </span>
+          {coverageBadge && (
+            <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${coverageBadge.className}`}>
+              {coverageBadge.label}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-0.5 shrink-0">
+          {/* Eye: toggle map visibility only */}
+          <button
+            type="button"
+            onClick={onToggleHide}
+            disabled={isClosed}
+            title={isHidden ? "Mostrar en mapa" : "Ocultar del mapa (el cálculo Voronoi no cambia)"}
+            className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            {isHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          </button>
+          {/* Power: toggle closed (excluded from Voronoi + map) — auto-recalculates */}
+          <button
+            type="button"
+            onClick={onToggleClose}
+            title={isClosed ? "Restaurar en la simulación (recalcula)" : "Simular cierre — excluye del cálculo y recalcula"}
+            className={`p-1 rounded-md cursor-pointer transition-colors ${
+              isClosed
+                ? "text-rose-500 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-gray-700"
+                : "text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30"
+            }`}
+          >
+            {isClosed ? <RotateCcw className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+      </div>
+      {/* Description */}
+      {isClosed ? (
+        <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500 italic">
+          Excluida del cálculo de Voronoi.
+        </p>
+      ) : isHidden ? (
+        <p className="mt-1 text-[10px] font-medium text-blue-500 dark:text-blue-400">
+          Oculta del mapa
+        </p>
+      ) : branch.coveragePercentage !== undefined ? (
+        <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+          {branch.severity
+            ? `${branch.name} solo alcanza a cubrir el ${Math.round(branch.coveragePercentage)}% de su territorio asignado (Déficit de ${formatKm2(branch.deficitKm2 ?? 0)}). Se recomienda abrir una sucursal cercana.`
+            : `${branch.name} alcanzaría una cobertura adecuada: el área simulada cubre el ${Math.round(branch.coveragePercentage)}% de su territorio asignado.`}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
 // ── Diagnóstico del simulador ─────────────────────────────────────────────────
 // Estilo para sucursales con cobertura adecuada (severity === "") — no está en
 // GAP_STYLE porque ese mapa solo cubre las severidades de gap.
 const ADEQUATE_BADGE = "bg-emerald-100 text-emerald-800";
 
-function SimulationRecommendations({
-  simResult,
-  highlighted,
-}: {
-  simResult: SimulationResult;
-  highlighted: string | null;
-}) {
-  const cells = useMemo(() => {
-    const filtered = highlighted
-      ? simResult.cells.filter((c) => c.branch_id === highlighted)
-      : simResult.cells;
-    return [...filtered].sort(
-      (a, b) =>
-        (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0) ||
-        a.coverage_percentage - b.coverage_percentage
-    );
-  }, [simResult, highlighted]);
-
-  if (cells.length === 0) return null;
-
-  return (
-    <ul className="space-y-2.5">
-      {cells.map((c) => {
-        const pct = Math.round(c.coverage_percentage);
-        const style = c.severity ? GAP_STYLE[c.severity] : null;
-        return (
-          <li
-            key={c.branch_id}
-            className="p-3 rounded-lg border border-slate-200 dark:border-gray-700"
-          >
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                {c.branch_name}
-              </span>
-              <span
-                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                  style ? style.badge : ADEQUATE_BADGE
-                }`}
-              >
-                {style ? style.label : "Adecuada"}
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {c.is_gap
-                ? `${c.branch_name} solo alcanza a cubrir el ${pct}% de su territorio asignado (Déficit de ${formatKm2(c.deficit_km2)}). Se recomienda abrir una sucursal cercana.`
-                : `${c.branch_name} alcanzaría una cobertura adecuada: el área simulada cubre el ${pct}% de su territorio asignado.`}
-            </p>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}

@@ -70,9 +70,9 @@ func (h *CoverageHandler) Diagnose(c *gin.Context) {
 		return
 	}
 	if len(req.ExcludedBranchIDs) == 0 {
-		c.JSON(http.StatusOK, h.svc.Diagnose(req.AreaKm2, req.CustomBoundingArea))
+		c.JSON(http.StatusOK, h.svc.Diagnose(req.AreaKm2, req.CustomBoundingArea, req.IncludeInactive))
 	} else {
-		c.JSON(http.StatusOK, h.svc.DiagnoseExcluding(req.AreaKm2, req.ExcludedBranchIDs, req.CustomBoundingArea))
+		c.JSON(http.StatusOK, h.svc.DiagnoseExcluding(req.AreaKm2, req.ExcludedBranchIDs, req.CustomBoundingArea, req.IncludeInactive))
 	}
 }
 

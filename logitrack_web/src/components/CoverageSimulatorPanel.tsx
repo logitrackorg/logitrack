@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff, Globe, Pencil, Trash2 } from "lucide-react";
+import { Globe, Pencil, Trash2 } from "lucide-react";
 
 export const SIM_AREA_MIN = 100;
 export const SIM_AREA_MAX = 1_000_000;
@@ -29,14 +29,6 @@ interface CoverageSimulatorPanelProps {
   scopeLabel: string;
   /** Bloquea el slider y el botón de confirmación (p.ej. mientras se geocodifican sugerencias). */
   disabled?: boolean;
-  /** Lista de sucursales disponibles para la simulación de cierre. */
-  branches?: Array<{ id: string; label: string }>;
-  /** IDs de sucursales actualmente "cerradas" en la simulación. */
-  hiddenBranchIds?: string[];
-  /** Toggle de visibilidad de una sucursal. */
-  onToggleBranch?: (id: string) => void;
-  /** Restaura todas las sucursales ocultas. */
-  onRestoreAllBranches?: () => void;
   /** Modo de territorio: "national" = Argentina completa, "custom" = área dibujada. */
   territoryMode?: TerritoryMode;
   /** Notifica al padre cuando el usuario cambia el modo de territorio. */
@@ -56,10 +48,6 @@ export function CoverageSimulatorPanel({
   onMinPopulationChange,
   scopeLabel,
   disabled = false,
-  branches,
-  hiddenBranchIds,
-  onToggleBranch,
-  onRestoreAllBranches,
   territoryMode = "national",
   onTerritoryModeChange,
   customBoundaryPoints = 0,
@@ -187,54 +175,6 @@ export function CoverageSimulatorPanel({
         Confirmar y Diagnosticar
       </button>
 
-      {branches && branches.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-gray-700 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-              Simular cierre de sucursal
-            </p>
-            {(hiddenBranchIds ?? []).length > 0 && (
-              <button
-                type="button"
-                onClick={onRestoreAllBranches}
-                className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-              >
-                Restaurar todas
-              </button>
-            )}
-          </div>
-          <ul className="space-y-1">
-            {branches.map((b) => {
-              const isHidden = (hiddenBranchIds ?? []).includes(b.id);
-              return (
-                <li key={b.id} className="flex items-center justify-between gap-2">
-                  <span className={`text-xs truncate ${isHidden ? "line-through text-slate-400 dark:text-slate-500" : "text-slate-700 dark:text-slate-200"}`}>
-                    {b.label}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onToggleBranch?.(b.id)}
-                    disabled={disabled}
-                    title={isHidden ? "Restaurar sucursal" : "Simular cierre"}
-                    aria-label={isHidden ? `Restaurar sucursal ${b.label}` : `Simular cierre de ${b.label}`}
-                    className="shrink-0 p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-                  >
-                    {isHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          {(hiddenBranchIds ?? []).length > 0 && (
-            <p className="text-[10px] text-slate-500 dark:text-slate-400">
-              {(hiddenBranchIds ?? []).length === 1
-                ? "1 sucursal excluida del cálculo."
-                : `${(hiddenBranchIds ?? []).length} sucursales excluidas del cálculo.`}{" "}
-              Confirmá el diagnóstico para recalcular.
-            </p>
-          )}
-        </div>
-      )}
     </div>
   );
 }
