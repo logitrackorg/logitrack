@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { Geolocation } from "@capacitor/geolocation";
 
 export interface CurrentSpeedResult {
   /** Velocidad actual en km/h. 0 cuando hay fix pero el dispositivo no reporta velocidad. */
@@ -23,6 +25,10 @@ export interface CurrentSpeedResult {
  * useCurrentSpeed — lee la velocidad real del dispositivo vía la API de
  * Geolocalización (`GeolocationCoordinates.speed`, m/s) y la expone en km/h.
  *
+ * En plataforma nativa (Capacitor APK) usa @capacitor/geolocation para poder
+ * solicitar permisos y abrir ajustes del sistema cuando están denegados.
+ * En web usa navigator.geolocation directamente.
+ *
  * SIN fallback permisivo (BUG-43): si no hay fix de ubicación (GPS apagado o
  * permiso denegado) `locationReady` queda en false y el consumidor DEBE
  * bloquear la acción. Un fix válido con `speed === null` (vehículo detenido o
@@ -36,6 +42,7 @@ export function useCurrentSpeed(): CurrentSpeedResult {
   const [requesting, setRequesting] = useState(false);
   const [locationErrorMsg, setLocationErrorMsg] = useState<string | null>(null);
   const warnedRef = useRef(false);
+  const isNative = Capacitor.isNativePlatform();
 
   const applyPosition = useCallback((pos: GeolocationPosition) => {
     setLocationReady(true);
@@ -56,9 +63,9 @@ export function useCurrentSpeed(): CurrentSpeedResult {
     setPermissionDenied(err.code === err.PERMISSION_DENIED);
     const msg =
       err.code === err.PERMISSION_DENIED
-        ? "Permiso de ubicación denegado. Habilitalo en Ajustes > Apps > Permisos > Ubicación."
+        ? "Permiso de ubicación denegado. Tocá \"Ir a Ajustes\" para habilitarlo."
         : err.code === err.POSITION_UNAVAILABLE
-          ? "GPS desactivado. Activá la ubicación en la configuración del dispositivo."
+          ? "GPS desactivado. Activá la ubicación en los ajustes del dispositivo."
           : "No se pudo obtener la ubicación. Verificá que el GPS esté activo.";
     setLocationErrorMsg(msg);
     if (!warnedRef.current) {
@@ -69,7 +76,6 @@ export function useCurrentSpeed(): CurrentSpeedResult {
 
   useEffect(() => {
     if (!navigator.geolocation) {
-      console.warn("[useCurrentSpeed] Geolocalización no soportada por el dispositivo.");
       setLocationReady(false);
       setLocationErrorMsg("Este dispositivo no soporta GPS.");
       return;
@@ -82,22 +88,61 @@ export function useCurrentSpeed(): CurrentSpeedResult {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [applyPosition, applyError]);
 
-  // Re-petición explícita (botón "Activar ubicación"). Muestra feedback inmediato
-  // y vuelve a disparar el prompt del sistema si el permiso aún no fue decidido.
-  const requestLocation = useCallback(() => {
-    if (!navigator.geolocation) {
-      setLocationErrorMsg("Este dispositivo no soporta GPS.");
-      return;
-    }
+  // En nativo: solicita permiso vía plugin Capacitor. Si ya fue denegado,
+  // abre directamente los ajustes de la app para que el chofer lo habilite.
+  // En web: dispara el prompt del navegador con getCurrentPosition.
+  const requestLocation = useCallback(async () => {
     warnedRef.current = false;
     setRequesting(true);
     setLocationErrorMsg(null);
+
+    if (isNative) {
+      try {
+        const status = await Geolocation.checkPermissions();
+        if (status.location === "denied") {
+          // Permiso permanentemente denegado → abrir ajustes de la app vía intent Android.
+          window.open(
+            "intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;data=package:com.logitrack.driver;end",
+            "_system",
+          );
+          setRequesting(false);
+          return;
+        }
+        if (status.location !== "granted") {
+          // Permiso no decidido aún → solicitar al sistema.
+          const result = await Geolocation.requestPermissions({ permissions: ["location"] });
+          if (result.location !== "granted") {
+            setRequesting(false);
+            setPermissionDenied(true);
+            setLocationErrorMsg("Permiso denegado. Tocá \"Ir a Ajustes\" para habilitarlo.");
+            return;
+          }
+        }
+        // Permiso concedido: disparar lectura para actualizar locationReady.
+        navigator.geolocation.getCurrentPosition(applyPosition, applyError, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        });
+      } catch {
+        setRequesting(false);
+        setLocationErrorMsg("No se pudo solicitar el permiso de ubicación.");
+      }
+      return;
+    }
+
+    // Web: prompt estándar del navegador.
+    if (!navigator.geolocation) {
+      setRequesting(false);
+      setLocationErrorMsg("Este dispositivo no soporta GPS.");
+      return;
+    }
     navigator.geolocation.getCurrentPosition(applyPosition, applyError, {
       enableHighAccuracy: true,
       timeout: 10000,
       maximumAge: 0,
     });
-  }, [applyPosition, applyError]);
+  }, [isNative, applyPosition, applyError]);
 
   return { speedKmh, locationReady, permissionDenied, requesting, locationErrorMsg, requestLocation };
 }

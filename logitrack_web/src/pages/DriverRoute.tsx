@@ -70,7 +70,7 @@ export function DriverRoute() {
   // BUG-43: velocidad GPS real del chofer (sin fallback permisivo). El valor
   // efectivo y la fuente se computan más abajo, una vez conocido el estado del
   // simulador (ver simulationActive / effectiveSpeed).
-  const { speedKmh: gpsSpeedKmh, locationReady, requesting: locationRequesting, locationErrorMsg, requestLocation } = useCurrentSpeed();
+  const { speedKmh: gpsSpeedKmh, locationReady, permissionDenied: locationPermissionDenied, requesting: locationRequesting, locationErrorMsg, requestLocation } = useCurrentSpeed();
 
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -301,6 +301,23 @@ export function DriverRoute() {
     }
   };
 
+  // Aplica el resultado de una acción offline directamente en `data` y el routeCache,
+  // para que el conteo de completados sea inmediato y correcto aunque el componente
+  // se remonte mientras sigue offline.
+  const applyOfflineStatus = (trackingId: string, newStatus: string) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      const updated = {
+        ...prev,
+        shipments: prev.shipments.map((s) =>
+          s.tracking_id === trackingId ? { ...s, status: newStatus as Shipment["status"] } : s,
+        ),
+      };
+      if (user) cacheRoute(user.id, updated).catch(() => {});
+      return updated;
+    });
+  };
+
   const closeSheets = () => {
     setDeliverShipment(null);
     setFailedShipment(null);
@@ -427,6 +444,7 @@ export function DriverRoute() {
         photoBlob: deliveryPhoto ?? undefined,
         enqueuedAt: Date.now(),
       });
+      applyOfflineStatus(deliverShipment.tracking_id, "delivered");
       setPendingSyncIds((prev) => new Set(prev).add(deliverShipment.tracking_id));
       closeSheets();
       setSubmitting(false);
@@ -492,6 +510,7 @@ export function DriverRoute() {
         payload: { status: "delivery_failed", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource, latitude: coords?.lat, longitude: coords?.lng },
         enqueuedAt: Date.now(),
       });
+      applyOfflineStatus(failedShipment.tracking_id, "delivery_failed");
       setPendingSyncIds((prev) => new Set(prev).add(failedShipment.tracking_id));
       closeSheets();
       setSubmitting(false);
@@ -535,6 +554,7 @@ export function DriverRoute() {
         payload: { status: "delivery_failed", location: "", notes: note, rejected_by_recipient: true, current_speed: effectiveSpeed, speed_source: speedSource, latitude: coords?.lat, longitude: coords?.lng },
         enqueuedAt: Date.now(),
       });
+      applyOfflineStatus(rejectedShipment.tracking_id, "delivery_failed");
       setPendingSyncIds((prev) => new Set(prev).add(rejectedShipment.tracking_id));
       closeSheets();
       setSubmitting(false);
@@ -698,7 +718,7 @@ export function DriverRoute() {
   const progressPct = total === 0 ? 0 : Math.round((done / total) * 100);
 
   if (routeEffectivelyDone) {
-    return <RouteCompletedView data={data} today={today} />;
+    return <RouteCompletedView data={data} today={today} pendingSyncIds={pendingSyncIds} />;
   }
 
   const canAct = routeStatus === "en_curso";
@@ -991,6 +1011,7 @@ export function DriverRoute() {
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
         locationRequesting={locationRequesting}
+        locationPermissionDenied={locationPermissionDenied}
         locationErrorMsg={locationErrorMsg}
         error={actionError}
         photo={deliveryPhoto}
@@ -1012,6 +1033,7 @@ export function DriverRoute() {
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
         locationRequesting={locationRequesting}
+        locationPermissionDenied={locationPermissionDenied}
         locationErrorMsg={locationErrorMsg}
       />
       <RejectedSheet
@@ -1029,6 +1051,7 @@ export function DriverRoute() {
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
         locationRequesting={locationRequesting}
+        locationPermissionDenied={locationPermissionDenied}
         locationErrorMsg={locationErrorMsg}
       />
 
@@ -1370,6 +1393,7 @@ function DeliverSheet({
   needsLocation,
   onRequestLocation,
   locationRequesting = false,
+  locationPermissionDenied = false,
   locationErrorMsg = null,
   error,
   photo,
@@ -1392,6 +1416,7 @@ function DeliverSheet({
   needsLocation: boolean;
   onRequestLocation: () => void;
   locationRequesting?: boolean;
+  locationPermissionDenied?: boolean;
   locationErrorMsg?: string | null;
   error: string;
   photo: Blob | null;
@@ -1578,11 +1603,11 @@ function DeliverSheet({
           {needsLocation && (
             <>
               <button
-                onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
+                onClick={(e) => { e.stopPropagation(); void onRequestLocation(); }}
                 disabled={locationRequesting}
                 className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer disabled:opacity-50"
               >
-                {locationRequesting ? "Solicitando…" : "Activar ubicación"}
+                {locationRequesting ? "Solicitando…" : locationPermissionDenied ? "Ir a Ajustes" : "Activar ubicación"}
               </button>
               {locationErrorMsg && (
                 <p className="mt-1 text-[11px] text-red-500 px-2">{locationErrorMsg}</p>
@@ -1610,6 +1635,7 @@ function FailedSheet({
   needsLocation,
   onRequestLocation,
   locationRequesting = false,
+  locationPermissionDenied = false,
   locationErrorMsg = null,
 }: {
   open: boolean;
@@ -1626,6 +1652,7 @@ function FailedSheet({
   needsLocation: boolean;
   onRequestLocation: () => void;
   locationRequesting?: boolean;
+  locationPermissionDenied?: boolean;
   locationErrorMsg?: string | null;
 }) {
   if (!shipment) return null;
@@ -1693,11 +1720,11 @@ function FailedSheet({
           {needsLocation && (
             <>
               <button
-                onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
+                onClick={(e) => { e.stopPropagation(); void onRequestLocation(); }}
                 disabled={locationRequesting}
                 className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer disabled:opacity-50"
               >
-                {locationRequesting ? "Solicitando…" : "Activar ubicación"}
+                {locationRequesting ? "Solicitando…" : locationPermissionDenied ? "Ir a Ajustes" : "Activar ubicación"}
               </button>
               {locationErrorMsg && (
                 <p className="mt-1 text-[11px] text-red-500 px-2">{locationErrorMsg}</p>
@@ -1726,6 +1753,7 @@ function RejectedSheet({
   needsLocation,
   onRequestLocation,
   locationRequesting = false,
+  locationPermissionDenied = false,
   locationErrorMsg = null,
 }: {
   open: boolean;
@@ -1742,6 +1770,7 @@ function RejectedSheet({
   needsLocation: boolean;
   onRequestLocation: () => void;
   locationRequesting?: boolean;
+  locationPermissionDenied?: boolean;
   locationErrorMsg?: string | null;
 }) {
   if (!shipment) return null;
@@ -1811,11 +1840,11 @@ function RejectedSheet({
           {needsLocation && (
             <>
               <button
-                onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
+                onClick={(e) => { e.stopPropagation(); void onRequestLocation(); }}
                 disabled={locationRequesting}
                 className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer disabled:opacity-50"
               >
-                {locationRequesting ? "Solicitando…" : "Activar ubicación"}
+                {locationRequesting ? "Solicitando…" : locationPermissionDenied ? "Ir a Ajustes" : "Activar ubicación"}
               </button>
               {locationErrorMsg && (
                 <p className="mt-1 text-[11px] text-red-500 px-2">{locationErrorMsg}</p>
@@ -1829,10 +1858,10 @@ function RejectedSheet({
 }
 
 
-function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today: string }) {
+function RouteCompletedView({ data, today, pendingSyncIds = new Set() }: { data: DriverRouteResponse; today: string; pendingSyncIds?: Set<string> }) {
   const navigate = useNavigate();
-  const done = data.shipments.filter((s) => s.status === "delivered").length;
-  const failed = data.shipments.filter((s) => s.status === "delivery_failed").length;
+  const done = data.shipments.filter((s) => s.status === "delivered" || pendingSyncIds.has(s.tracking_id)).length;
+  const failed = data.shipments.filter((s) => s.status === "delivery_failed" && !pendingSyncIds.has(s.tracking_id)).length;
 
   const [tripId, setTripId] = useState<string | null>(null);
   const [qrBase64, setQrBase64] = useState<string | null>(null);
