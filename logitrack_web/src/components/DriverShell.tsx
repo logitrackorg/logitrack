@@ -8,9 +8,9 @@ interface DriverShellProps {
 
 export function DriverShell({ title, subtitle, children }: DriverShellProps) {
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] flex flex-col max-w-2xl mx-auto w-full">
+    <div className="min-h-screen bg-[var(--bg-page)] flex flex-col max-w-3xl mx-auto w-full md:border-x md:border-[var(--border)] md:shadow-lg md:my-0">
       <DriverNav title={title} subtitle={subtitle} />
-      <main className="flex-1 flex flex-col pb-[calc(env(safe-area-inset-bottom,0px)+16px)]">
+      <main className="flex-1 flex flex-col pb-[calc(env(safe-area-inset-bottom,0px)+16px)] px-4 md:px-6">
         {children}
       </main>
     </div>
