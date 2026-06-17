@@ -83,7 +83,7 @@ func (h *CoverageHandler) SnapToCity(c *gin.Context) {
 		return
 	}
 
-	results := h.svc.SnapToCities(req.Points, req.RadiusKm)
+	results := h.svc.SnapToCities(req.Points, req.RadiusKm, req.MinPopulation)
 
 	c.JSON(http.StatusOK, model.SnapToCityResponse{Results: results})
 }

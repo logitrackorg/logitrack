@@ -165,9 +165,13 @@ export const coverageApi = {
    * `radiusKm` (la zona de cobertura simulada). Devuelve un resultado por
    * punto, en el mismo orden.
    */
-  snapToCity: (points: LatLng[], radiusKm: number) =>
+  snapToCity: (points: LatLng[], radiusKm: number, minPopulation = 0) =>
     api
-      .post<SnapToCityResponse>("/coverage/snap-to-city", { points, radius_km: radiusKm })
+      .post<SnapToCityResponse>("/coverage/snap-to-city", {
+        points,
+        radius_km: radiusKm,
+        min_population: minPopulation,
+      })
       .then((r) => r.data.results),
 
   /**

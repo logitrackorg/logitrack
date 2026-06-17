@@ -989,6 +989,7 @@ export function CoberturaTab() {
   // diagnóstico mientras eso está en curso.
   const [isFetchingCities, setIsFetchingCities] = useState(false);
   const [snapError, setSnapError] = useState<string | null>(null);
+  const [snapMinPopulation, setSnapMinPopulation] = useState(0);
 
   // "Proyección de Impacto": cobertura actual vs. proyectada de cada sucursal
   // si la red incluyera también las sugerencias activas. Se recalcula cada
@@ -1010,10 +1011,11 @@ export function CoberturaTab() {
   useEffect(() => load(), [load]);
 
   // Diagnóstico: compara el área simulada contra el área Voronoi real (post-recorte) de cada sucursal.
-  const handleConfirmSimulation = useCallback((area: number) => {
+  const handleConfirmSimulation = useCallback((area: number, minPopulation: number) => {
     setSimError(null);
     setSnappedCities(null);
     setSnapError(null);
+    setSnapMinPopulation(minPopulation);
     coverageApi
       .diagnose(area)
       .then(setSimResult)
@@ -1050,7 +1052,7 @@ export function CoberturaTab() {
     });
 
     coverageApi
-      .snapToCity(pendingPoints, radiusKm)
+      .snapToCity(pendingPoints, radiusKm, snapMinPopulation)
       .then((results) => {
         setSnappedCities((prev) => {
           const merged: SnappedCity[] =
@@ -1064,7 +1066,7 @@ export function CoberturaTab() {
       })
       .catch(() => setSnapError("No se pudo aterrizar las sugerencias en ciudades reales en este momento."))
       .finally(() => setIsFetchingCities(false));
-  }, [simResult, pendingSnapIndexes]);
+  }, [simResult, pendingSnapIndexes, snapMinPopulation]);
 
   // Descarta una sugerencia: la quita de `simResult.suggested_locations` y de
   // `snappedCities` en el mismo índice, manteniendo ambos arrays alineados.

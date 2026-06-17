@@ -73,10 +73,21 @@ type overpassResponse struct {
 	Elements []overpassElement `json:"elements"`
 }
 
+// snapPopulationFallback returns an estimated population for an OSM element
+// that lacks a "population" tag, based on its place type. Used by
+// bestSnapCandidate to enforce a MinPopulation filter even when the tag is absent.
+var snapPopulationFallback = map[string]int{
+	"city": 50_000,
+	"town": 10_000,
+}
+
 // SnapToCities resolves a batch of geometric coverage-gap points (lat/lng) to
 // the best real populated place (city or town — see snapChunk and
 // candidateScore) within radiusKm of each — typically the suggested
 // branches' simulated coverage radius, capped at snapToCityMaxRadiusKm.
+//
+// minPopulation filters out candidates whose population (OSM tag or per-type
+// fallback) is strictly below the threshold. 0 disables the filter.
 //
 // Points are processed in small sequential chunks (snapToCityChunkSize), each
 // resolved with a single Overpass request — one "around" clause per point in
@@ -89,7 +100,7 @@ type overpassResponse struct {
 // radiusKm, or whose chunk request fails (timeout/429/etc.), gets
 // Snapped=false — callers should keep its original geometric coordinates in
 // that case. A failure in one chunk does not affect the others.
-func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64) []model.SnappedCity {
+func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64, minPopulation int) []model.SnappedCity {
 	results := make([]model.SnappedCity, len(points))
 	if len(points) == 0 {
 		return results
@@ -103,7 +114,7 @@ func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64) 
 		if end > len(points) {
 			end = len(points)
 		}
-		s.snapChunk(points[start:end], radiusKm, results[start:end])
+		s.snapChunk(points[start:end], radiusKm, minPopulation, results[start:end])
 
 		if end < len(points) {
 			time.Sleep(snapToCityChunkDelay)
@@ -116,7 +127,7 @@ func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64) 
 // snapChunk resolves one batch of points via a single Overpass request,
 // writing into out (same length as points). On any failure, out is left with
 // its zero values (Snapped=false for every point in the chunk).
-func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, out []model.SnappedCity) {
+func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, minPopulation int, out []model.SnappedCity) {
 	radiusMeters := int(radiusKm * 1000)
 
 	// Only city/town: these are real urban centers viable as logistics hubs.
@@ -169,7 +180,7 @@ func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, out
 	}
 
 	for i, p := range points {
-		best, found := bestSnapCandidate(parsed.Elements, p.Lat, p.Lng, radiusKm)
+		best, found := bestSnapCandidate(parsed.Elements, p.Lat, p.Lng, radiusKm, minPopulation)
 		if !found {
 			continue
 		}
@@ -244,11 +255,26 @@ func isWithinArgentina(el overpassElement) bool {
 	return planar.DistanceFrom(contour, pt) <= argentinaBorderToleranceDeg
 }
 
+// candidatePopulation returns the effective population for an OSM element:
+// the parsed "population" tag when present, or a per-place-type fallback.
+func candidatePopulation(el overpassElement) int {
+	if popStr := el.Tags["population"]; popStr != "" {
+		if pop, err := strconv.Atoi(popStr); err == nil && pop > 0 {
+			return pop
+		}
+	}
+	if fallback, ok := snapPopulationFallback[el.Tags["place"]]; ok {
+		return fallback
+	}
+	return 0
+}
+
 // bestSnapCandidate picks the named populated place with the highest
 // candidateScore among those within radiusKm of the origin point and inside
 // Argentina. Candidates without a "name" tag (not usable as a CityName),
-// beyond radiusKm, or outside the national contour are skipped.
-func bestSnapCandidate(elements []overpassElement, originLat, originLng, radiusKm float64) (overpassElement, bool) {
+// beyond radiusKm, outside the national contour, or below minPopulation are
+// skipped. minPopulation == 0 disables the population filter.
+func bestSnapCandidate(elements []overpassElement, originLat, originLng, radiusKm float64, minPopulation int) (overpassElement, bool) {
 	var best overpassElement
 	bestScore := math.Inf(-1)
 	found := false
@@ -262,6 +288,9 @@ func bestSnapCandidate(elements []overpassElement, originLat, originLng, radiusK
 			continue
 		}
 		if !isWithinArgentina(el) {
+			continue
+		}
+		if minPopulation > 0 && candidatePopulation(el) < minPopulation {
 			continue
 		}
 		score := candidateScore(el, dist)

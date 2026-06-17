@@ -28,7 +28,7 @@ func TestBestSnapCandidate_PrefersHigherScore(t *testing.T) {
 		Tags: map[string]string{"place": "town", "name": "Pueblo Cercano"},
 	}
 
-	best, found := bestSnapCandidate([]overpassElement{town, city}, originLat, originLng, 100)
+	best, found := bestSnapCandidate([]overpassElement{town, city}, originLat, originLng, 100, 0)
 	if !found {
 		t.Fatal("expected a candidate to be found")
 	}
@@ -52,7 +52,7 @@ func TestBestSnapCandidate_PopulationBreaksTie(t *testing.T) {
 		Tags: map[string]string{"place": "city", "name": "Ciudad Capital", "population": "1300000"},
 	}
 
-	best, found := bestSnapCandidate([]overpassElement{small, big}, originLat, originLng, 100)
+	best, found := bestSnapCandidate([]overpassElement{small, big}, originLat, originLng, 100, 0)
 	if !found {
 		t.Fatal("expected a candidate to be found")
 	}
@@ -71,7 +71,7 @@ func TestBestSnapCandidate_SkipsUnnamed(t *testing.T) {
 		{Lat: -34.2, Lon: -64.0, Tags: map[string]string{"place": "town", "name": "Pueblo Chico"}},
 	}
 
-	best, found := bestSnapCandidate(elements, originLat, originLng, 150)
+	best, found := bestSnapCandidate(elements, originLat, originLng, 150, 0)
 	if !found {
 		t.Fatal("expected a candidate to be found")
 	}
@@ -95,7 +95,7 @@ func TestBestSnapCandidate_SkipsBeyondRadius(t *testing.T) {
 		Tags: map[string]string{"place": "town", "name": "Pueblo Cercano"},
 	}
 
-	best, found := bestSnapCandidate([]overpassElement{tooFar, withinRadius}, originLat, originLng, 60)
+	best, found := bestSnapCandidate([]overpassElement{tooFar, withinRadius}, originLat, originLng, 60, 0)
 	if !found {
 		t.Fatal("expected a candidate within the radius to be found")
 	}
@@ -107,17 +107,17 @@ func TestBestSnapCandidate_SkipsBeyondRadius(t *testing.T) {
 // TestBestSnapCandidate_NoneFound verifies the empty/no-candidates and
 // all-beyond-radius cases report found=false rather than a zero-value match.
 func TestBestSnapCandidate_NoneFound(t *testing.T) {
-	if _, found := bestSnapCandidate(nil, -34.0, -64.0, 100); found {
+	if _, found := bestSnapCandidate(nil, -34.0, -64.0, 100, 0); found {
 		t.Error("expected found=false for an empty candidate list")
 	}
 
 	unnamed := []overpassElement{{Lat: -34.0, Lon: -64.0, Tags: map[string]string{"place": "city"}}}
-	if _, found := bestSnapCandidate(unnamed, -34.0, -64.0, 100); found {
+	if _, found := bestSnapCandidate(unnamed, -34.0, -64.0, 100, 0); found {
 		t.Error("expected found=false when no candidate has a name")
 	}
 
 	tooFar := []overpassElement{{Lat: -35.0, Lon: -64.0, Tags: map[string]string{"place": "city", "name": "Lejos"}}}
-	if _, found := bestSnapCandidate(tooFar, -34.0, -64.0, 10); found {
+	if _, found := bestSnapCandidate(tooFar, -34.0, -64.0, 10, 0); found {
 		t.Error("expected found=false when every named candidate is beyond radiusKm")
 	}
 }
@@ -139,7 +139,7 @@ func TestBestSnapCandidate_DiscardsOutsideArgentina(t *testing.T) {
 		Tags: map[string]string{"place": "town", "name": "La Plata"},
 	}
 
-	best, found := bestSnapCandidate([]overpassElement{outsideArgentina, insideArgentina}, originLat, originLng, 5000)
+	best, found := bestSnapCandidate([]overpassElement{outsideArgentina, insideArgentina}, originLat, originLng, 5000, 0)
 	if !found {
 		t.Fatal("expected a candidate to be found")
 	}
@@ -157,7 +157,7 @@ func TestBestSnapCandidate_NoneFound_AllOutsideArgentina(t *testing.T) {
 		{Lat: -15.78, Lon: -47.93, Tags: map[string]string{"place": "city", "name": "Brasilia"}},
 	}
 
-	if _, found := bestSnapCandidate(outsideArgentina, originLat, originLng, 5000); found {
+	if _, found := bestSnapCandidate(outsideArgentina, originLat, originLng, 5000, 0); found {
 		t.Error("expected found=false when every candidate is outside Argentina")
 	}
 }
@@ -255,7 +255,7 @@ func (rt redirectingTransport) RoundTrip(req *http.Request) (*http.Response, err
 
 func TestSnapToCities_Empty(t *testing.T) {
 	svc := NewCoverageService(nil, nil)
-	results := svc.SnapToCities(nil, 50)
+	results := svc.SnapToCities(nil, 50, 0)
 	if len(results) != 0 {
 		t.Fatalf("expected empty results, got %d", len(results))
 	}
@@ -278,7 +278,7 @@ func TestSnapToCities_ChunksRequests(t *testing.T) {
 		points[i] = model.LatLng{Lat: -30.0 - float64(i), Lng: -60.0 - float64(i)}
 	}
 
-	results := svc.SnapToCities(points, 50)
+	results := svc.SnapToCities(points, 50, 0)
 
 	if len(results) != 7 {
 		t.Fatalf("expected 7 results, got %d", len(results))
@@ -312,7 +312,7 @@ func TestSnapToCities_QueryFiltersByPlaceType(t *testing.T) {
 	svc := NewCoverageService(nil, nil)
 	svc.httpClient = &http.Client{Transport: redirectingTransport{base: server.URL}}
 
-	svc.SnapToCities([]model.LatLng{{Lat: -34.0, Lng: -58.0}}, 50)
+	svc.SnapToCities([]model.LatLng{{Lat: -34.0, Lng: -58.0}}, 50, 0)
 
 	if !strings.Contains(capturedQuery, `place"~"^(city|town)$"`) {
 		t.Fatalf("expected query to filter on place=city|town, query was: %s", capturedQuery)
@@ -340,7 +340,7 @@ func TestSnapToCities_QueryFiltersByCountryArea(t *testing.T) {
 	svc := NewCoverageService(nil, nil)
 	svc.httpClient = &http.Client{Transport: redirectingTransport{base: server.URL}}
 
-	svc.SnapToCities([]model.LatLng{{Lat: -34.0, Lng: -58.0}}, 50)
+	svc.SnapToCities([]model.LatLng{{Lat: -34.0, Lng: -58.0}}, 50, 0)
 
 	if !strings.Contains(capturedQuery, `area["ISO3166-1"="AR"]->.ar`) {
 		t.Fatalf("expected query to define an Argentina area filter, query was: %s", capturedQuery)
@@ -366,7 +366,7 @@ func TestSnapToCities_RadiusCapped(t *testing.T) {
 	svc := NewCoverageService(nil, nil)
 	svc.httpClient = &http.Client{Transport: redirectingTransport{base: server.URL}}
 
-	svc.SnapToCities([]model.LatLng{{Lat: -34.0, Lng: -58.0}}, 437.0)
+	svc.SnapToCities([]model.LatLng{{Lat: -34.0, Lng: -58.0}}, 437.0, 0)
 
 	if !strings.Contains(capturedQuery, "around:100000,") {
 		t.Fatalf("expected radius capped to 100000m, query was: %s", capturedQuery)
@@ -394,7 +394,7 @@ func TestSnapToCities_ChunkFailureIsPartial(t *testing.T) {
 		points[i] = model.LatLng{Lat: -30.0 - float64(i), Lng: -60.0 - float64(i)}
 	}
 
-	results := svc.SnapToCities(points, 50)
+	results := svc.SnapToCities(points, 50, 0)
 
 	for i := 0; i < 5; i++ {
 		if results[i].Snapped {

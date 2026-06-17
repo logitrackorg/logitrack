@@ -118,6 +118,12 @@ type SnapToCityRequest struct {
 	// the would-be branch's coverage area can be snapped to. <= 0 falls back
 	// to a default radius.
 	RadiusKm float64 `json:"radius_km"`
+
+	// MinPopulation is an optional lower bound on the population of the
+	// snapped city. Candidates whose population (from OSM tag, or a
+	// per-place-type fallback) is strictly below this value are discarded
+	// before scoring. 0 disables the filter (all candidates are considered).
+	MinPopulation int `json:"min_population"`
 }
 
 // SnapToCityResponse pairs each input point with its SnappedCity result,
