@@ -1461,7 +1461,7 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`relative h-12 px-4 text-sm font-semibold cursor-pointer transition-colors active:scale-95 transition-all duration-150 ${active ? "text-[var(--brand)]" : "dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700"
+      className={`relative h-12 px-4 text-sm font-semibold cursor-pointer active:scale-95 transition-all duration-150 ${active ? "text-[var(--brand)]" : "dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700"
         }`}
     >
       {children}
@@ -1977,20 +1977,21 @@ function HeroNextStop({
             href={mapsLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full h-14 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-colors"
+            className="w-full h-14 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
           >
             <Navigation className="w-5 h-5" />
             Navegar con Maps
           </a>
         )}
-        <button
+        <Button
+          variant="outline"
           onClick={onToggleShipments}
-          className="w-full h-12 rounded-xl border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+          className="w-full h-12 rounded-xl text-sm font-semibold gap-2"
         >
           <Package className="w-4 h-4" />
           Ver lista de envíos
           {shipmentsExpanded ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
-        </button>
+        </Button>
         {shipmentsExpanded && allDropoffs.length > 0 && (
           <div className="mt-1 rounded-xl border border-[var(--border)] divide-y divide-[var(--border)] overflow-hidden">
             {stop.shipment_ids.map((tid) => (
@@ -2075,7 +2076,7 @@ function QRModal({
           </div>
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-full bg-[var(--bg-muted)] hover:bg-[var(--bg-inset)] flex items-center justify-center cursor-pointer transition-colors"
+            className="w-9 h-9 rounded-full bg-[var(--bg-muted)] hover:bg-[var(--bg-inset)] flex items-center justify-center cursor-pointer transition-all"
           >
             <X className="w-4 h-4 text-[var(--text-secondary)]" />
           </button>

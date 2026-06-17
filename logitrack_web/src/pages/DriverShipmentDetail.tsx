@@ -209,10 +209,10 @@ export function DriverShipmentDetail() {
           </p>
         </div>
         <div className="border-t border-[var(--border)] flex divide-x divide-[var(--border)]">
-          <a href={`tel:${phone}`} className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors no-underline cursor-pointer">
+          <a href={`tel:${phone}`} className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-all no-underline cursor-pointer">
             <Phone size={15} />Llamar
           </a>
-          <a href={waHref(phone)} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors no-underline cursor-pointer">
+          <a href={waHref(phone)} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-all no-underline cursor-pointer">
             <MessageCircle size={15} className="text-emerald-500" />WhatsApp
           </a>
         </div>
