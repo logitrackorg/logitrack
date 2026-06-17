@@ -1,0 +1,37 @@
+logitrack_web/android/build/reports/problems/problems-report.html
+  s_c45b9d86112317::t_573dd4183b222b 653
+logitrack_web/src/hooks/useCurrentSpeed.ts
+  s_c45b9d86112317::t_c23a9ab34cc954 14-17
+  s_c45b9d86112317::t_e43bb291e98484 36-37,43-44,50,55,57-63,74,85-86,88-91,93-94,102
+logitrack_web/android/capacitor-cordova-android-plugins/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+  s_c45b9d86112317::t_573dd4183b222b 1
+logitrack_web/src/pages/DriverScanVehicle.tsx
+  s_c45b9d86112317::t_0585c25ed7944d 20-21
+  s_c45b9d86112317::t_feb7af6f06721b 72,85,91,97,115,122-132,135-142
+logitrack_web/android/app/src/main/assets/public/index.html
+  s_c45b9d86112317::t_573dd4183b222b 25
+logitrack_web/src/pages/DriverRoute.tsx
+  s_c45b9d86112317::t_d28f3a2ad5a09f 1694-1705,1728-1729,1744-1745
+  s_c45b9d86112317::t_73bb0e62844345 993-994,1014-1015,1031-1032
+  s_c45b9d86112317::t_ada0ababf4b0ad 1372-1373,1394-1395
+  s_c45b9d86112317::t_b3d1dec342d99f 1812-1823
+  s_c45b9d86112317::t_80494ff1b564b4 1612-1613,1628-1629
+  s_c45b9d86112317::t_19099276c20064 1579-1590
+  s_c45b9d86112317::t_c7bbde4ba51fc2 73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "7aa03ead62a8ec7b9d29f976ebae6e8eecf16473",
+  "prompts": {},
+  "sessions": {
+    "s_c45b9d86112317": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ad2f25d-89aa-499d-99ae-8a0dcd407f95",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
