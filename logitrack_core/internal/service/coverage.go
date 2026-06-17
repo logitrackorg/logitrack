@@ -384,7 +384,10 @@ func (s *CoverageService) listBranches(includeInactive bool) []model.Branch {
 // diagnosis is restricted to the user-drawn region (e.g. AMBA, a province).
 // A nil/empty slice uses the cached national-boundary diagram.
 func (s *CoverageService) Diagnose(simulatedAreaKm2 float64, customBoundary []model.LatLng, includeInactive bool) model.SimulationResult {
-	if len(customBoundary) >= 3 {
+	// When inactive branches are requested, the cached diagram only covers active
+	// branches and cannot be reused — rebuild the Voronoi from the full list.
+	// Same applies when a custom boundary clips the diagram.
+	if includeInactive || len(customBoundary) >= 3 {
 		branches := s.listBranches(includeInactive)
 		var sites []voronoiSite
 		for _, b := range branches {

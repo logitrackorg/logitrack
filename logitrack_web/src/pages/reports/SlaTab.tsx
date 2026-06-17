@@ -1280,7 +1280,18 @@ export function CoberturaTab() {
     if (includeInactive) {
       allBranches
         .filter((b) => b.status !== "activo" && !diagramIds.has(b.id) && b.latitude != null && b.longitude != null)
-        .forEach((b) => items.push({ id: b.id, name: b.name, status: b.status, severity: null, isInactive: true }));
+        .forEach((b) => {
+          const simCell = simResult?.cells.find((c) => c.branch_id === b.id);
+          items.push({
+            id: b.id,
+            name: b.name,
+            status: b.status,
+            severity: simCell?.severity ?? null,
+            isInactive: true,
+            coveragePercentage: simCell?.coverage_percentage,
+            deficitKm2: simCell?.deficit_km2,
+          });
+        });
     }
 
     const RANK: Record<string, number> = { critico: 3, moderado: 2, leve: 1, "": 0 };
@@ -2002,6 +2013,10 @@ function BranchSimulationCard({
           {branch.severity
             ? `${branch.name} solo alcanza a cubrir el ${Math.round(branch.coveragePercentage)}% de su territorio asignado (Déficit de ${formatKm2(branch.deficitKm2 ?? 0)}). Se recomienda abrir una sucursal cercana.`
             : `${branch.name} alcanzaría una cobertura adecuada: el área simulada cubre el ${Math.round(branch.coveragePercentage)}% de su territorio asignado.`}
+        </p>
+      ) : branch.isInactive ? (
+        <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500 italic">
+          Excluida del cálculo de Voronoi.
         </p>
       ) : null}
     </li>
