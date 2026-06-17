@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -8,6 +8,11 @@ import {
   GAP_STYLE,
   COVERED_STYLE,
 } from "../api/coverage";
+
+export interface VoronoiCoverageMapHandle {
+  /** Animate the map to the given coordinates and zoom level. */
+  flyTo(lat: number, lng: number, zoom?: number): void;
+}
 
 interface VoronoiCoverageMapProps {
   cells: CoverageCell[];
@@ -84,7 +89,8 @@ function suggestionIcon(color: string): L.DivIcon {
  * El mapa es responsive: un ResizeObserver llama invalidateSize() cuando el
  * contenedor cambia de tamaño.
  */
-export function VoronoiCoverageMap({
+export const VoronoiCoverageMap = forwardRef<VoronoiCoverageMapHandle, VoronoiCoverageMapProps>(
+function VoronoiCoverageMap({
   cells,
   highlightedBranchId,
   onSelectBranch,
@@ -95,9 +101,15 @@ export function VoronoiCoverageMap({
   onBoundaryComplete,
   onBoundaryCancel,
   customBoundary,
-}: VoronoiCoverageMapProps) {
+}: VoronoiCoverageMapProps, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    flyTo(lat, lng, zoom = 8) {
+      mapRef.current?.flyTo([lat, lng], zoom, { duration: 1.5 });
+    },
+  }));
   const cellsLayer = useRef<L.LayerGroup | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
   const simLayer = useRef<L.LayerGroup | null>(null);
@@ -430,7 +442,7 @@ export function VoronoiCoverageMap({
   }, [snappedCities]);
 
   return <div ref={containerRef} className="h-full w-full" />;
-}
+});
 
 function formatKm2(v: number): string {
   return `${Math.round(v).toLocaleString("es-AR")} km²`;

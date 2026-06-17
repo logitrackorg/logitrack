@@ -29,7 +29,7 @@ import {
   type BranchProjection,
   GAP_STYLE,
 } from "../../api/coverage";
-import { VoronoiCoverageMap } from "../../components/VoronoiCoverageMap";
+import { VoronoiCoverageMap, type VoronoiCoverageMapHandle } from "../../components/VoronoiCoverageMap";
 import { CoverageSimulatorPanel, SIM_AREA_DEFAULT } from "../../components/CoverageSimulatorPanel";
 import { CollapsiblePanel } from "../../components/CollapsiblePanel";
 import { SkeletonCard } from "../../components/ui/skeleton";
@@ -1012,6 +1012,11 @@ export function CoberturaTab() {
   const territoryModeRef = useRef<"national" | "custom">("national");
   const includeInactiveRef = useRef(false);
   const closedBranchIdsRef = useRef<string[]>([]);
+  const coverageMapRef = useRef<VoronoiCoverageMapHandle>(null);
+
+  const handleFlyToLocation = useCallback((lat: number, lng: number, zoom = 8) => {
+    coverageMapRef.current?.flyTo(lat, lng, zoom);
+  }, []);
 
   // Feature: Área de simulación personalizada — el usuario dibuja un polígono
   // en el mapa para restringir el diagnóstico a esa zona (ej. AMBA, Patagonia).
@@ -1274,6 +1279,8 @@ export function CoberturaTab() {
         isInactive: false,
         coveragePercentage: simCell?.coverage_percentage,
         deficitKm2: simCell?.deficit_km2,
+        lat: cell.site.lat,
+        lng: cell.site.lng,
       };
     });
 
@@ -1290,6 +1297,8 @@ export function CoberturaTab() {
             isInactive: true,
             coveragePercentage: simCell?.coverage_percentage,
             deficitKm2: simCell?.deficit_km2,
+            lat: b.latitude,
+            lng: b.longitude,
           });
         });
     }
@@ -1411,6 +1420,7 @@ export function CoberturaTab() {
         <Card className="lg:col-span-2 overflow-hidden !cursor-default p-0 isolate">
           <div className="h-[420px] sm:h-[520px] lg:h-full w-full">
             <VoronoiCoverageMap
+              ref={coverageMapRef}
               cells={visibleCells}
               highlightedBranchId={highlighted}
               onSelectBranch={(id) => setHighlighted(id)}
@@ -1524,11 +1534,70 @@ export function CoberturaTab() {
                                   onRemove={() => removeSuggestion(index)}
                                   onTogglePause={() => togglePauseSuggestion(index)}
                                   onBlacklist={(name) => blacklistCity(index, name)}
+                                  onFlyTo={handleFlyToLocation}
                                 />
                               ))}
                           </ul>
                         </div>
                       )}
+                      {(() => {
+                        const unsnapped = snappedCities
+                          .map((c, i) => ({ city: c, index: i }))
+                          .filter(({ city }) => !city.is_snapped);
+                        if (unsnapped.length === 0) return null;
+                        return (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                              {unsnapped.length} sugerencia{unsnapped.length !== 1 ? "s" : ""} pendiente{unsnapped.length !== 1 ? "s" : ""} de asignación:
+                            </p>
+                            <ul className="space-y-2">
+                              {unsnapped.map(({ city, index }, ui) => {
+                                const loc = simResult.suggested_locations[index];
+                                const isPaused = city.is_paused ?? false;
+                                return (
+                                  <li
+                                    key={index}
+                                    className={`relative p-3 pr-16 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 transition-opacity ${isPaused ? "opacity-50" : ""}`}
+                                  >
+                                    <div className="absolute top-2 right-2 flex items-center gap-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => togglePauseSuggestion(index)}
+                                        title={isPaused ? "Reanudar sugerencia" : "Pausar sugerencia"}
+                                        className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 cursor-pointer transition-colors"
+                                      >
+                                        {isPaused ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeSuggestion(index)}
+                                        title="Descartar sugerencia"
+                                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 cursor-pointer transition-colors"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleFlyToLocation(loc.lat, loc.lng)}
+                                      title="Centrar mapa en esta sugerencia"
+                                      className="text-sm font-semibold text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors text-left"
+                                    >
+                                      ID-{ui + 1}
+                                    </button>
+                                    <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300">
+                                      Aportará ~{formatKm2(loc.actual_added_km2)} de cobertura neta.
+                                      {loc.affected_branches.length > 0 && (
+                                        <> Descomprimirá las zonas de: {loc.affected_branches.join(", ")}.</>
+                                      )}
+                                    </p>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        );
+                      })()}
                     </>
                   )}
                   {(projection || projectionLoading || projectionError) && (
@@ -1605,6 +1674,7 @@ export function CoberturaTab() {
                 onToggleIncludeInactive={handleToggleIncludeInactive}
                 onToggleHide={toggleHiddenBranch}
                 onToggleClose={toggleClosedBranch}
+                onFlyTo={handleFlyToLocation}
               />
             </CollapsiblePanel>
           </Card>
@@ -1767,12 +1837,14 @@ function SuggestionCard({
   onRemove,
   onTogglePause,
   onBlacklist,
+  onFlyTo,
 }: {
   city: SnappedCity;
   loc: SuggestedLocation;
   onRemove: () => void;
   onTogglePause: () => void;
   onBlacklist: (cityName: string) => void;
+  onFlyTo: (lat: number, lng: number) => void;
 }) {
   const [blacklistChecked, setBlacklistChecked] = useState(false);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${city.lat},${city.lng}`;
@@ -1809,7 +1881,14 @@ function SuggestionCard({
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
-      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{city.city_name}</p>
+      <button
+        type="button"
+        onClick={() => onFlyTo(city.lat, city.lng)}
+        title="Centrar mapa en esta ciudad"
+        className="text-sm font-semibold text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors text-left"
+      >
+        {city.city_name}
+      </button>
       <a
         href={mapsUrl}
         target="_blank"
@@ -1856,6 +1935,9 @@ interface PanelBranchItem {
   /** Populated from simResult when a diagnosis has been run. */
   coveragePercentage?: number;
   deficitKm2?: number;
+  /** Branch coordinates — used for fly-to map navigation. */
+  lat?: number;
+  lng?: number;
 }
 
 function BranchSimulationPanel({
@@ -1866,6 +1948,7 @@ function BranchSimulationPanel({
   onToggleIncludeInactive,
   onToggleHide,
   onToggleClose,
+  onFlyTo,
 }: {
   branches: PanelBranchItem[];
   hiddenBranchIds: string[];
@@ -1874,6 +1957,7 @@ function BranchSimulationPanel({
   onToggleIncludeInactive: () => void;
   onToggleHide: (id: string) => void;
   onToggleClose: (id: string) => void;
+  onFlyTo: (lat: number, lng: number) => void;
 }) {
   const closedCount = closedBranchIds.length;
   const hiddenCount = hiddenBranchIds.length;
@@ -1904,6 +1988,7 @@ function BranchSimulationPanel({
               isClosed={closedBranchIds.includes(b.id)}
               onToggleHide={() => onToggleHide(b.id)}
               onToggleClose={() => onToggleClose(b.id)}
+              onFlyTo={b.lat != null && b.lng != null ? () => onFlyTo(b.lat!, b.lng!) : undefined}
             />
           ))}
         </ul>
@@ -1930,12 +2015,14 @@ function BranchSimulationCard({
   isClosed,
   onToggleHide,
   onToggleClose,
+  onFlyTo,
 }: {
   branch: PanelBranchItem;
   isHidden: boolean;
   isClosed: boolean;
   onToggleHide: () => void;
   onToggleClose: () => void;
+  onFlyTo?: () => void;
 }) {
   const isDimmed = isHidden || isClosed;
 
@@ -1964,9 +2051,20 @@ function BranchSimulationCard({
       {/* Top row */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-sm font-semibold truncate text-slate-800 dark:text-slate-100">
-            {branch.name}
-          </span>
+          {onFlyTo ? (
+            <button
+              type="button"
+              onClick={onFlyTo}
+              title="Centrar mapa en esta sucursal"
+              className="text-sm font-semibold truncate text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors text-left"
+            >
+              {branch.name}
+            </button>
+          ) : (
+            <span className="text-sm font-semibold truncate text-slate-800 dark:text-slate-100">
+              {branch.name}
+            </span>
+          )}
           {coverageBadge && (
             <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${coverageBadge.className}`}>
               {coverageBadge.label}
