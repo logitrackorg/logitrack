@@ -150,6 +150,19 @@ func (r *inMemoryBranchRepository) UpdateStatus(id string, status model.BranchSt
 	return nil
 }
 
+func (r *inMemoryBranchRepository) UpdateEmployeeOfMonth(id string, enabled bool, username string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	b, ok := r.branches[id]
+	if !ok {
+		return errors.New("branch not found")
+	}
+	b.EmployeeOfMonthEnabled = enabled
+	b.UpdatedBy = username
+	r.branches[id] = b
+	return nil
+}
+
 func (r *inMemoryBranchRepository) GetByID(id string) (model.Branch, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -447,6 +460,19 @@ func (r *inMemoryRouteRepository) UpdateStatus(id string, status model.RouteStat
 	return fmt.Errorf("route not found")
 }
 
+func (r *inMemoryRouteRepository) ListByDateRange(from, to time.Time) []model.Route {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var result []model.Route
+	for _, route := range r.routes {
+		d := time.Time(route.Date)
+		if !d.Before(from) && !d.After(to) {
+			result = append(result, route)
+		}
+	}
+	return result
+}
+
 // ── InMemory CustomerRepository ───────────────────────────────────────────────
 
 type inMemoryCustomerRepository struct {
@@ -687,20 +713,6 @@ func (r *inMemoryClaimRepository) ListAll() ([]model.Claim, error) {
 	return out, nil
 }
 
-func (r *inMemoryClaimRepository) UpdateCategory(id string, category model.ClaimCategory, status model.ClaimStatus, updatedAt time.Time) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for i := range r.claims {
-		if r.claims[i].ID == id {
-			r.claims[i].AssignedCategory = category
-			r.claims[i].Status = status
-			r.claims[i].UpdatedAt = updatedAt
-			return nil
-		}
-	}
-	return ErrClaimNotFound
-}
-
 func (r *inMemoryClaimRepository) Resolve(id string, resolutionType model.ClaimResolutionType, status model.ClaimStatus, updatedAt time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -726,6 +738,32 @@ func (r *inMemoryClaimRepository) UpdateStatus(id string, status model.ClaimStat
 		}
 	}
 	return ErrClaimNotFound
+}
+
+func (r *inMemoryClaimRepository) UpdateTransferStatus(id, assignedBranchID string, status model.ClaimStatus, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range r.claims {
+		if r.claims[i].ID == id {
+			r.claims[i].Status = status
+			r.claims[i].AssignedBranchID = assignedBranchID
+			r.claims[i].UpdatedAt = updatedAt
+			return nil
+		}
+	}
+	return ErrClaimNotFound
+}
+
+func (r *inMemoryClaimRepository) ListByAssignedBranch(branchID string) ([]model.Claim, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var result []model.Claim
+	for _, c := range r.claims {
+		if c.AssignedBranchID == branchID {
+			result = append(result, c)
+		}
+	}
+	return result, nil
 }
 
 // ── InMemory ClaimEventRepository ─────────────────────────────────────────────

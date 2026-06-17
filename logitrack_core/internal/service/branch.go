@@ -230,6 +230,17 @@ func (s *BranchService) UpdateStatus(id string, req model.UpdateBranchStatusRequ
 	return updated, nil
 }
 
+func (s *BranchService) UpdateEmployeeOfMonth(id string, enabled bool, username string) (model.Branch, error) {
+	if _, found := s.repo.GetByID(id); !found {
+		return model.Branch{}, ErrBranchNotFound
+	}
+	if err := s.repo.UpdateEmployeeOfMonth(id, enabled, username); err != nil {
+		return model.Branch{}, fmt.Errorf("error al actualizar configuración: %w", err)
+	}
+	updated, _ := s.repo.GetByID(id)
+	return updated, nil
+}
+
 func (s *BranchService) IsBranchActive(branchID string) bool {
 	b, found := s.repo.GetByID(branchID)
 	return found && b.Status == model.BranchStatusActive

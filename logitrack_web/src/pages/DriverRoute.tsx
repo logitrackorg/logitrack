@@ -6,6 +6,7 @@ import {
   ArrowDown,
   ArrowUp,
   Ban,
+  Camera,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -17,14 +18,30 @@ import {
   Package,
   Play,
   QrCode,
+  RefreshCw,
   Truck,
   Weight,
+  WifiOff,
   X,
   XCircle,
 } from "lucide-react";
+import { compare as bcryptCompare } from "bcryptjs";
+import { useOffline } from "../offline/useOffline";
+import { GEOFENCE_RADIUS_M, distanceMeters } from "../utils/geo";
+import {
+  cacheRoute,
+  getCachedRoute,
+  enqueueAction,
+  getAllQueuedActions,
+  getKeywordAttempts,
+  incrementKeywordAttempts,
+  prefetchRouteGeometry,
+  clearDayCache,
+} from "../offline/db";
+import { syncQueue } from "../offline/sync";
 import { DeliveryActionSheet } from "../components/driver/DeliveryActionSheet";
 
-import { driverApi, type DriverRouteResponse } from "../api/driver";
+import { driverApi, type DriverRouteResponse, type TouchEventPayload } from "../api/driver";
 import { interBranchTripsApi, type InterBranchTrip, type TripQRResponse } from "../api/interBranchTrips";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
@@ -32,6 +49,7 @@ import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Skeleton } from "../components/ui/skeleton";
+import { CameraCapture } from "../components/ui/CameraCapture";
 import { MapView } from "../components/ui/MapView";
 import { NextStopCard } from "../components/ui/NextStopCard";
 import { useGeolocation } from "../hooks/useGeolocation";
@@ -84,6 +102,11 @@ export function DriverRoute() {
 function LastMileView() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isOnline = useOffline();
+  // trackingIds de acciones encoladas localmente, pendientes de sincronizar.
+  // Se siembra desde IndexedDB en cada montaje (sobrevive cierres de app).
+  const [pendingSyncIds, setPendingSyncIds] = useState<Set<string>>(new Set());
+  const [syncing, setSyncing] = useState(false);
 
   // BUG-43: velocidad GPS real del chofer (sin fallback permisivo). El valor
   // efectivo y la fuente se computan más abajo, una vez conocido el estado del
@@ -112,6 +135,8 @@ function LastMileView() {
   const [rejectedShipment, setRejectedShipment] = useState<Shipment | null>(null);
   const [recipientDni, setRecipientDni] = useState("");
   const [deliveryKeyword, setDeliveryKeyword] = useState("");
+  const [deliveryPhoto, setDeliveryPhoto] = useState<Blob | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [useContingency, setUseContingency] = useState(false);
   const [failedReason, setFailedReason] = useState<string>("");
   const [failedNotes, setFailedNotes] = useState("");
@@ -119,6 +144,10 @@ function LastMileView() {
   const [rejectedNotes, setRejectedNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [offlineKeywordAttempts, setOfflineKeywordAttempts] = useState(0);
+  // Geofence warning: when set, shows a confirmation modal before proceeding.
+  // Stores the distance (m) and a callback to execute if the driver confirms.
+  const [geoWarning, setGeoWarning] = useState<{ distanceM: number; onConfirm: () => void } | null>(null);
   const [tab, setTab] = useState<Tab>("pendientes");
 
   const { getMisfires, resetMisfires, triggerCheckin, closeCheckin } =
@@ -127,12 +156,169 @@ function LastMileView() {
   const load = () =>
     driverApi
       .getRoute()
-      .then((d) => { setData(d); setNoRoute(false); })
-      .catch(() => setNoRoute(true))
+      .then((d) => {
+        setData(d);
+        setNoRoute(false);
+        if (user) {
+          cacheRoute(user.id, d).catch(() => {});
+          if (d.waypoints && d.waypoints.length >= 2) {
+            prefetchRouteGeometry(user.id, d.waypoints, d.origin ?? undefined).catch(() => {});
+          }
+        }
+      })
+      .catch(async (err) => {
+        // 404 = no hay ruta asignada en el servidor → no usar cache (datos obsoletos).
+        // Cualquier otro error (red caída, 5xx) → intentar cache offline.
+        const status = err?.response?.status;
+        if (status === 404) { setNoRoute(true); return; }
+        if (user) {
+          const cached = await getCachedRoute(user.id).catch(() => null);
+          if (cached) { setData(cached as typeof data); setNoRoute(false); return; }
+        }
+        setNoRoute(true);
+      })
       .finally(() => setLoading(false));
 
-  useEffect(() => { load(); }, []);
+  // En producción puede haber un fallo transitorio inmediatamente después de que
+  // el chofer reclamó el vehículo o inició la ruta. En ese caso reintentamos una
+  // vez antes de redirigir a scan, para evitar el bounce-back post gate de fatiga.
+  // El reintento delega en load(), que ante un fallo de red sirve la ruta cacheada
+  // (clave para abrir la app sin conexión) antes de marcar noRoute.
+  const loadWithRetry = () => {
+    setLoading(true);
+    driverApi
+      .getRoute()
+      .then((d) => {
+        setData(d);
+        setNoRoute(false);
+        setLoading(false);
+        if (user) {
+          cacheRoute(user.id, d).catch(() => {});
+          if (d.waypoints && d.waypoints.length >= 2) {
+            prefetchRouteGeometry(user.id, d.waypoints, d.origin ?? undefined).catch(() => {});
+          }
+        }
+      })
+      .catch((err) => {
+        // 404 definitivo: no reintentar, mostrar pantalla sin ruta.
+        if (err?.response?.status === 404) { setNoRoute(true); setLoading(false); return; }
+        setTimeout(() => { load(); }, 2000);
+      });
+  };
+
+  useEffect(() => { loadWithRetry(); }, []);
   useEffect(() => { zoneApi.list().then(setZones).catch(() => {}); }, []);
+
+  // Reconciliación de la cola offline. Corre en cada montaje y cada vez que
+  // cambia la conectividad:
+  //   1. Lee la cola persistida en IndexedDB y la refleja en pendingSyncIds
+  //      (así sobreviven las acciones encoladas en una sesión previa).
+  //   2. Si hay conexión y cola pendiente, la reproduce contra el backend.
+  //   3. Las acciones sincronizadas con éxito se quitan del set; las fallidas
+  //      quedan en cola y se avisa al chofer (se reintentan en el próximo ciclo).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const actions = await getAllQueuedActions().catch(() => []);
+      if (cancelled) return;
+      if (actions.length > 0) {
+        setPendingSyncIds((prev) => {
+          const next = new Set(prev);
+          actions.forEach((a) => next.add(a.trackingId));
+          return next;
+        });
+      }
+      if (!isOnline || actions.length === 0) return;
+      setSyncing(true);
+      try {
+        const results = await syncQueue();
+        if (cancelled) return;
+        const okIds = new Set(results.filter((r) => r.success).map((r) => r.trackingId));
+        setPendingSyncIds((prev) => {
+          const next = new Set(prev);
+          okIds.forEach((id) => next.delete(id));
+          return next;
+        });
+        const failed = results.filter((r) => !r.success).length;
+        if (failed > 0) {
+          setActionError(`No se pudieron sincronizar ${failed} acción(es). Se reintentará automáticamente.`);
+        }
+        load();
+      } finally {
+        if (!cancelled) setSyncing(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Polling de bloqueo por fatiga — cada 5 s mientras la ruta está activa (LOGITRACK-499).
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const status = await driverApi.getFatigueBlockStatus();
+        const nowBlocked = status.blocked ?? false;
+        setFatigueBlocked(nowBlocked);
+        if (!nowBlocked && status.recently_unblocked && status.unblocked_by) {
+          const ackKey = (status as { unblocked_at?: string }).unblocked_at ?? "seen";
+          const storedAck = sessionStorage.getItem("lt_fatigue_ack_route");
+          pendingAckRef.current = ackKey;
+          if (ackKey !== storedAck) {
+            setFatigueUnblockedBy(status.unblocked_by);
+          }
+        }
+      } catch {
+        // Error de red → mantener estado actual (conservador)
+      }
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Returns the driver's current GPS coordinates (null in simulation mode or without fix).
+  // Returns the driver's current position (real GPS or simulated) for geofence checking.
+  const driverCoords = (): { lat: number; lng: number } | null => userLocation ?? null;
+
+  // Checks whether the driver's current position is within the geofence of the
+  // recipient address. Returns the distance in meters, or null when coords are unavailable.
+  const checkGeofence = (shipment: Shipment): number | null => {
+    const pos = driverCoords();
+    const addr = shipment.recipient?.address;
+    if (!pos || addr?.latitude == null || addr?.longitude == null) return null;
+    return distanceMeters(pos.lat, pos.lng, addr.latitude, addr.longitude);
+  };
+
+  // Opens a sheet after checking geofence. If outside radius, shows the warning
+  // first and only opens the sheet if the driver confirms.
+  const openDeliverSheet = (shipment: Shipment) => {
+    // Resetear antes de cargar para evitar que queden intentos de un envío anterior.
+    setOfflineKeywordAttempts(0);
+    getKeywordAttempts(shipment.tracking_id).then(setOfflineKeywordAttempts).catch(() => {});
+    const distM = checkGeofence(shipment);
+    if (distM !== null && distM > GEOFENCE_RADIUS_M) {
+      setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setDeliverShipment(shipment); } });
+    } else {
+      setDeliverShipment(shipment);
+    }
+  };
+
+  const openFailedSheet = (shipment: Shipment) => {
+    const distM = checkGeofence(shipment);
+    if (distM !== null && distM > GEOFENCE_RADIUS_M) {
+      setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setFailedShipment(shipment); } });
+    } else {
+      setFailedShipment(shipment);
+    }
+  };
+
+  const openRejectedSheet = (shipment: Shipment) => {
+    const distM = checkGeofence(shipment);
+    if (distM !== null && distM > GEOFENCE_RADIUS_M) {
+      setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setRejectedShipment(shipment); } });
+    } else {
+      setRejectedShipment(shipment);
+    }
+  };
 
   const closeSheets = () => {
     setDeliverShipment(null);
@@ -145,6 +331,7 @@ function LastMileView() {
     setFailedNotes("");
     setRejectedReason("");
     setRejectedNotes("");
+    setDeliveryPhoto(null);
   };
 
   const checkReTestGate = async () => {
@@ -164,17 +351,87 @@ function LastMileView() {
     if (!deliverShipment) return;
     const isLastMile = deliverShipment.delivery_method === "ultima_milla";
     if (isLastMile) {
-      const locked = (deliverShipment.keyword_attempts ?? 0) >= 3;
+      const serverLocked = (deliverShipment.keyword_attempts ?? 0) >= 3;
       if (useContingency) {
         if (!recipientDni.trim()) return;
       } else {
-        if (locked || !deliveryKeyword.trim()) return;
+        if (serverLocked || !deliveryKeyword.trim()) return;
       }
+      if (!deliveryPhoto) return;
     } else {
       if (!recipientDni.trim()) return;
     }
+
+    // ── Path offline ────────────────────────────────────────────────────────
+    if (!isOnline) {
+      // El retiro en sucursal se opera desde la web, no desde la app del chofer;
+      // su flujo (updateStatus + DNI) no está soportado offline. Defensivo: no
+      // encolamos una acción malformada.
+      if (!isLastMile) {
+        setActionError("La entrega en sucursal requiere conexión.");
+        return;
+      }
+      if (!useContingency) {
+        setSubmitting(true);
+        const offlineAttempts = await getKeywordAttempts(deliverShipment.tracking_id);
+        if (offlineAttempts >= 3) {
+          setActionError("Palabra clave bloqueada (sin conexión). Usá el DNI como alternativa.");
+          setSubmitting(false);
+          return;
+        }
+        const hash = deliverShipment.keyword_hash;
+        if (!hash) {
+          const newCount = await incrementKeywordAttempts(deliverShipment.tracking_id);
+          setOfflineKeywordAttempts(newCount);
+          setDeliveryKeyword("");
+          if (newCount >= 3) {
+            setActionError("Sin conexión y sin datos de verificación local. Intentos agotados. Usá el DNI como alternativa.");
+          } else {
+            setActionError(`Sin conexión y sin datos de verificación local. Intento ${newCount}/3. Usá el DNI como alternativa.`);
+          }
+          setSubmitting(false);
+          return;
+        }
+        const valid = await bcryptCompare(deliveryKeyword.trim().toUpperCase(), hash);
+        if (!valid) {
+          const newCount = await incrementKeywordAttempts(deliverShipment.tracking_id);
+          setOfflineKeywordAttempts(newCount);
+          setDeliveryKeyword("");
+          if (newCount >= 3) {
+            setActionError("Palabra clave incorrecta. Intentos agotados. Usá el DNI como alternativa.");
+          } else {
+            setActionError(`Palabra clave incorrecta. Intento ${newCount}/3.`);
+          }
+          setSubmitting(false);
+          return;
+        }
+      }
+      const coords = driverCoords();
+      await enqueueAction({
+        type: "deliver",
+        trackingId: deliverShipment.tracking_id,
+        payload: {
+          keyword: useContingency ? undefined : deliveryKeyword.trim(),
+          recipient_dni: useContingency ? recipientDni.trim() : undefined,
+          contingency: useContingency || undefined,
+          current_speed: effectiveSpeed,
+          speed_source: speedSource,
+          latitude: coords?.lat,
+          longitude: coords?.lng,
+        },
+        photoBlob: deliveryPhoto ?? undefined,
+        enqueuedAt: Date.now(),
+      });
+      setPendingSyncIds((prev) => new Set(prev).add(deliverShipment.tracking_id));
+      closeSheets();
+      setSubmitting(false);
+      return;
+    }
+
+    // ── Path online ─────────────────────────────────────────────────────────
     setSubmitting(true);
     setActionError("");
+    const coords = driverCoords();
     try {
       if (isLastMile) {
         await shipmentApi.deliver(deliverShipment.tracking_id, {
@@ -183,6 +440,9 @@ function LastMileView() {
           contingency: useContingency,
           current_speed: effectiveSpeed,
           speed_source: speedSource,
+          photo: deliveryPhoto!,
+          latitude: coords?.lat,
+          longitude: coords?.lng,
         });
       } else {
         await shipmentApi.updateStatus(deliverShipment.tracking_id, {
@@ -191,13 +451,14 @@ function LastMileView() {
           recipient_dni: recipientDni.trim(),
           current_speed: effectiveSpeed,
           speed_source: speedSource,
+          latitude: coords?.lat,
+          longitude: coords?.lng,
         });
       }
       closeSheets();
       await checkReTestGate();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      // Refresh shipment to get updated keyword_attempts from backend
       if (msg?.includes("intento") || msg?.includes("bloqueado")) {
         setDeliveryKeyword("");
         const updated = await shipmentApi.get(deliverShipment.tracking_id).catch(() => null);
@@ -214,8 +475,24 @@ function LastMileView() {
     const reasonLabel = FAILED_REASONS.find((r) => r.id === failedReason)?.label ?? "";
     const note = [reasonLabel, failedNotes.trim()].filter(Boolean).join(" — ");
     if (!note) return;
+
     setSubmitting(true);
     setActionError("");
+    const coords = driverCoords();
+
+    if (!isOnline) {
+      await enqueueAction({
+        type: "delivery_failed",
+        trackingId: failedShipment.tracking_id,
+        payload: { status: "delivery_failed", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource, latitude: coords?.lat, longitude: coords?.lng },
+        enqueuedAt: Date.now(),
+      });
+      setPendingSyncIds((prev) => new Set(prev).add(failedShipment.tracking_id));
+      closeSheets();
+      setSubmitting(false);
+      return;
+    }
+
     try {
       await shipmentApi.updateStatus(failedShipment.tracking_id, {
         status: "delivery_failed",
@@ -223,6 +500,8 @@ function LastMileView() {
         notes: note,
         current_speed: effectiveSpeed,
         speed_source: speedSource,
+        latitude: coords?.lat,
+        longitude: coords?.lng,
       });
       closeSheets();
       await checkReTestGate();
@@ -239,8 +518,24 @@ function LastMileView() {
     const reasonEntry = REJECTED_REASONS.find((r) => r.id === rejectedReason);
     const reasonLabel = reasonEntry ? reasonEntry.label : rejectedReason;
     const note = [reasonLabel, rejectedNotes.trim()].filter(Boolean).join(" — ");
+
     setSubmitting(true);
     setActionError("");
+    const coords = driverCoords();
+
+    if (!isOnline) {
+      await enqueueAction({
+        type: "rejected",
+        trackingId: rejectedShipment.tracking_id,
+        payload: { status: "delivery_failed", location: "", notes: note, rejected_by_recipient: true, current_speed: effectiveSpeed, speed_source: speedSource, latitude: coords?.lat, longitude: coords?.lng },
+        enqueuedAt: Date.now(),
+      });
+      setPendingSyncIds((prev) => new Set(prev).add(rejectedShipment.tracking_id));
+      closeSheets();
+      setSubmitting(false);
+      return;
+    }
+
     try {
       await shipmentApi.updateStatus(rejectedShipment.tracking_id, {
         status: "delivery_failed",
@@ -249,6 +544,8 @@ function LastMileView() {
         rejected_by_recipient: true,
         current_speed: effectiveSpeed,
         speed_source: speedSource,
+        latitude: coords?.lat,
+        longitude: coords?.lng,
       });
       closeSheets();
       await checkReTestGate();
@@ -291,6 +588,17 @@ function LastMileView() {
   const cycleSpeedMultiplier = () =>
     setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));
 
+  // Re-ejecutar prefetch con ubicación GPS real en cuanto esté disponible,
+  // para que el cache offline use la posición del chofer y no la sucursal.
+  useEffect(() => {
+    if (!userLocation || !data?.waypoints || !user) return;
+    const pending = data.waypoints.filter(
+      (wp) => wp.status !== 'delivered' && wp.status !== 'delivery_failed'
+    );
+    if (pending.length < 1) return;
+    prefetchRouteGeometry(user.id, pending, data.origin ?? undefined, userLocation).catch(() => {});
+  }, [userLocation?.lat, userLocation?.lng]);
+
   // ── BUG-43: gate de entrega consciente del simulador ───────────────────────
   // Si la simulación de Leaflet está activa, la velocidad efectiva es la velocidad
   // VIRTUAL del vehículo (0 cuando está pausado/detenido en una parada; la
@@ -310,6 +618,23 @@ function LastMileView() {
     : locationMissing
       ? "Ubicación requerida. Active el GPS y deténgase para entregar"
       : "";
+
+  // Calculado antes de early returns para poder usarlo en el useEffect de abajo.
+  const routeEffectivelyDone = data
+    ? ((data.route.status === "finalizada" || data.route.status === "en_curso") &&
+        data.shipments.filter(
+          (s) => s.status === "out_for_delivery" && !pendingSyncIds.has(s.tracking_id),
+        ).length === 0 &&
+        data.shipments.length > 0)
+    : false;
+
+  // Limpiar cache de jornada al finalizar la ruta. Debe estar antes de cualquier
+  // early return para cumplir las reglas de hooks de React.
+  useEffect(() => {
+    if (routeEffectivelyDone && user) {
+      clearDayCache(user.id).catch(() => {});
+    }
+  }, [routeEffectivelyDone, user?.id]);
 
   // Gate de re-test en ruta: se activa tras una acción de entrega si el backend
   // detecta que pasaron más de 3h o hay más de 5 misfires acumulados.
@@ -336,18 +661,16 @@ function LastMileView() {
 
   const routeStatus = data.route.status ?? "pendiente";
 
-  const pendingList = data.shipments.filter((s) => s.status === "out_for_delivery");
+  const pendingList = data.shipments.filter(
+    (s) => s.status === "out_for_delivery" && !pendingSyncIds.has(s.tracking_id),
+  );
   const completedList = data.shipments.filter(
-    (s) => s.status === "delivered" || s.status === "delivery_failed",
+    (s) => s.status === "delivered" || s.status === "delivery_failed" || pendingSyncIds.has(s.tracking_id),
   );
   const total = data.shipments.length;
   const done = completedList.length;
   const pending = pendingList.length;
   const progressPct = total === 0 ? 0 : Math.round((done / total) * 100);
-
-  const routeEffectivelyDone =
-    (routeStatus === "finalizada" && pending === 0) ||
-    (routeStatus === "en_curso" && pending === 0 && total > 0);
 
   if (routeEffectivelyDone) {
     return <RouteCompletedView data={data} />;
@@ -384,71 +707,113 @@ function LastMileView() {
     : [];
 
   return (
-    <>
-      {/* Toolbar: view toggle, simulator, danger badge, status pill */}
-      <div className="flex items-center justify-between gap-3 mb-2 px-4 max-w-2xl mx-auto pt-2">
-        {/* Toggle Lista/Mapa */}
-        {canAct && (
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setViewMode('list')}
-              className={viewMode === 'list' ? `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] bg-[var(--sidebar-bg)] text-white` : `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100`}
-            >
-              <Package className="w-4 h-4" />
-              Lista
-            </button>
-            <button
-              onClick={() => setViewMode('map')}
-              className={viewMode === 'map' ? `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] bg-[var(--sidebar-bg)] text-white` : `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100`}
-            >
-              <MapPin className="w-4 h-4" />
-              Mapa
-            </button>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2">
-          {!simActive && simulationMode === "real" && (
-            <button
-              onClick={() => { setSimActive(true); setViewMode('map'); }}
-              title="Activar simulación GPS"
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center opacity-30 hover:opacity-70 transition-opacity cursor-pointer select-none"
-            >
-              <Film size={20} />
-            </button>
+    <div className="pb-32">
+      {/* Banner offline */}
+      {(!isOnline || syncing) && (
+        <div className={`fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 px-4 py-2 text-xs font-semibold ${syncing ? "bg-amber-400 text-amber-900" : "bg-slate-700 text-white"}`}>
+          <span className="flex items-center gap-1.5">
+            {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <WifiOff className="w-3.5 h-3.5" />}
+            {syncing ? "Sincronizando acciones pendientes…" : "Sin conexión — las acciones se guardan localmente"}
+          </span>
+          {!syncing && pendingSyncIds.size > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-white/20">{pendingSyncIds.size} pendiente{pendingSyncIds.size !== 1 ? "s" : ""}</span>
           )}
-          <RouteStatusPill status={routeStatus} />
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      <div className="mb-2 px-4 max-w-2xl mx-auto">
-        <div className="h-2 w-full rounded-full dark:bg-gray-700/50 bg-slate-100 overflow-hidden">
-          <div
-            ref={el => { if (el) el.style.width = `${progressPct}%`; }}
-            className="h-full bg-gradient-to-r from-emerald-400 to-[var(--ok)] transition-[width] duration-500"
-          />
-        </div>
-      </div>
-
-      {/* Tabs */}
-      {canAct && viewMode === 'list' && (
-        <div className="-mx-4 px-4 flex gap-2 mt-2 mb-2 border-b dark:border-gray-700 border-slate-100 max-w-2xl mx-auto">
-          <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
-            Pendientes
-            <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400">
-              {pending}
-            </span>
-          </TabButton>
-          <TabButton active={tab === "completados"} onClick={() => setTab("completados")}>
-            Completados
-            <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
-              {done}
-            </span>
-          </TabButton>
         </div>
       )}
-      <div className="px-4 py-2 max-w-2xl mx-auto">
+
+      {/* Header sticky con progreso y tabs */}
+      <header className={`sticky z-10 bg-white/95 backdrop-blur border-b dark:border-gray-700 border-slate-200 ${(!isOnline || syncing) ? "top-8" : "top-0"}`}>
+        <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-3 pb-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
+                <Truck className="w-4.5 h-4.5" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-lg font-bold dark:text-gray-100 text-slate-900 leading-tight tracking-tight">Mi ruta</h1>
+                <p className="text-[11px] dark:text-gray-400 text-slate-500 leading-tight">
+                  {today} · {done}/{total} completados
+                </p>
+              </div>
+            </div>
+
+            {/* Toggle Lista/Mapa */}
+            {canAct && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'list'
+                    ? 'bg-[var(--sidebar-bg)] text-white'
+                    : 'dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100'
+                    }`}
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  Lista
+                </button>
+                <button
+                  onClick={() => setViewMode('map')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'map'
+                    ? 'bg-[var(--sidebar-bg)] text-white'
+                    : 'dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100'
+                    }`}
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  Mapa
+                </button>
+              </div>
+            )}
+
+            {!simActive && simulationMode === "real" && (
+              <button
+                onClick={() => { setSimActive(true); setViewMode('map'); }}
+                title="Activar simulación GPS"
+                className="text-[16px] opacity-30 hover:opacity-70 transition-opacity cursor-pointer select-none"
+              >
+                <Film size={16} />
+              </button>
+            )}
+
+            {/* Badge minimizado de zona peligrosa — visible solo cuando el cartel grande fue descartado */}
+            {isDangerDismissed && (
+              <span
+                title="Zona peligrosa activa"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 border border-red-300 text-red-600 text-[11px] font-bold shrink-0 animate-pulse"
+              >
+                <AlertTriangle size={12} className="mr-0.5" /> Zona
+              </span>
+            )}
+            <RouteStatusPill status={routeStatus} />
+          </div>
+
+          <div className="mt-3">
+            <div className="h-1.5 w-full rounded-full dark:bg-gray-700/50 bg-slate-100 overflow-hidden">
+              <div
+                ref={el => { if (el) el.style.width = `${progressPct}%`; }}
+                className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-[width] duration-500"
+              />
+            </div>
+          </div>
+
+          {canAct && viewMode === 'list' && (
+            <div className="mt-3 -mx-4 sm:-mx-6 px-4 sm:px-6 flex gap-1 border-b-0">
+              <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
+                Pendientes
+                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                  {pending}
+                </span>
+              </TabButton>
+              <TabButton active={tab === "completados"} onClick={() => setTab("completados")}>
+                Completados
+                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                  {done}
+                </span>
+              </TabButton>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-4">
         {actionError && (
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm font-semibold text-[var(--danger-text)]">
             <AlertCircle className="w-5 h-5 shrink-0" />
@@ -480,8 +845,29 @@ function LastMileView() {
           </Card>
         )}
 
-        {/* Vista Lista */}
-        {viewMode !== 'map' && (
+        {/* Renderizado condicional Lista o Mapa */}
+        {viewMode === 'map' ? (
+          <>
+            <MapView
+              waypoints={waypoints}
+              origin={origin}
+              userLocation={userLocation ?? undefined}
+              simulationMode={simulationMode}
+              driverId={user?.id}
+              simulationControls={{
+                isPaused, pause, play, reset,
+                onExit: () => { setSimActive(false); setSpeedMultiplier(1); },
+                speedMultiplier,
+                onCycleSpeed: cycleSpeedMultiplier,
+                onFastForwardTime: () => driverApi.fastForwardCheckinTime().catch(() => {}),
+              }}
+              zones={zones}
+              onRouteInfoChange={setRouteInfo}
+              onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
+            />
+            <ZoneAlert zones={activeDangerZones} onDismissedChange={setIsDangerDismissed} />
+          </>
+        ) : (
           <>
             {visibleList.length === 0 ? (
               <div className="py-16 text-center">
@@ -506,12 +892,24 @@ function LastMileView() {
             ) : (
               <div className="grid gap-3">
                 {visibleList.map((shipment, idx) => (
-                  <ShipmentCard
-                    key={shipment.tracking_id}
-                    shipment={shipment}
-                    order={tab === "pendientes" ? idx + 1 : undefined}
-                    onOpen={() => navigate(`/driver/shipments/${shipment.tracking_id}`)}
-                  />
+                  <div key={shipment.tracking_id}>
+                    <ShipmentCard
+                      shipment={shipment}
+                      order={tab === "pendientes" ? idx + 1 : undefined}
+                      canAct={canAct && tab === "pendientes"}
+                      getMisfires={() => misfireRef.current}
+                      onDeliver={() => openDeliverSheet(shipment)}
+                      onFailed={() => openFailedSheet(shipment)}
+                      onRejected={() => openRejectedSheet(shipment)}
+                      onOpen={() => navigate(`/shipments/${shipment.tracking_id}`)}
+                    />
+                    {pendingSyncIds.has(shipment.tracking_id) && (
+                      <div className="flex items-center gap-1.5 mt-1 px-3 py-1.5 rounded-b-lg bg-amber-50 border border-t-0 border-amber-200 text-xs text-amber-700 font-medium">
+                        <RefreshCw className="w-3 h-3" />
+                        Pendiente de sincronización
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
@@ -550,17 +948,35 @@ function LastMileView() {
           userLocation={userLocation ?? undefined}
           routeInfo={routeInfo}
           canAct={canAct}
-          onDeliver={() => { if (nextShipment) setDeliverShipment(nextShipment); }}
-          onFailed={() => { if (nextShipment) setFailedShipment(nextShipment); }}
-          onRejected={() => { if (nextShipment) setRejectedShipment(nextShipment); }}
+          onDeliver={() => {
+            if (!nextShipment) return;
+            openDeliverSheet(nextShipment);
+            if (nextShipment.delivery_method === "ultima_milla") setCameraOpen(true);
+          }}
+          onFailed={() => { if (nextShipment) openFailedSheet(nextShipment); }}
+          onRejected={() => { if (nextShipment) openRejectedSheet(nextShipment); }}
         />
       )}
 
 
+      {/* Camera for delivery photo */}
+      {cameraOpen && (
+        <CameraCapture
+          onCapture={(blob) => {
+            setDeliveryPhoto(blob);
+            setCameraOpen(false);
+          }}
+          onClose={() => {
+            setCameraOpen(false);
+            if (!deliveryPhoto) setDeliverShipment(null);
+          }}
+        />
+      )}
+
       {/* Bottom sheets */}
       <DeliveryActionSheet
         mode="deliver"
-        open={!!deliverShipment}
+        open={!!deliverShipment && !cameraOpen}
         onClose={closeSheets}
         shipment={deliverShipment}
         keyword={deliveryKeyword}
@@ -576,6 +992,9 @@ function LastMileView() {
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
         error={actionError}
+        photo={deliveryPhoto}
+        onRetakePhoto={() => setCameraOpen(true)}
+        offlineKeywordAttempts={offlineKeywordAttempts}
       />
       <DeliveryActionSheet
         mode="failed"
@@ -611,7 +1030,7 @@ function LastMileView() {
         onRequestLocation={requestLocation}
         error={actionError}
       />
-    </>
+    </div>
   );
 }
 
@@ -1408,6 +1827,43 @@ function InterBranchTripView() {
           }} className="mt-2 px-9 py-3 rounded-xl text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white">
             Continuar
           </Button>
+        </div>
+      )}
+
+      {/* Modal de advertencia de geofence */}
+      {geoWarning && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
+            <div className="flex items-start gap-3 px-5 pt-5 pb-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-slate-900 dark:text-gray-100">Ubicación fuera de rango</p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-gray-400 leading-relaxed">
+                  Estás a <span className="font-semibold text-amber-700">{Math.round(geoWarning.distanceM)} m</span> del domicilio del destinatario
+                  (máximo {GEOFENCE_RADIUS_M} m).
+                </p>
+                <p className="mt-2 text-xs text-slate-500 dark:text-gray-500">
+                  Si confirmás, se registrará un incidente en el envío para revisión del supervisor.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 px-5 pb-5">
+              <button
+                onClick={() => setGeoWarning(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold border dark:border-gray-700 border-slate-200 dark:text-gray-300 text-slate-700 dark:hover:bg-gray-800 hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={geoWarning.onConfirm}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+              >
+                Confirmar igual
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

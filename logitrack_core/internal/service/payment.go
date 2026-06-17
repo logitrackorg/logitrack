@@ -176,22 +176,33 @@ func (s *PaymentService) HandleWebhook(mpPaymentID string, rawPayload []byte) er
 		prediction = s.shipmentSvc.mlClient.PredictFromShipment(shipment)
 	}
 
+	securityKeyword := shipment.SecurityKeyword
+	securityKeywordHash := shipment.SecurityKeywordHash
+	if securityKeyword == "" && shipment.DeliveryMethod == model.DeliveryMethodLastMile {
+		securityKeyword = GenerateSecurityKeyword()
+		if hash, err := HashKeyword(securityKeyword); err == nil {
+			securityKeywordHash = hash
+		}
+	}
 	confirmed, err := s.shipmentSvc.repo.ConfirmPayment(repository.ConfirmPaymentCmd{
 		OldTrackingID:       trackingID,
 		NewTrackingID:       newTrackingID,
 		PaymentID:           payment.ID,
 		MPPaymentID:         mpPaymentID,
 		Amount:              payment.Amount,
+		Method:              model.PaymentMethodMP,
 		ChangedBy:           "mercadopago",
 		Timestamp:           now,
 		EstimatedDeliveryAt: s.shipmentSvc.estimatedDelivery(now, shipment.OriginBranchID, shipment.FinalBranchID, string(shipment.ShipmentType)),
 		Prediction:          prediction,
+		SecurityKeyword:     securityKeyword,
+		SecurityKeywordHash: securityKeywordHash,
 	})
 	if err != nil {
 		return fmt.Errorf("error al confirmar pago en repo: %w", err)
 	}
 
-	if err := s.paymentRepo.MarkApproved(payment.ID, mpPaymentID, newTrackingID, now); err != nil {
+	if err := s.paymentRepo.MarkApproved(payment.ID, mpPaymentID, newTrackingID, now, model.PaymentMethodMP); err != nil {
 		log.Printf("[payment] advertencia: no se pudo marcar pago como aprobado: %v", err)
 	}
 

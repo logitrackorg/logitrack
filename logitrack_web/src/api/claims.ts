@@ -27,6 +27,8 @@ export type ClaimStatus =
   | "in_review"
   | "pending_customer"
   | "derived"
+  | "transferred"
+  | "transfer_rejected"
   | "resolved_operativa"
   | "resolved_comercial"
   | "resolved_rrhh"
@@ -63,6 +65,7 @@ export interface Claim {
   assigned_category?: ClaimCategory;
   resolution_type?: ClaimResolutionType;
   is_automatic: boolean;
+  assigned_branch_id?: string;
   evidence_file_name?: string;
   evidence_mime_type?: string;
   evidence_upload_date?: string;
@@ -74,7 +77,11 @@ export type ClaimEventType =
   | "claim_resolved"
   | "claim_pending_customer"
   | "claim_in_review"
-  | "claim_customer_responded";
+  | "claim_customer_responded"
+  | "claim_comment"
+  | "claim_transferred"
+  | "claim_accepted"
+  | "claim_transfer_rejected";
 
 export interface ClaimEvent {
   id: string;
@@ -90,6 +97,8 @@ export interface ClaimEvent {
   to_status?: ClaimStatus;
   evidence_file_name?: string;
   evidence_file_path?: string;
+  origin_branch_id?: string;
+  target_branch_id?: string;
 }
 
 export const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
@@ -109,6 +118,10 @@ export const CLAIM_EVENT_LABELS: Record<ClaimEventType, string> = {
   claim_pending_customer: "Solicitud de información al cliente",
   claim_in_review: "Reclamo en revisión",
   claim_customer_responded: "Respuesta del cliente",
+  claim_comment: "Comentario",
+  claim_transferred: "Derivado a sucursal",
+  claim_accepted: "Reclamo aceptado",
+  claim_transfer_rejected: "Derivación rechazada",
 };
 
 export const claimsApi = {
@@ -129,11 +142,16 @@ export const claimsApi = {
     const response = await api.get(`/claims/${id}/response-evidence/download`, { responseType: "blob" });
     return response.data as Blob;
   },
-  updateCategory: (id: string, category: ClaimCategory, notes?: string) =>
-    api.patch<Claim>(`/claims/${id}/category`, { assigned_category: category, notes }).then((r) => r.data),
+  addComment: (id: string, comment: string) =>
+    api.post<Claim>(`/claims/${id}/comment`, { comment }).then((r) => r.data),
   resolve: (id: string, resolution: ClaimResolutionType, notes?: string) =>
     api.post<Claim>(`/claims/${id}/resolve`, { resolution_type: resolution, notes }).then((r) => r.data),
   requestInfo: (id: string, notes?: string) =>
     api.post<Claim>(`/claims/${id}/request-info`, { notes }).then((r) => r.data),
   markInReview: (id: string) => api.post<Claim>(`/claims/${id}/review`).then((r) => r.data),
+  transfer: (id: string, targetBranchId: string, notes: string) =>
+    api.post<Claim>(`/claims/${id}/transfer`, { target_branch_id: targetBranchId, notes }).then((r) => r.data),
+  acceptTransfer: (id: string) => api.post<Claim>(`/claims/${id}/accept-transfer`).then((r) => r.data),
+  rejectTransfer: (id: string, notes: string) =>
+    api.post<Claim>(`/claims/${id}/reject-transfer`, { notes }).then((r) => r.data),
 };

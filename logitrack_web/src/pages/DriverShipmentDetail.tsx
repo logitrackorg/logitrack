@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  AlertCircle, AlertTriangle, Ban, CheckCircle2, ChevronLeft,
+  AlertCircle, AlertTriangle, Ban, Camera, CheckCircle2, ChevronLeft,
   Clock, MapPin, MessageCircle, Phone, XCircle,
 } from "lucide-react";
 import { shipmentApi, type Shipment } from "../api/shipments";
@@ -11,6 +11,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { Button } from "../components/ui/button";
 
 import { DeliveryActionSheet } from "../components/driver/DeliveryActionSheet";
+import { CameraCapture } from "../components/ui/CameraCapture";
 import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { waHref } from "../utils/driverActions";
@@ -42,6 +43,8 @@ export function DriverShipmentDetail() {
   const [rejectedNotes, setRejectedNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [deliveryPhoto, setDeliveryPhoto] = useState<Blob | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const { speedKmh: gpsSpeedKmh, locationReady, requestLocation } = useCurrentSpeed();
   const [simActive] = useState(false);
@@ -68,12 +71,16 @@ export function DriverShipmentDetail() {
   const handleDeliver = async () => {
     if (!shipment || !recipientDni.trim()) return;
     const isLastMile = shipment.delivery_method === "ultima_milla";
-    if (isLastMile) { const locked = (shipment.keyword_attempts ?? 0) >= 3; if (useContingency) { if (!recipientDni.trim()) return; } else { if (locked || !deliveryKeyword.trim()) return; } }
+    if (isLastMile) { const locked = (shipment.keyword_attempts ?? 0) >= 3; if (useContingency) { if (!recipientDni.trim()) return; } else { if (locked || !deliveryKeyword.trim()) return; } if (!deliveryPhoto) return; }
     setSubmitting(true); setActionError("");
     try {
-      if (isLastMile) await shipmentApi.deliver(shipment.tracking_id, { keyword: useContingency ? undefined : deliveryKeyword.trim(), recipient_dni: useContingency ? recipientDni.trim() : undefined, contingency: useContingency, current_speed: effectiveSpeed, speed_source: speedSource });
+      if (isLastMile) {
+        const arrayBuffer = await deliveryPhoto!.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        await shipmentApi.deliver(shipment.tracking_id, { keyword: useContingency ? undefined : deliveryKeyword.trim(), recipient_dni: useContingency ? recipientDni.trim() : undefined, contingency: useContingency, current_speed: effectiveSpeed, speed_source: speedSource, delivery_photo_base64: base64 });
+      }
       else await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivered", location: "", recipient_dni: recipientDni.trim(), current_speed: effectiveSpeed, speed_source: speedSource });
-      setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false);
+      setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); setDeliveryPhoto(null);
       await reload(shipment.tracking_id);
     } catch (err: unknown) { const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error; if (msg?.includes("intento") || msg?.includes("bloqueado")) { setDeliveryKeyword(""); const u = await shipmentApi.get(shipment.tracking_id).catch(() => null); if (u) setShipment(u); } setActionError(msg ?? "No se pudo registrar la entrega."); } finally { setSubmitting(false); }
   };
@@ -235,14 +242,24 @@ export function DriverShipmentDetail() {
           </div>
         </div>
       )}
-
     </div>
+
+      {cameraOpen && (
+        <CameraCapture
+          onCapture={(blob) => {
+            setDeliveryPhoto(blob);
+            setCameraOpen(false);
+            setDeliverOpen(true);
+          }}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
 
     {/* Sticky CTAs */}
     {canAct && (
       <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
         <div className="flex flex-col gap-2 max-w-2xl mx-auto">
-          <Button onClick={() => setDeliverOpen(true)} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
+          <Button onClick={() => { if (shipment.delivery_method === "ultima_milla") { setCameraOpen(true); } else { setDeliverOpen(true); } }} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
             <CheckCircle2 className="w-5 h-5" />Entregar
           </Button>
           <div className="flex gap-2">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { AlertCircle, CheckCircle2, Minus, Plus, Clock, RotateCcw, ShieldCheck, Mail } from "lucide-react";
+import { AlertCircle, CheckCircle2, Minus, Plus, Clock, RotateCcw, ShieldCheck, Mail, Map as MapIcon } from "lucide-react";
 import { systemConfigApi, type SystemConfig as SystemConfigType } from "../api/systemConfig";
 import { clockApi, type ClockState } from "../api/clock";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
@@ -147,7 +147,8 @@ export function SystemConfig() {
       draft.whatsapp_notifications_enabled !== config.whatsapp_notifications_enabled ||
       draft.max_reschedules !== config.max_reschedules ||
       draft.max_reschedule_days !== config.max_reschedule_days ||
-      draft.two_fa_cooldown_minutes !== config.two_fa_cooldown_minutes
+      draft.two_fa_cooldown_minutes !== config.two_fa_cooldown_minutes ||
+      draft.max_coverage_area_km2 !== config.max_coverage_area_km2
     );
 
   return (
@@ -666,6 +667,54 @@ export function SystemConfig() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Detector de falta de sucursal: umbral de área de cobertura */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <MapIcon className="w-4 h-4 text-slate-500" />
+                <CardTitle>Cobertura de sucursales</CardTitle>
+              </div>
+              <CardDescription>
+                Área máxima de servicio (en km²) que puede cubrir una sucursal antes de marcarse como
+                zona sub-cubierta en el detector de falta de sucursal. El diagrama de cobertura abarca
+                todo el territorio nacional (~6,7 millones de km²), por lo que las celdas suelen medir
+                cientos de miles o millones de km². Cuanto menor el umbral, más exigente es la
+                detección de gaps. Rango permitido: 100–10.000.000 km².
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
+                  Área máxima por sucursal (km²)
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={100}
+                    max={10000000}
+                    step={1000}
+                    value={draft.max_coverage_area_km2}
+                    onChange={(e) =>
+                      setDraft((d) =>
+                        d ? { ...d, max_coverage_area_km2: Number(e.target.value) } : d
+                      )
+                    }
+                    className="w-40 px-3 py-2 rounded-lg border border-slate-200 bg-white text-lg font-bold text-[var(--sidebar-bg)] tabular-nums outline-none"
+                  />
+                  <span className="text-sm text-slate-500">km²</span>
+                </div>
+              </div>
+              <div className="mt-3 text-xs text-slate-500">
+                <p>
+                  Las celdas de cobertura que superen <strong>{draft.max_coverage_area_km2.toLocaleString("es-AR")} km²</strong> se
+                  marcarán como gap (leve / moderado / crítico según el múltiplo del umbral) en la
+                  pestaña <strong>Cobertura</strong> del dashboard.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Save / discard — always below all config cards */}
           <div className="space-y-2">
             {error && (

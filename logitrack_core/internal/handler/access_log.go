@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/model"
@@ -18,19 +17,20 @@ func NewAccessLogHandler(repo repository.AccessLogRepository) *AccessLogHandler 
 }
 
 func (h *AccessLogHandler) List(c *gin.Context) {
-	limit := 500
-	if l := c.Query("limit"); l != "" {
-		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 1000 {
-			limit = n
-		}
+	filter := model.AccessLogFilter{
+		Username: c.Query("username"),
+		DateFrom: c.Query("date_from"),
+		DateTo:   c.Query("date_to"),
+		Limit:    500,
 	}
-	logs, err := h.repo.List(limit)
+
+	logs, err := h.repo.ListFiltered(filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo obtener el historial"})
 		return
 	}
 	if logs == nil {
 		logs = []model.AccessLog{}
 	}
-	c.JSON(http.StatusOK, gin.H{"logs": logs})
+	c.JSON(http.StatusOK, logs)
 }

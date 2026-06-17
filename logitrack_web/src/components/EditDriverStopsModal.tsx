@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -358,7 +359,7 @@ export function EditDriverStopsModal({
   );
 
   useEffect(() => {
-    zoneApi.list().then(setZones).catch(() => {});
+    zoneApi.list().then(setZones).catch(() => { });
   }, []);
 
   const recomputeForMode = useCallback(
@@ -388,6 +389,17 @@ export function EditDriverStopsModal({
     [assignment.vehicle_id, config.morning_window_start_hour, planDate, selectedDate],
   );
 
+  // On mount, recompute the route so the polyline matches the actual current
+  // stops. The stored assignment.polyline_coords was generated at plan-build
+  // time and may be stale if the operator manually moved shipments after that.
+  const didInitialRecompute = useRef(false);
+  useEffect(() => {
+    if (didInitialRecompute.current) return;
+    didInitialRecompute.current = true;
+    void recomputeForMode(mode, stops);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleModeChange = useCallback(
     (newMode: RouteMode) => {
       if (newMode === mode) return;
@@ -406,10 +418,7 @@ export function EditDriverStopsModal({
     [selectedDate, mode, stops, recomputeForMode],
   );
 
-  // Apply está habilitado solo cuando se edita el plan del día base (hoy).
-  // Los planes de pronóstico no se pueden aplicar desde el backend.
   const canApplyDate = !planDate || selectedDate === planDate;
-
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),

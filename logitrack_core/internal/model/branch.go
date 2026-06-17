@@ -25,6 +25,13 @@ type Branch struct {
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
 	UpdatedBy   string       `json:"updated_by,omitempty"`
+	// EmployeeOfMonthEnabled controls whether this branch participates in the monthly employee ranking.
+	EmployeeOfMonthEnabled bool `json:"employee_of_month_enabled"`
+}
+
+// UpdateEmployeeOfMonthRequest is the request body for toggling the "Empleado del Mes" feature.
+type UpdateEmployeeOfMonthRequest struct {
+	Enabled bool `json:"enabled"`
 }
 
 // BranchCapacity holds occupancy data for a branch.

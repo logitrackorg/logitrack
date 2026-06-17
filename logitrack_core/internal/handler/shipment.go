@@ -8,11 +8,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/middleware"
+	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/service"
 )
 
 var timeNow = time.Now
+
+// geoDistanceM returns the Haversine distance in meters between two coordinates.
+// Returns -1 when any pointer is nil (coords unavailable → geofence skipped).
+func geoDistanceM(driverLat, driverLng, addrLat, addrLng *float64) float64 {
+	if driverLat == nil || driverLng == nil || addrLat == nil || addrLng == nil {
+		return -1
+	}
+	return ml.HaversineKm(*driverLat, *driverLng, *addrLat, *addrLng) * 1000
+}
 
 // branchForbidden returns true (and writes 403) when the user is an operator or supervisor
 // whose assigned branch does not match the shipment's receiving branch.
@@ -45,18 +55,49 @@ type CancelRequest struct {
 }
 
 type ShipmentHandler struct {
-	svc        *service.ShipmentService
-	routeSvc   *service.RouteService
-	commentSvc *service.CommentService
-	branchSvc  *service.BranchService
-	claimSvc   *service.ClaimService
-	routingSvc *service.RoutingService
+	svc         *service.ShipmentService
+	routeSvc    *service.RouteService
+	commentSvc  *service.CommentService
+	branchSvc   *service.BranchService
+	claimSvc    *service.ClaimService
+	routingSvc  *service.RoutingService
+	incidentSvc *service.IncidentService
+	notifSvc    *service.NotificationService
 }
 
 // SetRoutingService wires the routing service for real-time ETA lookups on the
 // public tracking endpoint. Called after both handlers are constructed.
 func (h *ShipmentHandler) SetRoutingService(svc *service.RoutingService) {
 	h.routingSvc = svc
+}
+
+// SetIncidentService wires the incident service for auto-reporting geofence
+// violations at delivery time.
+func (h *ShipmentHandler) SetIncidentService(svc *service.IncidentService) {
+	h.incidentSvc = svc
+}
+
+// SetNotificationService wires the notification service for geo-mismatch alerts.
+func (h *ShipmentHandler) SetNotificationService(svc *service.NotificationService) {
+	h.notifSvc = svc
+}
+
+// maybeReportGeoIncident creates an "ubicacion_fuera_de_rango" incident and
+// notifies supervisors of the branch when the driver is outside the geofence.
+// action describes the operation that triggered the check (e.g. "Entrega",
+// "Intento de entrega") so the incident text reads accurately for both
+// delivered and failed-attempt transitions. Best-effort: never blocks the response.
+func (h *ShipmentHandler) maybeReportGeoIncident(trackingID, changedBy, branchID, action string, distanceM float64) {
+	if h.incidentSvc != nil {
+		desc := fmt.Sprintf(
+			"%s registrada a %.0f m del domicilio del destinatario (límite: %.0f m). Verificar con el chofer.",
+			action, distanceM, model.GeofenceRadiusMeters,
+		)
+		_, _ = h.incidentSvc.ReportIncident(trackingID, changedBy, model.IncidentTypeGeoMismatch, desc)
+	}
+	if h.notifSvc != nil && branchID != "" {
+		go h.notifSvc.NotifyGeoMismatch(branchID, trackingID, changedBy, action, distanceM)
+	}
 }
 
 func NewShipmentHandler(
@@ -366,6 +407,18 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 		if user.Role == model.RoleDriver &&
 			(req.Status == model.StatusDelivered || req.Status == model.StatusDeliveryFailed || req.Status == model.StatusLost) {
 			h.routeSvc.CheckAndFinalizeRoute(user.ID)
+		}
+		// Geofence check: auto-report incident if driver is outside acceptable radius.
+		if user.Role == model.RoleDriver &&
+			(req.Status == model.StatusDelivered || req.Status == model.StatusDeliveryFailed) &&
+			req.Latitude != nil && req.Longitude != nil {
+			if distM := geoDistanceM(req.Latitude, req.Longitude, current.Recipient.Address.Latitude, current.Recipient.Address.Longitude); distM > model.GeofenceRadiusMeters {
+				action := "Entrega"
+				if req.Status == model.StatusDeliveryFailed {
+					action = "Intento de entrega"
+				}
+				h.maybeReportGeoIncident(trackingID, user.Username, current.ReceivingBranchID, action, distM)
+			}
 		}
 	}
 	if err != nil {

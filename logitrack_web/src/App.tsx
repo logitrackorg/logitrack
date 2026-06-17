@@ -53,6 +53,10 @@ import { TripsCalendar } from "./pages/TripsCalendar";
 import { TwoFAVerify } from "./pages/TwoFAVerify";
 import { TwoFASetup } from "./pages/TwoFASetup";
 import { NetworkHub } from "./pages/NetworkHub";
+import { EmployeeProfile } from "./pages/EmployeeProfile";
+import { DashboardConfig } from "./pages/DashboardConfig";
+import { MetricPermissionsProvider } from "./context/MetricPermissionsContext";
+import { DashboardPrefsProvider } from "./context/DashboardPrefsContext";
 
 /** Layout wrapper for non-driver roles: sidebar (fixed) + topbar (sticky) + main with left offset. */
 function AppShell({ children }: { children: React.ReactNode }) {
@@ -214,6 +218,12 @@ function AppRoutes() {
           </ProtectedRoute>
         } />
 
+        <Route path="/employees/:id" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager", "admin", "driver"]}>
+            <EmployeeProfile />
+          </ProtectedRoute>
+        } />
+
         <Route path="/ml-config" element={
           <ProtectedRoute roles={["admin"]}>
             <MLConfig />
@@ -322,6 +332,12 @@ function AppRoutes() {
           </ProtectedRoute>
         } />
 
+        <Route path="/admin/dashboard-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <DashboardConfig />
+          </ProtectedRoute>
+        } />
+
         <Route path="/profile" element={
           <ProtectedRoute>
             <UserProfile />
@@ -353,6 +369,8 @@ export default function App() {
     <ThemeProvider>
       <OrganizationThemeProvider>
       <AuthProvider>
+        <MetricPermissionsProvider>
+        <DashboardPrefsProvider>
         <BrowserRouter>
           <TwoFAGuard>
             <Routes>
@@ -365,6 +383,8 @@ export default function App() {
             </Routes>
           </TwoFAGuard>
         </BrowserRouter>
+        </DashboardPrefsProvider>
+        </MetricPermissionsProvider>
       </AuthProvider>
       </OrganizationThemeProvider>
     </ThemeProvider>

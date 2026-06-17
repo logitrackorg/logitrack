@@ -25,11 +25,11 @@ func (r *postgresSystemConfigRepository) Get() model.SystemConfig {
 	err := r.db.QueryRow(`
 		SELECT max_delivery_attempts, draft_retention_days, draft_purge_days,
 		       pickup_deadline_days, email_notifications_enabled, whatsapp_notifications_enabled,
-		       max_reschedules, max_reschedule_days, two_fa_cooldown_minutes
+		       max_reschedules, max_reschedule_days, two_fa_cooldown_minutes, max_coverage_area_km2
 		FROM system_config WHERE id = 1`).
 		Scan(&cfg.MaxDeliveryAttempts, &cfg.DraftRetentionDays, &cfg.DraftPurgeDays,
 			&cfg.PickupDeadlineDays, &cfg.EmailNotificationsEnabled, &cfg.WhatsAppNotificationsEnabled,
-			&cfg.MaxReschedules, &cfg.MaxRescheduleDays, &cfg.TwoFACooldownMinutes)
+			&cfg.MaxReschedules, &cfg.MaxRescheduleDays, &cfg.TwoFACooldownMinutes, &cfg.MaxCoverageAreaKm2)
 	if err != nil {
 		log.Printf("❌ [REPO] Error leyendo config: %v", err)
 		return model.DefaultSystemConfig()
@@ -51,7 +51,8 @@ func (r *postgresSystemConfigRepository) Update(cfg model.SystemConfig) error {
 		     whatsapp_notifications_enabled = $6,
 		     max_reschedules                = $7,
 		     max_reschedule_days            = $8,
-		     two_fa_cooldown_minutes        = $9
+		     two_fa_cooldown_minutes        = $9,
+		     max_coverage_area_km2          = $10
 		 WHERE id = 1`,
 		cfg.MaxDeliveryAttempts,
 		cfg.DraftRetentionDays,
@@ -62,6 +63,7 @@ func (r *postgresSystemConfigRepository) Update(cfg model.SystemConfig) error {
 		cfg.MaxReschedules,
 		cfg.MaxRescheduleDays,
 		cfg.TwoFACooldownMinutes,
+		cfg.MaxCoverageAreaKm2,
 	)
 	if err != nil {
 		log.Printf("[ERROR] Update failed: %v", err)

@@ -1,5 +1,6 @@
 import axios from "axios";
 import type { Role } from "./auth";
+import type { EOMCategory } from "./employeeOfMonth";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8080/api/v1",
@@ -11,6 +12,13 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+export interface Award {
+  category: EOMCategory;
+  period: string; // ISO date
+  score: number;
+  branch_id?: string;
+}
+
 export interface UserProfile {
   id: string;
   username: string;
@@ -20,6 +28,7 @@ export interface UserProfile {
   branch_id?: string;
   branch_name?: string;
   driver_type?: string;
+  awards?: Award[];
 }
 
 export interface ChangePasswordRequest {
@@ -56,6 +65,7 @@ function toUserProfile(u: RawDriverUser): UserProfile {
 
 export const usersApi = {
   getMe: () => api.get<UserProfile>("/users/me").then((r) => r.data),
+  getById: (id: string) => api.get<UserProfile>(`/users/${id}`).then((r) => r.data),
   listDrivers: (branchId?: string, driverType?: string) => {
     const params: Record<string, string> = {};
     if (branchId)    params.branch_id    = branchId;

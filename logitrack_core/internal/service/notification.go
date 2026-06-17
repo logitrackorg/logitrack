@@ -622,6 +622,42 @@ func (s *NotificationService) NotifyFatigueAlert(branchID, driverID, driverUsern
 	}
 }
 
+// NotifyGeoMismatch sends a notification to all supervisors of the given branch
+// when a driver confirms a delivery or failed attempt outside the geofence.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *NotificationService) NotifyGeoMismatch(branchID, trackingID, driverUsername, action string, distanceM float64) {
+	supervisors, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{model.RoleSupervisor})
+	if err != nil {
+		log.Printf("[NotificationService] NotifyGeoMismatch GetUsersByBranchAndRoles error: %v", err)
+		return
+	}
+	if len(supervisors) == 0 {
+		return
+	}
+
+	title := "⚠️ Ubicación fuera de rango"
+	body := fmt.Sprintf("%s · %s · Chofer: %s · %.0f m del domicilio (límite: %.0f m)",
+		trackingID, action, driverUsername, distanceM, model.GeofenceRadiusMeters)
+
+	now := clock.Now().UTC()
+	for _, sup := range supervisors {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     sup.ID,
+			Type:       model.NotificationGeoMismatch,
+			Title:      title,
+			Body:       body,
+			ResourceID: trackingID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyGeoMismatch Create error for supervisor %s: %v", sup.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
 // GetForUser returns paginated notifications for a user.
 func (s *NotificationService) GetForUser(userID string, filters repository.NotificationFilters) ([]model.Notification, int, error) {
 	return s.repo.ListByUser(userID, filters)

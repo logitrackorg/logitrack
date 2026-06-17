@@ -102,6 +102,10 @@ type Shipment struct {
 	PriorityConfidence float64                 `json:"priority_confidence,omitempty"` // 0.0-1.0 forest vote share
 	PriorityFactors    map[string]FactorDetail `json:"priority_factors,omitempty"`    // per-factor breakdown
 
+	// CreatedBy is the user ID of the operator/supervisor who created the shipment.
+	// Populated from DomainEvent.ChangedBy on EventShipmentCreated / EventDraftSaved.
+	CreatedBy string `json:"created_by,omitempty"`
+
 	// Status & dates
 	Status              Status     `json:"status"`
 	CurrentLocation     string     `json:"current_location,omitempty"` // branch ID of current location
@@ -119,7 +123,8 @@ type Shipment struct {
 
 	// Security keyword — última milla only. Generated at create/confirm; sent to recipient via email.
 	// Never returned in API responses (json:"-"); validated by the driver at delivery time.
-	SecurityKeyword     string `json:"-"`
+	SecurityKeyword     string `json:"security_keyword,omitempty"`
+	SecurityKeywordHash string `json:"-"` // bcrypt hash, exposed only in GET /driver/route for offline validation
 	KeywordAttempts     int    `json:"keyword_attempts,omitempty"`    // failed keyword attempts by driver (max 3)
 	ContingencyDelivery bool   `json:"contingency_delivery,omitempty"` // true when delivered via DNI fallback after max keyword attempts
 
@@ -368,7 +373,8 @@ type ShipmentFilter struct {
 	DateFrom          *time.Time // inclusive lower bound on created_at
 	DateTo            *time.Time // inclusive upper bound on created_at (end of day)
 	ReceivingBranchID string     // if non-empty, only shipments with this branch
-	IncludeExpired    bool 
+	CreatedBy         string     // if non-empty, only shipments created by this user ID
+	IncludeExpired    bool
 }
 
 // CorrectShipmentRequest carries typed field corrections.
