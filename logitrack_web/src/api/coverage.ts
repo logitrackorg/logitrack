@@ -110,6 +110,8 @@ export interface SnappedCity {
   lng: number;
   city_name: string;
   is_snapped: boolean;
+  /** Población efectiva de la ciudad elegida (tag OSM o fallback por tipo). 0 / ausente cuando is_snapped=false. */
+  population?: number;
   /**
    * Frontend-only (no proviene del backend): true cuando el usuario "pausó"
    * esta sugerencia para un análisis What-If sin descartarla. Las

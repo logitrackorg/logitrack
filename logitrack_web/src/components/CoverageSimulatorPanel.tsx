@@ -16,6 +16,12 @@ interface CoverageSimulatorPanelProps {
   onAreaChange: (areaKm2: number) => void;
   /** Se llama al confirmar con el área y la población mínima elegidas. */
   onConfirm: (areaKm2: number, minPopulation: number) => void;
+  /**
+   * Notifica al padre en cada movimiento del slider de población mínima, no
+   * solo al confirmar. Necesario para que "Reintentar sugerencias pendientes"
+   * use el valor actual del slider y no el de la última confirmación.
+   */
+  onMinPopulationChange?: (minPopulation: number) => void;
   /** A qué sucursal(es) se aplica el círculo de previsualización. */
   scopeLabel: string;
   /** Bloquea el slider y el botón de confirmación (p.ej. mientras se geocodifican sugerencias). */
@@ -26,6 +32,7 @@ export function CoverageSimulatorPanel({
   areaKm2,
   onAreaChange,
   onConfirm,
+  onMinPopulationChange,
   scopeLabel,
   disabled = false,
 }: CoverageSimulatorPanelProps) {
@@ -65,7 +72,11 @@ export function CoverageSimulatorPanel({
         max={MIN_POP_MAX}
         step={MIN_POP_STEP}
         value={minPopulation}
-        onChange={(e) => setMinPopulation(Number(e.target.value))}
+        onChange={(e) => {
+          const v = Number(e.target.value);
+          setMinPopulation(v);
+          onMinPopulationChange?.(v);
+        }}
         disabled={disabled}
         className="w-full accent-slate-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         aria-label="Población mínima requerida para ciudades candidatas"

@@ -1224,6 +1224,7 @@ export function CoberturaTab() {
                 areaKm2={visualArea}
                 onAreaChange={setVisualArea}
                 onConfirm={handleConfirmSimulation}
+                onMinPopulationChange={setSnapMinPopulation}
                 scopeLabel={simScopeLabel}
                 disabled={isFetchingCities}
               />
@@ -1622,6 +1623,11 @@ function SuggestionCard({
           <> Descomprimirá las zonas de: {loc.affected_branches.join(", ")}.</>
         )}
       </p>
+      {(city.population ?? 0) > 0 && (
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          Población estimada: {city.population!.toLocaleString("es-AR")} habitantes.
+        </p>
+      )}
     </li>
   );
 }

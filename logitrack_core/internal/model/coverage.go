@@ -104,8 +104,9 @@ type SimulationResult struct {
 // original geometric point in that case.
 type SnappedCity struct {
 	LatLng
-	CityName string `json:"city_name"`
-	Snapped  bool   `json:"is_snapped"`
+	CityName   string `json:"city_name"`
+	Snapped    bool   `json:"is_snapped"`
+	Population int    `json:"population,omitempty"` // effective population used for selection; 0 when Snapped=false
 }
 
 // SnapToCityRequest is the body of POST /coverage/snap-to-city: the geometric

@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -73,11 +72,11 @@ type overpassResponse struct {
 	Elements []overpassElement `json:"elements"`
 }
 
-// snapPopulationFallback returns an estimated population for an OSM element
-// that lacks a "population" tag, based on its place type. Used by
-// bestSnapCandidate to enforce a MinPopulation filter even when the tag is absent.
+// snapPopulationFallback is the assumed population for an OSM element that
+// lacks a "population" tag. Used by candidatePopulation as a scoring proxy
+// and by bestSnapCandidate's minPopulation filter.
 var snapPopulationFallback = map[string]int{
-	"city": 50_000,
+	"city": 100_000,
 	"town": 10_000,
 }
 
@@ -132,8 +131,7 @@ func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, min
 
 	// Only city/town: these are real urban centers viable as logistics hubs.
 	// village/hamlet/isolated_dwelling are excluded at the query level so
-	// Overpass never returns tiny settlements that would otherwise win on
-	// raw proximity to the gap centroid (see candidateScore).
+	// Overpass never returns tiny settlements that could win on raw proximity.
 	//
 	// area["ISO3166-1"="AR"]->.ar restricts every node search to Argentine
 	// territory, so border cities of neighboring countries (Chile, Brazil,
@@ -185,56 +183,12 @@ func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, min
 			continue
 		}
 		out[i] = model.SnappedCity{
-			LatLng:   model.LatLng{Lat: best.Lat, Lng: best.Lon},
-			CityName: best.Tags["name"],
-			Snapped:  true,
+			LatLng:     model.LatLng{Lat: best.Lat, Lng: best.Lon},
+			CityName:   best.Tags["name"],
+			Snapped:    true,
+			Population: candidatePopulation(best),
 		}
 	}
-}
-
-// placeTypeWeight is the base "urban hierarchy" weight for an OSM place=
-// tag. snapChunk only queries place=city|town (see above), so in practice
-// every candidate has one of these two values; the default only matters for
-// hand-built test fixtures or a future relaxed query.
-var placeTypeWeight = map[string]float64{
-	"city": 50.0,
-	"town": 5.0,
-}
-
-// placeScorePopulationDivisor and placeScoreDistanceDivisorKm tune
-// candidateScore (see below).
-const (
-	placeScorePopulationDivisor  = 500_000.0
-	placeScoreDistanceDivisorKm  = 20.0
-	placeScoreDefaultPlaceWeight = 1.0
-)
-
-// candidateScore implements the "gravity" scoring used to rank snap-to-city
-// candidates: place-type hierarchy and population pull the score up, distance
-// pulls it down.
-//
-//	score = placeWeight * (1 + population/500_000) / (1 + distanceKm/20)
-//
-// The distance decay (÷20km) is gentle enough that the city/town weight gap
-// (50 vs 5 — a 10x difference) dominates even at the edges of the search
-// radius: a place=city 40km away always outscores a place=town 10km away
-// (50/(1+40/20)=16.7 vs 5/(1+10/20)=3.3), so a real city is never passed over
-// for a small town just because the town sits closer to the geometric gap
-// centroid. Population, when present, adds a further multiplier so that e.g.
-// a provincial capital outranks a smaller city at a similar distance.
-func candidateScore(el overpassElement, distanceKm float64) float64 {
-	weight, ok := placeTypeWeight[el.Tags["place"]]
-	if !ok {
-		weight = placeScoreDefaultPlaceWeight
-	}
-
-	if popStr := el.Tags["population"]; popStr != "" {
-		if population, err := strconv.ParseFloat(popStr, 64); err == nil && population > 0 {
-			weight *= 1 + population/placeScorePopulationDivisor
-		}
-	}
-
-	return weight / (1 + distanceKm/placeScoreDistanceDivisorKm)
 }
 
 // argentinaBorderToleranceDeg absorbs floating-point/simplified-geometry
@@ -269,14 +223,16 @@ func candidatePopulation(el overpassElement) int {
 	return 0
 }
 
-// bestSnapCandidate picks the named populated place with the highest
-// candidateScore among those within radiusKm of the origin point and inside
-// Argentina. Candidates without a "name" tag (not usable as a CityName),
+// bestSnapCandidate picks the most populous named place within radiusKm of
+// the origin that is inside Argentina. Candidates without a "name" tag,
 // beyond radiusKm, outside the national contour, or below minPopulation are
-// skipped. minPopulation == 0 disables the population filter.
+// skipped (minPopulation == 0 disables the filter). When two candidates share
+// the same population (including both using a per-type fallback), the closer
+// one wins as a tiebreaker.
 func bestSnapCandidate(elements []overpassElement, originLat, originLng, radiusKm float64, minPopulation int) (overpassElement, bool) {
 	var best overpassElement
-	bestScore := math.Inf(-1)
+	bestPop := -1
+	var bestDist float64
 	found := false
 
 	for _, el := range elements {
@@ -290,13 +246,14 @@ func bestSnapCandidate(elements []overpassElement, originLat, originLng, radiusK
 		if !isWithinArgentina(el) {
 			continue
 		}
-		if minPopulation > 0 && candidatePopulation(el) < minPopulation {
+		pop := candidatePopulation(el)
+		if minPopulation > 0 && pop < minPopulation {
 			continue
 		}
-		score := candidateScore(el, dist)
-		if !found || score > bestScore {
+		if !found || pop > bestPop || (pop == bestPop && dist < bestDist) {
 			best = el
-			bestScore = score
+			bestPop = pop
+			bestDist = dist
 			found = true
 		}
 	}

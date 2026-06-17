@@ -12,11 +12,11 @@ import (
 	"github.com/logitrack/core/internal/model"
 )
 
-// TestBestSnapCandidate_PrefersHigherScore verifies the "gravity" scoring: a
-// place=city farther from the gap centroid outranks a place=town that is
-// geometrically closer, per candidateScore's place-type weight (50 vs 5)
-// dominating its gentle distance decay (÷20km).
-func TestBestSnapCandidate_PrefersHigherScore(t *testing.T) {
+// TestBestSnapCandidate_PrefersHigherPopulation verifies population-first
+// selection: a place=city 40km away (fallback 100 000) outranks a place=town
+// 10km away (fallback 10 000) because its effective population is higher,
+// regardless of distance.
+func TestBestSnapCandidate_PrefersHigherPopulation(t *testing.T) {
 	originLat, originLng := -34.0, -64.0
 
 	city := overpassElement{
@@ -24,7 +24,7 @@ func TestBestSnapCandidate_PrefersHigherScore(t *testing.T) {
 		Tags: map[string]string{"place": "city", "name": "Ciudad Principal"},
 	}
 	town := overpassElement{
-		Lat: -34.09, Lon: -64.0, // ~10km away, but lower hierarchy
+		Lat: -34.09, Lon: -64.0, // ~10km away, but lower fallback population
 		Tags: map[string]string{"place": "town", "name": "Pueblo Cercano"},
 	}
 
@@ -33,7 +33,7 @@ func TestBestSnapCandidate_PrefersHigherScore(t *testing.T) {
 		t.Fatal("expected a candidate to be found")
 	}
 	if best.Tags["name"] != "Ciudad Principal" {
-		t.Errorf("expected the farther city to outscore the nearer town, got %q", best.Tags["name"])
+		t.Errorf("expected the higher-population city to win over the nearer town, got %q", best.Tags["name"])
 	}
 }
 
@@ -159,32 +159,6 @@ func TestBestSnapCandidate_NoneFound_AllOutsideArgentina(t *testing.T) {
 
 	if _, found := bestSnapCandidate(outsideArgentina, originLat, originLng, 5000, 0); found {
 		t.Error("expected found=false when every candidate is outside Argentina")
-	}
-}
-
-// TestCandidateScore_PopulationIncreasesScore verifies that, for the same
-// place type and distance, a higher reported population increases the score.
-func TestCandidateScore_PopulationIncreasesScore(t *testing.T) {
-	small := overpassElement{Tags: map[string]string{"place": "city", "population": "20000"}}
-	big := overpassElement{Tags: map[string]string{"place": "city", "population": "1300000"}}
-
-	if candidateScore(big, 30) <= candidateScore(small, 30) {
-		t.Error("expected higher population to increase the score at the same distance")
-	}
-}
-
-// TestCandidateScore_MissingOrInvalidPopulation verifies candidates without a
-// population tag, or with an unparsable value, still score using just the
-// place-type weight and distance (no panic, positive score).
-func TestCandidateScore_MissingOrInvalidPopulation(t *testing.T) {
-	noPop := overpassElement{Tags: map[string]string{"place": "town"}}
-	if got := candidateScore(noPop, 5); got <= 0 {
-		t.Errorf("expected a positive score, got %v", got)
-	}
-
-	badPop := overpassElement{Tags: map[string]string{"place": "town", "population": "not-a-number"}}
-	if got := candidateScore(badPop, 5); got <= 0 {
-		t.Errorf("expected a positive score with unparsable population, got %v", got)
 	}
 }
 
