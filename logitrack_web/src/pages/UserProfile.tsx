@@ -4,7 +4,7 @@ import { ArrowLeft, User, Lock, ClipboardList, Loader2 } from "lucide-react";
 import { usersApi, type UserProfile, type ChangePasswordRequest } from "../api/users";
 import { driverApi, type PersonalHistoryResult } from "../api/driver";
 import { useAuth } from "../context/AuthContext";
-import { DriverShell } from "../components/DriverShell";
+
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { toast } from "../utils/toast";
@@ -136,8 +136,8 @@ export function UserProfile() {
                   role="tab"
                   aria-selected={active}
                   onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    "shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-colors min-h-[44px]",
+                    className={cn(
+                      "shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-all min-h-[44px]",
                     active
                       ? "bg-[var(--sidebar-bg)] text-white"
                       : "bg-[var(--bg-subtle)] text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]"
@@ -164,8 +164,8 @@ export function UserProfile() {
                     role="tab"
                     aria-selected={active}
                     onClick={() => setActiveTab(tab.id)}
-                    className={cn(
-                      "w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium cursor-pointer transition-colors",
+                      className={cn(
+                        "w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium cursor-pointer transition-all",
                       active
                         ? "bg-[var(--sidebar-bg)] text-white"
                         : "text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)]"
@@ -303,7 +303,7 @@ export function UserProfile() {
                           {historyResult.history.map((rec) => {
                             const [yy, mm, dd] = rec.date.split("-");
                             return (
-                              <tr key={rec.recorded_at || rec.date} className="hover:bg-[var(--bg-hover)] transition-colors">
+                              <tr key={rec.recorded_at || rec.date} className="hover:bg-[var(--bg-hover)] transition-all">
                                 <td className="px-4 py-3 text-[var(--text-primary)]">
                                   {dd}/{mm}/{yy}
                                   {rec.recorded_at && (
@@ -504,10 +504,6 @@ export function UserProfile() {
       </div>
     </div>
   );
-
-  if (isDriver) {
-    return <DriverShell title="Mi perfil">{content}</DriverShell>;
-  }
 
   return content;
 }

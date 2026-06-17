@@ -43,6 +43,8 @@ Las specs son la fuente de verdad. La implementación debe satisfacer todos los 
 | 067 | [Registrar intento fallido de entrega](./US-067-intento-fallido.md) | Parcialmente implementada |
 | 068 | [Registrar entrega exitosa](./US-068-entrega-exitosa.md) | Implementada |
 | 080 | [Precio del envío](./US-080-precio-envio.md) | Implementada |
+| — | [Integración de Pagos](../integracion-pagos.md) | Documentación técnica |
+| — | [Guía Mercado Pago](../mercadopago-guide.md) | Guía de integración MP para terceros |
 | 081–088 | [Nuevas funcionalidades: geolocalización, fecha estimada, borradores, tipo de envío](./US-081-088-nuevas-funcionalidades.md) | Implementada |
 | 089–099 | [Ruteo inteligente diario](./US-089-099-ruteo-inteligente.md) | Implementada |
 | 100 | [Dashboard Gerencial](./US-100-dashboard-gerencial.md) | Implementada |

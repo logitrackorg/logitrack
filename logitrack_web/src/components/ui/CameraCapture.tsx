@@ -93,7 +93,7 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
   // Error state
   if (error) {
     return (
-      <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center px-8 text-center gap-4">
+      <div className="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center px-8 text-center gap-4">
         <Camera className="w-12 h-12 text-rose-400" />
         <p className="text-white text-sm leading-relaxed">{error}</p>
         <button
@@ -109,7 +109,7 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
   // Preview state — photo taken, user confirms or retakes
   if (preview) {
     return (
-      <div className="fixed inset-0 z-50 bg-black flex flex-col">
+      <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
         <img
           src={preview}
           alt="Foto capturada"
@@ -136,7 +136,7 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
 
   // Live camera — video fills the container, controls are absolutely positioned
   return (
-    <div className="fixed inset-0 z-50 bg-black">
+    <div className="fixed inset-0 z-[9999] bg-black">
       <canvas ref={canvasRef} className="hidden" />
 
       <video

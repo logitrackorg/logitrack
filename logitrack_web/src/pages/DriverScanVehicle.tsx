@@ -6,6 +6,7 @@ import { interBranchTripsApi } from "../api/interBranchTrips";
 import { driverApi } from "../api/driver";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
+import { Button } from "@/components/ui/button";
 import { getPendingFatigueStep } from "../utils/fatigueWizardProgress";
 
 export function DriverScanVehicle() {
@@ -199,27 +200,27 @@ export function DriverScanVehicle() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+    <div className="flex-1 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 rounded-full bg-[var(--sidebar-bg)] flex items-center justify-center mb-3">
             <Truck className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-xl font-bold text-slate-900">Escanear vehículo</h1>
-          <p className="text-sm text-slate-500 mt-1 text-center">
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">Escanear vehículo</h1>
+          <p className="text-sm text-[var(--text-secondary)] mt-1 text-center">
             Escaneá el código QR del vehículo para reclamar el viaje.
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 flex items-start gap-2 px-4 py-3 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
+          <div className="mb-4 flex items-start gap-2 px-4 py-3 rounded-lg border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-4 flex items-start gap-2 px-4 py-3 rounded-lg border border-emerald-200 bg-emerald-50 text-sm text-emerald-700">
+          <div className="mb-4 flex items-start gap-2 px-4 py-3 rounded-lg border border-[var(--ok-border)] bg-[var(--ok-bg)] text-sm text-[var(--ok-text)]">
             <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
             {success}
           </div>
@@ -228,46 +229,47 @@ export function DriverScanVehicle() {
         {/* QR Scanner viewport */}
         <div
           id="driver-qr-reader"
-          className={`w-full rounded-xl overflow-hidden border border-slate-200 bg-black mb-4 ${scanning ? "block min-h-[280px]" : "hidden min-h-0"}`}
+          className={`w-full rounded-xl overflow-hidden border border-[var(--border)] bg-black mb-4 ${scanning ? "block min-h-[280px]" : "hidden min-h-0"}`}
         />
 
         {!scanning ? (
-          <button
+          <Button
             onClick={() => void startScanner()}
             disabled={loading}
-            className="w-full h-12 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            className="w-full h-12 rounded-xl font-semibold text-sm gap-2"
           >
             <QrCode className="w-5 h-5" />
             Activar cámara
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
+            variant="outline"
             onClick={stopScanner}
-            className="w-full h-12 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-sm transition-colors cursor-pointer"
+            className="w-full h-12 rounded-xl font-semibold text-sm"
           >
             Cancelar
-          </button>
+          </Button>
         )}
 
         {/* Manual fallback */}
         <div className="mt-6">
-          <p className="text-xs text-slate-500 text-center mb-2">¿No funciona la cámara? Ingresá la patente del vehículo:</p>
+          <p className="text-xs text-[var(--text-secondary)] text-center mb-2">¿No funciona la cámara? Ingresá la patente del vehículo:</p>
           <div className="flex gap-2">
             <input
               type="text"
               value={manualToken}
               onChange={(e) => setManualToken(e.target.value.toUpperCase())}
               placeholder="Ej.: AB100UM"
-              className="flex-1 h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
+              className="flex-1 h-10 px-3 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
               onKeyDown={(e) => { if (e.key === "Enter" && manualToken.trim()) void handleToken(manualToken.trim()); }}
             />
-            <button
+            <Button
               onClick={() => { if (manualToken.trim()) void handleToken(manualToken.trim()); }}
               disabled={!manualToken.trim() || loading}
-              className="h-10 px-4 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-40 text-white text-sm font-semibold transition-colors cursor-pointer"
+              className="h-10 px-4 rounded-lg text-sm font-semibold"
             >
               OK
-            </button>
+            </Button>
           </div>
         </div>
       </div>

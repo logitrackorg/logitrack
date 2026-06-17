@@ -29,7 +29,7 @@ export function BottomSheet({ open, onClose, title, description, children, class
   return (
     <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center">
       <div
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-[1px]"
         onClick={onClose}
       />
       <div
@@ -37,24 +37,24 @@ export function BottomSheet({ open, onClose, title, description, children, class
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "relative w-full sm:max-w-md bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200 dark:border-gray-700",
+          "relative w-full sm:max-w-md bg-[var(--bg-card)] rounded-t-2xl sm:rounded-2xl shadow-2xl border-t sm:border border-[var(--border)]",
           "max-h-[92vh] overflow-y-auto",
           "pb-[env(safe-area-inset-bottom,0px)]",
           "animate-in slide-in-from-bottom-4 fade-in duration-200",
           className,
         )}
       >
-        <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-slate-100 dark:border-gray-700 px-5 pt-3 pb-3 rounded-t-2xl">
+        <div className="sticky top-0 bg-[var(--bg-card)] border-b border-[var(--border)] px-5 pt-3 pb-3 rounded-t-2xl">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600 sm:hidden" />
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
-              <h2 className="text-base font-bold text-slate-900 tracking-tight">{title}</h2>
-              {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
+              <h2 className="text-base font-bold text-[var(--text-primary)] tracking-tight">{title}</h2>
+              {description && <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{description}</p>}
             </div>
             <button
               onClick={onClose}
               aria-label="Cerrar"
-              className="shrink-0 w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 cursor-pointer"
+              className="shrink-0 w-9 h-9 rounded-full hover:bg-[var(--bg-muted)] flex items-center justify-center text-[var(--text-muted)] cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>

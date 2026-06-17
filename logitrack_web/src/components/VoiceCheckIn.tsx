@@ -212,7 +212,7 @@ export function VoiceCheckIn({ onDone }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col">
+    <div className="fixed inset-0 z-[3000] bg-[var(--sidebar-bg)]/95 backdrop-blur-sm flex flex-col">
       {/* Skip button */}
       <div className="flex justify-end px-4 pt-4">
         <Button
@@ -230,7 +230,7 @@ export function VoiceCheckIn({ onDone }: Props) {
         <div className="max-w-md mx-auto pt-4">
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-300 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-[var(--brand)]/20 text-[var(--brand)] flex items-center justify-center shrink-0">
               <Volume2 className="w-5 h-5" />
             </div>
             <div>
@@ -240,7 +240,7 @@ export function VoiceCheckIn({ onDone }: Props) {
           </div>
 
           {/* Control phrase */}
-          <div className="mb-6 px-4 py-4 rounded-xl bg-slate-800 border border-slate-600">
+          <div className="mb-6 px-4 py-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border)]">
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
               Frase de control
             </p>
