@@ -420,6 +420,27 @@ func (h *ClaimHandler) TransferClaim(c *gin.Context) {
 	c.JSON(http.StatusOK, claim)
 }
 
+// TransferBranches returns the branches a claim may be transferred to: only those
+// on the shipment's route (origin, intermediate hubs and destination), excluding
+// the branch that currently holds the claim. Supervisor only.
+func (h *ClaimHandler) TransferBranches(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	branches, err := h.svc.TransferTargetBranches(c.Param("id"), user.BranchID)
+	if err != nil {
+		if err == repository.ErrClaimNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		if err == service.ErrClaimForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, branches)
+}
+
 // AcceptTransfer accepts a transferred claim. Supervisor only.
 func (h *ClaimHandler) AcceptTransfer(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)

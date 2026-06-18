@@ -1,4 +1,5 @@
 import axios from "axios";
+import type { Branch } from "./branches";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8080/api/v1",
@@ -149,6 +150,8 @@ export const claimsApi = {
   requestInfo: (id: string, notes?: string) =>
     api.post<Claim>(`/claims/${id}/request-info`, { notes }).then((r) => r.data),
   markInReview: (id: string) => api.post<Claim>(`/claims/${id}/review`).then((r) => r.data),
+  transferBranches: (id: string) =>
+    api.get<Branch[]>(`/claims/${id}/transfer-branches`).then((r) => r.data),
   transfer: (id: string, targetBranchId: string, notes: string) =>
     api.post<Claim>(`/claims/${id}/transfer`, { target_branch_id: targetBranchId, notes }).then((r) => r.data),
   acceptTransfer: (id: string) => api.post<Claim>(`/claims/${id}/accept-transfer`).then((r) => r.data),
