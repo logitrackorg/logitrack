@@ -8,4 +8,8 @@ type RegionRepository interface {
 	Create(r model.Region) error
 	CountByType(regionType string) (int, error)
 	UpdateCoordinatesByName(name string, coords []model.LatLng) error
+	// Update renames and/or re-draws a custom region. Predefined regions are
+	// not editable; implementations must return sql.ErrNoRows when id does not
+	// match an existing custom region.
+	Update(id, name string, coords []model.LatLng) error
 }

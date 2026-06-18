@@ -217,6 +217,17 @@ type DiagnoseRequest struct {
 type ProjectionRequest struct {
 	AreaKm2     float64  `json:"area_km2"`
 	Suggestions []LatLng `json:"suggestions"`
+
+	// CustomBoundingArea scopes the projection to a region (same semantics as
+	// DiagnoseRequest): both the current and projected Voronoi cells are clipped
+	// against this polygon instead of Argentina's national outline, so the
+	// coverage percentages reflect the selected zone (e.g. AMBA) rather than the
+	// national territory. Empty/nil = national scope.
+	CustomBoundingArea []LatLng `json:"custom_bounding_area,omitempty"`
+
+	// DangerousZones are exclusion polygons subtracted from the boundary before
+	// the Voronoi diagram is built (same semantics as DiagnoseRequest).
+	DangerousZones [][]LatLng `json:"dangerous_zones,omitempty"`
 }
 
 // BranchProjection compares an existing branch's current coverage percentage

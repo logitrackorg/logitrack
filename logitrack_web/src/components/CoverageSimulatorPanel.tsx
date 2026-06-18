@@ -39,6 +39,10 @@ interface CoverageSimulatorPanelProps {
   onRegionChange?: (id: string) => void;
   /** Called when the user clicks "Dibujar nueva zona". */
   onStartDrawNewRegion?: () => void;
+  /** true cuando la zona seleccionada es propia (editable). */
+  canEditSelectedRegion?: boolean;
+  /** Called when the user clicks "Editar" on a custom region. */
+  onEditRegion?: () => void;
 }
 
 export function CoverageSimulatorPanel({
@@ -58,6 +62,8 @@ export function CoverageSimulatorPanel({
   selectedRegionId = "national",
   onRegionChange,
   onStartDrawNewRegion,
+  canEditSelectedRegion = false,
+  onEditRegion,
 }: CoverageSimulatorPanelProps) {
   const [minPopulation, setMinPopulation] = useState(MIN_POP_DEFAULT);
 
@@ -101,6 +107,17 @@ export function CoverageSimulatorPanel({
               </optgroup>
             )}
           </select>
+          {canEditSelectedRegion && (
+            <button
+              type="button"
+              onClick={onEditRegion}
+              disabled={isDrawingBoundary || disabled}
+              title="Editar nombre y forma de esta zona"
+              className="shrink-0 flex items-center gap-1 px-2 py-1.5 text-xs rounded-md border border-slate-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-gray-700 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Pencil className="w-3 h-3" /> Editar
+            </button>
+          )}
           <button
             type="button"
             onClick={onStartDrawNewRegion}

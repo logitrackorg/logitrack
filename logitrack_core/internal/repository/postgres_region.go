@@ -68,3 +68,28 @@ func (r *postgresRegionRepository) UpdateCoordinatesByName(name string, coords [
 	)
 	return err
 }
+
+// Update renames and re-draws a custom region. The `type = 'custom'` guard
+// makes predefined regions immutable; a 0-row result (unknown id or predefined
+// region) is reported as sql.ErrNoRows so the handler can answer 404.
+func (r *postgresRegionRepository) Update(id, name string, coords []model.LatLng) error {
+	coordsJSON, err := json.Marshal(coords)
+	if err != nil {
+		return err
+	}
+	res, err := r.db.Exec(
+		`UPDATE regions SET name = $1, coordinates = $2 WHERE id = $3 AND type = $4`,
+		name, coordsJSON, id, model.RegionTypeCustom,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}

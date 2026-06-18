@@ -213,9 +213,13 @@ export const coverageApi = {
    * sugerencias activas y devuelve, para cada sucursal existente, su
    * cobertura actual vs. proyectada con el mismo área simulada.
    */
-  project: (areaKm2: number, suggestions: LatLng[]) =>
+  project: (areaKm2: number, suggestions: LatLng[], customBoundingArea?: LatLng[]) =>
     api
-      .post<ProjectionResult>("/coverage/project", { area_km2: areaKm2, suggestions })
+      .post<ProjectionResult>("/coverage/project", {
+        area_km2: areaKm2,
+        suggestions,
+        ...(customBoundingArea?.length ? { custom_bounding_area: customBoundingArea } : {}),
+      })
       .then((r) => r.data),
 };
 

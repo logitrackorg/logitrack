@@ -721,7 +721,11 @@ func coveragePercentageForCell(cell model.CoverageCell, radiusKm float64) float6
 // current coverage percentage (from Diagnose) alongside the projected one in
 // the combined network — both using the same simulatedAreaKm2 coverage
 // circle.
-func (s *CoverageService) ProjectScenario(simulatedAreaKm2 float64, suggestions []model.LatLng) model.ProjectionResult {
+// customBoundary and dangerousZones scope the projection to a region: when set,
+// both the current and the projected Voronoi cells are clipped against the
+// boundary (minus the dangerous zones), so the percentages reflect that zone
+// instead of the national territory. Nil/empty = national scope.
+func (s *CoverageService) ProjectScenario(simulatedAreaKm2 float64, suggestions []model.LatLng, customBoundary []model.LatLng, dangerousZones [][]model.LatLng) model.ProjectionResult {
 	branches := s.branchRepo.ListActive()
 
 	var sites []voronoiSite
@@ -753,13 +757,13 @@ func (s *CoverageService) ProjectScenario(simulatedAreaKm2 float64, suggestions 
 		radiusKm = math.Sqrt(simulatedAreaKm2 / math.Pi)
 	}
 
-	current := s.Diagnose(simulatedAreaKm2, nil, nil, false, 0, false)
+	current := s.Diagnose(simulatedAreaKm2, customBoundary, dangerousZones, false, 0, false)
 	currentByID := make(map[string]float64, len(current.Cells))
 	for _, c := range current.Cells {
 		currentByID[c.BranchID] = c.CoveragePercentage
 	}
 
-	newCells := s.buildVoronoiCells(sites, nil, nil)
+	newCells := s.buildVoronoiCells(sites, customBoundary, dangerousZones)
 	branchProjections := make([]model.BranchProjection, 0, len(branches))
 	for _, cell := range newCells {
 		if cell.BranchID == "" {

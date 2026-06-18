@@ -106,5 +106,5 @@ func (h *CoverageHandler) Project(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, h.svc.ProjectScenario(req.AreaKm2, req.Suggestions))
+	c.JSON(http.StatusOK, h.svc.ProjectScenario(req.AreaKm2, req.Suggestions, req.CustomBoundingArea, req.DangerousZones))
 }

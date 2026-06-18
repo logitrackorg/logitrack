@@ -30,4 +30,9 @@ export const regionsApi = {
 
   create: (payload: { name: string; coordinates: LatLng[] }): Promise<Region> =>
     api.post<Region>("/regions", payload).then((r) => r.data),
+
+  /** Renombra y/o re-dibuja una zona personalizada. Solo aplica a zonas
+   *  propias (type "custom"); las predefinidas devuelven 404. */
+  update: (id: string, payload: { name: string; coordinates: LatLng[] }): Promise<Region> =>
+    api.put<Region>(`/regions/${id}`, payload).then((r) => r.data),
 };

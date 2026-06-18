@@ -648,6 +648,7 @@ func main() {
 	protected.POST("/coverage/project", canViewStats, coverageHandler.Project)
 	protected.GET("/regions", canViewStats, regionHandler.List)
 	protected.POST("/regions", canViewStats, regionHandler.Create)
+	protected.PUT("/regions/:id", canViewStats, regionHandler.Update)
 	protected.POST("/admin/fleet-ml/retrain", adminOnly, slaMetricsHandler.RetrainFleetML)
 	protected.GET("/admin/sla-settings", adminOnly, slaSettingsHandler.Get)
 	protected.PUT("/admin/sla-settings", adminOnly, slaSettingsHandler.Update)

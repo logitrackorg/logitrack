@@ -37,3 +37,18 @@ func (s *RegionService) Create(req model.CreateRegionRequest) (model.Region, err
 	}
 	return region, nil
 }
+
+// Update renames and re-draws a custom region. The repository enforces that
+// only custom regions can be edited (returns sql.ErrNoRows otherwise), which
+// the handler maps to 404.
+func (s *RegionService) Update(id string, req model.CreateRegionRequest) (model.Region, error) {
+	if err := s.repo.Update(id, req.Name, req.Coordinates); err != nil {
+		return model.Region{}, err
+	}
+	return model.Region{
+		ID:          id,
+		Name:        req.Name,
+		Type:        model.RegionTypeCustom,
+		Coordinates: req.Coordinates,
+	}, nil
+}

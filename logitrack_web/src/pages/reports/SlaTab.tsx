@@ -1031,11 +1031,16 @@ export function CoberturaTab() {
   // Zonas guardadas (predefinidas + zonas del usuario).
   const [regions, setRegions] = useState<CoverageRegion[]>([]);
   const [selectedRegionId, setSelectedRegionId] = useState<string>("national");
-  // Modal para guardar una zona dibujada nueva.
+  // Modal para guardar una zona dibujada nueva o editada.
   const [showSaveRegionModal, setShowSaveRegionModal] = useState(false);
   const [pendingRegionBoundary, setPendingRegionBoundary] = useState<[number, number][] | null>(null);
   const [savingRegionName, setSavingRegionName] = useState("");
   const [savingRegion, setSavingRegion] = useState(false);
+  // Edición de zona: id de la zona que se está editando (null = creando una
+  // nueva). `redrawReference` es la forma original que se dibuja de fondo en
+  // tono claro mientras el usuario la re-dibuja, como referencia.
+  const [editingRegionId, setEditingRegionId] = useState<string | null>(null);
+  const [redrawReference, setRedrawReference] = useState<[number, number][] | null>(null);
 
   // Sync refs used by diagnoseCore (stable callback, reads values without closures).
   useEffect(() => { simResultRef.current = simResult; }, [simResult]);
@@ -1067,11 +1072,13 @@ export function CoberturaTab() {
 
   const handleRegionChange = useCallback((id: string) => {
     resetDiagnosis();
+    setEditingRegionId(null);
+    setRedrawReference(null);
+    setIsDrawingBoundary(false);
     setSelectedRegionId(id);
     if (id === "national") {
       setCustomBoundary(null);
       setTerritoryMode("national");
-      setIsDrawingBoundary(false);
       return;
     }
     const region = regions.find((r) => r.id === id);
@@ -1079,32 +1086,72 @@ export function CoberturaTab() {
     const coords: [number, number][] = region.coordinates.map((c) => [c.lat, c.lng]);
     setCustomBoundary(coords);
     setTerritoryMode("custom");
-    setIsDrawingBoundary(false);
     coverageMapRef.current?.fitBoundsToPolygon(coords);
   }, [regions, resetDiagnosis]);
 
   const handleStartDrawNewRegion = useCallback(() => {
     resetDiagnosis();
+    setEditingRegionId(null);
+    setRedrawReference(null);
     setSelectedRegionId("national");
     setCustomBoundary(null);
     setTerritoryMode("custom");
     setIsDrawingBoundary(true);
   }, [resetDiagnosis]);
 
+  // Editar una zona personalizada existente: entra en modo re-dibujo mostrando
+  // la forma original de fondo (tono claro) como referencia. Al cerrar el nuevo
+  // polígono (Enter) se abre el modal con el nombre precargado para confirmar
+  // nombre + nueva geometría. Solo aplica a zonas propias (type "custom").
+  const handleStartEditRegion = useCallback(() => {
+    const region = regions.find((r) => r.id === selectedRegionId);
+    if (!region || region.type !== "custom") return;
+    resetDiagnosis();
+    setEditingRegionId(region.id);
+    setRedrawReference(customBoundary ?? region.coordinates.map((c) => [c.lat, c.lng]));
+    setCustomBoundary(null);
+    setTerritoryMode("custom");
+    setIsDrawingBoundary(true);
+  }, [regions, selectedRegionId, customBoundary, resetDiagnosis]);
+
   const handleBoundaryComplete = useCallback((pts: [number, number][]) => {
     setCustomBoundary(pts);
     setIsDrawingBoundary(false);
+    setRedrawReference(null);
     setPendingRegionBoundary(pts);
+    // Al editar, precargamos el nombre actual para que el usuario pueda
+    // mantenerlo o cambiarlo en el mismo paso de confirmación.
+    if (editingRegionId) {
+      const region = regions.find((r) => r.id === editingRegionId);
+      setSavingRegionName(region?.name ?? "");
+    }
     setShowSaveRegionModal(true);
-  }, []);
+  }, [editingRegionId, regions]);
+
+  // Restaura la zona original (descarta el re-dibujo en curso). Reutilizado por
+  // Esc durante el dibujo y por "Cancelar" en el modal.
+  const restoreEditedRegion = useCallback((): boolean => {
+    if (!editingRegionId) return false;
+    const region = regions.find((r) => r.id === editingRegionId);
+    setEditingRegionId(null);
+    setRedrawReference(null);
+    if (!region) return false;
+    const coords = region.coordinates.map((c) => [c.lat, c.lng]) as [number, number][];
+    setSelectedRegionId(region.id);
+    setCustomBoundary(coords);
+    setTerritoryMode("custom");
+    return true;
+  }, [editingRegionId, regions]);
 
   const handleBoundaryCancel = useCallback(() => {
     setIsDrawingBoundary(false);
+    setRedrawReference(null);
+    if (restoreEditedRegion()) return;
     if (!customBoundary) {
       setTerritoryMode("national");
       setSelectedRegionId("national");
     }
-  }, [customBoundary]);
+  }, [customBoundary, restoreEditedRegion]);
 
   const handleClearBoundary = useCallback(() => {
     setCustomBoundary(null);
@@ -1116,13 +1163,14 @@ export function CoberturaTab() {
     if (!pendingRegionBoundary || !savingRegionName.trim()) return;
     setSavingRegion(true);
     try {
-      const newRegion = await regionsApi.create({
-        name: savingRegionName.trim(),
-        coordinates: pendingRegionBoundary.map(([lat, lng]) => ({ lat, lng })),
-      });
+      const coordinates = pendingRegionBoundary.map(([lat, lng]) => ({ lat, lng }));
+      const name = savingRegionName.trim();
+      const saved = editingRegionId
+        ? await regionsApi.update(editingRegionId, { name, coordinates })
+        : await regionsApi.create({ name, coordinates });
       const updated = await regionsApi.list();
       setRegions(updated);
-      setSelectedRegionId(newRegion.id);
+      setSelectedRegionId(saved.id);
       setCustomBoundary(pendingRegionBoundary);
       setTerritoryMode("custom");
     } finally {
@@ -1130,17 +1178,21 @@ export function CoberturaTab() {
       setShowSaveRegionModal(false);
       setSavingRegionName("");
       setPendingRegionBoundary(null);
+      setEditingRegionId(null);
     }
-  }, [pendingRegionBoundary, savingRegionName]);
+  }, [pendingRegionBoundary, savingRegionName, editingRegionId]);
 
   const handleCancelSaveRegion = useCallback(() => {
     setShowSaveRegionModal(false);
     setSavingRegionName("");
     setPendingRegionBoundary(null);
+    // Al cancelar una edición, restauramos la zona original; al cancelar una
+    // creación, volvemos a Nacional.
+    if (restoreEditedRegion()) return;
     setCustomBoundary(null);
     setTerritoryMode("national");
     setSelectedRegionId("national");
-  }, []);
+  }, [restoreEditedRegion]);
 
   // "Proyección de Impacto": cobertura actual vs. proyectada de cada sucursal
   // si la red incluyera también las sugerencias activas. Se recalcula cada
@@ -1467,12 +1519,17 @@ export function CoberturaTab() {
     setProjectionLoading(true);
     setProjectionError(null);
     const suggestions = activeSuggestionLocations.map((loc) => ({ lat: loc.lat, lng: loc.lng }));
+    // Scope the projection to the active zone: el cálculo de Voronoi (actual y
+    // proyectado) se recorta contra la misma zona del diagnóstico, así los
+    // porcentajes reflejan la cobertura dentro de la zona y no la nacional.
+    const boundingArea =
+      isZoneActive && customBoundary ? customBoundary.map(([lat, lng]) => ({ lat, lng })) : undefined;
     coverageApi
-      .project(simResult.simulated_area_km2, suggestions)
+      .project(simResult.simulated_area_km2, suggestions, boundingArea)
       .then((res) => setProjection(res.branches))
       .catch(() => setProjectionError("No se pudo calcular la proyección de impacto en este momento."))
       .finally(() => setProjectionLoading(false));
-  }, [simResult, activeSuggestionLocations]);
+  }, [simResult, activeSuggestionLocations, isZoneActive, customBoundary]);
 
   // Proyección de Impacto acotada: cuando hay una zona de análisis activa, solo
   // mostramos las sucursales que están dentro de la zona (a diferencia del panel
@@ -1569,6 +1626,7 @@ export function CoberturaTab() {
               onBoundaryComplete={handleBoundaryComplete}
               onBoundaryCancel={handleBoundaryCancel}
               customBoundary={customBoundary}
+              redrawReference={redrawReference}
             />
           </div>
         </Card>
@@ -1600,6 +1658,8 @@ export function CoberturaTab() {
                 selectedRegionId={selectedRegionId}
                 onRegionChange={handleRegionChange}
                 onStartDrawNewRegion={handleStartDrawNewRegion}
+                canEditSelectedRegion={regions.find((r) => r.id === selectedRegionId)?.type === "custom"}
+                onEditRegion={handleStartEditRegion}
               />
               {simResult !== null && (
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -1803,6 +1863,8 @@ export function CoberturaTab() {
                 threshold={diagram.threshold_km2}
                 simResult={simResult}
                 highlighted={highlighted}
+                zoneActive={isZoneActive}
+                branchFilter={isZoneActive ? inZoneBranchIds : null}
               />
             </CollapsiblePanel>
           </Card>
@@ -1861,10 +1923,12 @@ export function CoberturaTab() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-sm mx-4 rounded-xl bg-white dark:bg-gray-900 shadow-2xl border border-slate-200 dark:border-gray-700 p-6 space-y-4">
             <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-              Guardar zona personalizada
+              {editingRegionId ? "Editar zona personalizada" : "Guardar zona personalizada"}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Asigná un nombre a esta zona para reutilizarla en futuros análisis.
+              {editingRegionId
+                ? "Confirmá el nombre y la nueva forma de la zona."
+                : "Asigná un nombre a esta zona para reutilizarla en futuros análisis."}
             </p>
             <input
               type="text"
@@ -1891,7 +1955,7 @@ export function CoberturaTab() {
                 disabled={savingRegion || !savingRegionName.trim()}
                 className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {savingRegion ? "Guardando…" : "Guardar"}
+                {savingRegion ? "Guardando…" : editingRegionId ? "Guardar cambios" : "Guardar"}
               </button>
             </div>
           </div>
@@ -1917,6 +1981,8 @@ function SituationSummary({
   threshold,
   simResult,
   highlighted,
+  zoneActive = false,
+  branchFilter = null,
 }: {
   covered: number;
   total: number;
@@ -1925,12 +1991,18 @@ function SituationSummary({
   threshold: number;
   simResult: SimulationResult | null;
   highlighted: string | null;
+  /** true cuando hay una zona de análisis activa — acota el resumen a la zona. */
+  zoneActive?: boolean;
+  /** IDs de sucursales dentro de la zona; null = sin acotar (nacional). */
+  branchFilter?: Set<string> | null;
 }) {
-  const simCells = simResult
-    ? highlighted
-      ? simResult.cells.filter((c) => c.branch_id === highlighted)
-      : simResult.cells
-    : [];
+  const simCells = (() => {
+    if (!simResult) return [];
+    let cs = simResult.cells;
+    if (branchFilter) cs = cs.filter((c) => branchFilter.has(c.branch_id));
+    if (highlighted) cs = cs.filter((c) => c.branch_id === highlighted);
+    return cs;
+  })();
   const simGapCells = simCells.filter((c) => c.is_gap);
   const areaLabel = simResult ? formatKm2(simResult.simulated_area_km2) : "";
 
@@ -1961,6 +2033,14 @@ function SituationSummary({
         </div>
       );
     }
+  } else if (zoneActive) {
+    // Zona activa sin diagnóstico todavía: el resumen nacional no aplica.
+    statusBlock = (
+      <div className="flex items-start gap-2 text-slate-500 dark:text-slate-400">
+        <Info className="w-5 h-5 shrink-0 mt-0.5" />
+        <p>Confirmá un diagnóstico para ver la situación de cobertura de la zona seleccionada.</p>
+      </div>
+    );
   } else if (gapCount === 0) {
     statusBlock = (
       <div className="flex items-start gap-2 text-emerald-700 dark:text-emerald-400">
@@ -1977,7 +2057,9 @@ function SituationSummary({
   return (
     <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
       {statusBlock}
-      {gapCount > 0 && (
+      {/* Resumen nacional de gaps: solo sin zona activa (con zona, el estado de
+          arriba ya está acotado a la zona y este conteo nacional confundiría). */}
+      {!zoneActive && gapCount > 0 && (
         <>
           <p>
             De <strong>{total}</strong> sucursales activas, <strong>{covered}</strong> tienen cobertura
