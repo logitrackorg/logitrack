@@ -132,6 +132,7 @@ func computeMathematicalSuggestions(
 	radiusKm float64,
 	proj equirectProjector,
 	otherCells []namedCellPoly,
+	maxSuggestions int,
 ) (out []model.SuggestedLocation) {
 	// Top-level panic guard: polyclip can panic on degenerate geometry produced
 	// by successive boolean operations. We prefer returning 0 suggestions over
@@ -194,6 +195,10 @@ func computeMathematicalSuggestions(
 	log.Printf("[MathSugg] voidFragments: void had %d contours → %d outer fragments", len(void), len(frags))
 
 	for i, frag := range frags {
+		if maxSuggestions > 0 && len(out) >= maxSuggestions {
+			log.Printf("[MathSugg] fragment[%d]: reached maxSuggestions=%d — stopping early", i, maxSuggestions)
+			break
+		}
 		area := frag.Area()
 		if area < minFragAreaKm2 {
 			log.Printf("[MathSugg] fragment[%d]: area=%.3f km² < threshold %.3f → SKIP", i, area, minFragAreaKm2)
@@ -201,11 +206,15 @@ func computeMathematicalSuggestions(
 		}
 		log.Printf("[MathSugg] fragment[%d]: area=%.3f km² ≥ threshold %.3f → calling fillFragmentIteratively", i, area, minFragAreaKm2)
 		before := len(out)
-		out = append(out, fillFragmentIteratively(
+		newSuggs := fillFragmentIteratively(
 			globalCell, proj, frag, radiusKm,
 			&projSites, tierraFertil, otherCells,
 			minFragAreaKm2,
-		)...)
+		)
+		if maxSuggestions > 0 && len(out)+len(newSuggs) > maxSuggestions {
+			newSuggs = newSuggs[:maxSuggestions-len(out)]
+		}
+		out = append(out, newSuggs...)
 		log.Printf("[MathSugg] fragment[%d]: fillFragmentIteratively added %d suggestions (total so far: %d)",
 			i, len(out)-before, len(out))
 	}

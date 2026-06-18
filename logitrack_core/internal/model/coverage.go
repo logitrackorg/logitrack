@@ -198,6 +198,16 @@ type DiagnoseRequest struct {
 	// "fuera_de_servicio" in the Voronoi computation — the "Incluir sucursales
 	// Inactivas/Fuera de servicio en la simulación" toggle in the frontend.
 	IncludeInactive bool `json:"include_inactive,omitempty"`
+
+	// MaxSuggestions caps the number of MathematicalSuggestions returned.
+	// 0 means no limit (natural bound from coverageSuggestionMaxPerFragment).
+	MaxSuggestions int `json:"max_suggestions,omitempty"`
+
+	// SnapToCities, when true, resolves MathematicalSuggestions to the nearest
+	// real populated place (Overpass API) before returning. Default false keeps
+	// the diagnosis fast; the frontend can snap client-side via POST
+	// /coverage/snap-to-city when the user explicitly requests it.
+	SnapToCities bool `json:"snap_to_cities,omitempty"`
 }
 
 // ProjectionRequest is the body of POST /coverage/project: the simulated

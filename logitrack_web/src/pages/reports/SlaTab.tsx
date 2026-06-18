@@ -1007,6 +1007,9 @@ export function CoberturaTab() {
   const [allBranches, setAllBranches] = useState<Branch[]>([]);
 
   // Refs para diagnoseCore (evita stale closures en toggleClosedBranch / handleToggleIncludeInactive).
+  const [maxSuggestions, setMaxSuggestions] = useState(0);
+  const maxSuggestionsRef = useRef(0);
+
   const simResultRef = useRef<SimulationResult | null>(null);
   const visualAreaRef = useRef(SIM_AREA_DEFAULT);
   const customBoundaryRef = useRef<[number, number][] | null>(null);
@@ -1037,6 +1040,7 @@ export function CoberturaTab() {
   // Sync refs used by diagnoseCore (stable callback, reads values without closures).
   useEffect(() => { simResultRef.current = simResult; }, [simResult]);
   useEffect(() => { visualAreaRef.current = visualArea; }, [visualArea]);
+  useEffect(() => { maxSuggestionsRef.current = maxSuggestions; }, [maxSuggestions]);
   useEffect(() => { customBoundaryRef.current = customBoundary; }, [customBoundary]);
   useEffect(() => { territoryModeRef.current = territoryMode; }, [territoryMode]);
   useEffect(() => { includeInactiveRef.current = includeInactive; }, [includeInactive]);
@@ -1146,7 +1150,7 @@ export function CoberturaTab() {
     setSnapError(null);
     setBlacklistedCities([]);
     coverageApi
-      .diagnose(area, closed.length > 0 ? closed : undefined, boundingArea, inactive || undefined)
+      .diagnose(area, closed.length > 0 ? closed : undefined, boundingArea, inactive || undefined, maxSuggestionsRef.current > 0 ? maxSuggestionsRef.current : undefined)
       .then((result) => {
         const mathSuggs = result.mathematical_suggestions ?? [];
         const merged = [...result.suggested_locations, ...mathSuggs];
@@ -1179,14 +1183,10 @@ export function CoberturaTab() {
     setError(null);
     coverageApi
       .getDiagram()
-      .then((d) => {
-        setDiagram(d);
-        // Auto-diagnose on first load so description cards populate immediately.
-        diagnoseCore(visualAreaRef.current, closedBranchIdsRef.current);
-      })
+      .then((d) => setDiagram(d))
       .catch(() => setError("No se pudo calcular la cobertura en este momento."))
       .finally(() => setLoading(false));
-  }, [diagnoseCore]);
+  }, []);
 
   useEffect(() => load(), [load]);
 
@@ -1546,6 +1546,8 @@ export function CoberturaTab() {
                 onAreaChange={setVisualArea}
                 onConfirm={handleConfirmSimulation}
                 onMinPopulationChange={setSnapMinPopulation}
+                maxSuggestions={maxSuggestions}
+                onMaxSuggestionsChange={setMaxSuggestions}
                 scopeLabel={simScopeLabel}
                 disabled={isFetchingCities}
                 territoryMode={territoryMode}

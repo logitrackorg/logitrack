@@ -72,6 +72,21 @@ const (
 	// a safety bound against pathological/degenerate geometry producing an
 	// unbounded loop.
 	coverageSuggestionMaxPerFragment = 4
+
+	// coverageSuggestionSeparationFactor is the minimum allowed distance
+	// between two suggestions placed in the same iterative run, expressed as
+	// a multiple of radiusKm. A value of 1.5 means that if a new candidate is
+	// within 1.5× the coverage radius of an already-placed suggestion, it is
+	// rejected during the grid search — preventing heavy overlap (clustering).
+	coverageSuggestionSeparationFactor = 1.5
+
+	// coverageSuggestionClipRadiusScale expands the coverage circle used for
+	// the DIFFERENCE operation (subtracting each placed branch from the
+	// remaining fragment) by this factor. The expansion eliminates micro-sliver
+	// residuals that polyclip leaves when the subtraction circle matches the
+	// scoring circle exactly, preventing the next iteration from obsessing over
+	// pixel-scale leftovers.
+	coverageSuggestionClipRadiusScale = 1.05
 )
 
 // coverageConfigProvider supplies the configurable coverage threshold. Both
@@ -389,7 +404,7 @@ func (s *CoverageService) listBranches(includeInactive bool) []model.Branch {
 // dangerousZones is an optional list of exclusion polygons subtracted from the
 // boundary before Voronoi construction (see computeTierraFertil). When
 // non-empty the cached diagram cannot be reused and the Voronoi is rebuilt.
-func (s *CoverageService) Diagnose(simulatedAreaKm2 float64, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, includeInactive bool) model.SimulationResult {
+func (s *CoverageService) Diagnose(simulatedAreaKm2 float64, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, includeInactive bool, maxSuggestions int, snapToCities bool) model.SimulationResult {
 	// Rebuild when inactive branches, a custom boundary, or dangerous zones are
 	// in play — the cached active-only national diagram cannot be reused.
 	if includeInactive || len(customBoundary) >= 3 || len(dangerousZones) > 0 {
@@ -407,18 +422,18 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64, customBoundary []mo
 				lng:        *b.Longitude,
 			})
 		}
-		return s.diagnoseWithCells(simulatedAreaKm2, s.buildVoronoiCells(sites, customBoundary, dangerousZones), customBoundary, dangerousZones)
+		return s.diagnoseWithCells(simulatedAreaKm2, s.buildVoronoiCells(sites, customBoundary, dangerousZones), customBoundary, dangerousZones, maxSuggestions, snapToCities)
 	}
-	return s.diagnoseWithCells(simulatedAreaKm2, s.Diagram().Cells, nil, nil)
+	return s.diagnoseWithCells(simulatedAreaKm2, s.Diagram().Cells, nil, nil, maxSuggestions, snapToCities)
 }
 
 // DiagnoseExcluding is like Diagnose but recomputes the Voronoi diagram after
 // removing the listed branch IDs — the "Simulador de cierre de sucursales"
 // feature. An empty slice is equivalent to calling Diagnose directly.
 // customBoundary and dangerousZones follow the same semantics as in Diagnose.
-func (s *CoverageService) DiagnoseExcluding(simulatedAreaKm2 float64, excludedBranchIDs []string, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, includeInactive bool) model.SimulationResult {
+func (s *CoverageService) DiagnoseExcluding(simulatedAreaKm2 float64, excludedBranchIDs []string, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, includeInactive bool, maxSuggestions int, snapToCities bool) model.SimulationResult {
 	if len(excludedBranchIDs) == 0 {
-		return s.Diagnose(simulatedAreaKm2, customBoundary, dangerousZones, includeInactive)
+		return s.Diagnose(simulatedAreaKm2, customBoundary, dangerousZones, includeInactive, maxSuggestions, snapToCities)
 	}
 	excluded := make(map[string]bool, len(excludedBranchIDs))
 	for _, id := range excludedBranchIDs {
@@ -438,7 +453,7 @@ func (s *CoverageService) DiagnoseExcluding(simulatedAreaKm2 float64, excludedBr
 			lng:        *b.Longitude,
 		})
 	}
-	return s.diagnoseWithCells(simulatedAreaKm2, s.buildVoronoiCells(sites, customBoundary, dangerousZones), customBoundary, dangerousZones)
+	return s.diagnoseWithCells(simulatedAreaKm2, s.buildVoronoiCells(sites, customBoundary, dangerousZones), customBoundary, dangerousZones, maxSuggestions, snapToCities)
 }
 
 // diagnoseWithCells is the core diagnosis logic shared by Diagnose and
@@ -446,7 +461,7 @@ func (s *CoverageService) DiagnoseExcluding(simulatedAreaKm2 float64, excludedBr
 // either the cached diagram (Diagnose) or a freshly-computed filtered set
 // (DiagnoseExcluding). customBoundary and dangerousZones are forwarded to
 // computeTierraFertil for per-cell clipping and for the global void search.
-func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCells []model.CoverageCell, customBoundary []model.LatLng, dangerousZones [][]model.LatLng) model.SimulationResult {
+func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCells []model.CoverageCell, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, maxSuggestions int, snapToCities bool) model.SimulationResult {
 	diagCells := make([]model.SimulationDiagnosis, 0, len(coverageCells))
 	suggestions := make([]model.SuggestedLocation, 0)
 
@@ -571,8 +586,8 @@ func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCe
 		tierraFertil := computeTierraFertil(customBoundary, dangerousZones, globalProj)
 		log.Printf("[MathSugg] computeTierraFertil → %d contours", len(tierraFertil))
 		otherCellsGlobal := projectCellsLocal(coverageCells, globalProj)
-		mathSuggestions = computeMathematicalSuggestions(tierraFertil, branchSites, radiusKm, globalProj, otherCellsGlobal)
-		if len(mathSuggestions) > 0 {
+		mathSuggestions = computeMathematicalSuggestions(tierraFertil, branchSites, radiusKm, globalProj, otherCellsGlobal, maxSuggestions)
+		if snapToCities && len(mathSuggestions) > 0 {
 			log.Printf("[MathSugg] snap: starting snapMathSuggestionsInPlace for %d suggestions (searchRadius≤%.0fkm)", len(mathSuggestions), math.Min(radiusKm/2, snapToCityMaxRadiusKm))
 			s.snapMathSuggestionsInPlace(mathSuggestions, radiusKm, 0, dangerousZones)
 		}
@@ -717,7 +732,7 @@ func (s *CoverageService) ProjectScenario(simulatedAreaKm2 float64, suggestions 
 		radiusKm = math.Sqrt(simulatedAreaKm2 / math.Pi)
 	}
 
-	current := s.Diagnose(simulatedAreaKm2, nil, nil, false)
+	current := s.Diagnose(simulatedAreaKm2, nil, nil, false, 0, false)
 	currentByID := make(map[string]float64, len(current.Cells))
 	for _, c := range current.Cells {
 		currentByID[c.BranchID] = c.CoveragePercentage
@@ -802,6 +817,9 @@ func suggestLocationsFromDifference(cell model.CoverageCell, proj equirectProjec
 func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, frag geometry.Polygon, radiusKm float64, sites *[]geometry.Point, countryLocal polyclip.Polygon, otherCells []namedCellPoly, minFragAreaKm2 float64) []model.SuggestedLocation {
 	var out []model.SuggestedLocation
 	current := frag
+	// addedPoints tracks suggestions placed during THIS run so bestInteriorPoint
+	// can reject candidates that would cluster too close to them.
+	var addedPoints []geometry.Point
 
 	for i := 0; i < coverageSuggestionMaxPerFragment; i++ {
 		area := current.Area()
@@ -809,7 +827,7 @@ func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, fr
 			break
 		}
 
-		point, ok := bestInteriorPoint(current, *sites, radiusKm, countryLocal)
+		point, ok := bestInteriorPoint(current, *sites, radiusKm, countryLocal, addedPoints)
 		if !ok {
 			// Degenerate fragment (e.g. a sliver thinner than the grid
 			// resolution, with no grid point strictly inside): fall back to
@@ -848,19 +866,21 @@ func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, fr
 			AffectedBranches: affected,
 		})
 
-		// Update 1: future grid searches (this fragment's remaining
-		// iterations, later fragments, and other cells' suggestions via the
-		// shared slice) repel from this new suggestion too.
+		// Update 1: track for (a) global repulsion across all fragments via
+		// the shared sites slice, and (b) local proximity rejection inside
+		// this fragment's remaining iterations via addedPoints.
 		*sites = append(*sites, point)
+		addedPoints = append(addedPoints, point)
 
 		if radiusKm <= 0 {
 			break
 		}
 
-		// Update 2: model this new branch's own coverage circle and subtract
-		// it from the current fragment — the part of the gap it would now
-		// cover. Use safePolyclipOp so a degenerate DIFFERENCE doesn't panic.
-		coverCircle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), point))
+		// Update 2: subtract a slightly enlarged circle (×coverageSuggestionClipRadiusScale)
+		// from the current fragment. The expansion cleans up micro-sliver
+		// residuals that polyclip leaves when using the exact scoring radius,
+		// preventing subsequent iterations from fixating on pixel-scale leftovers.
+		coverCircle := toPolyclip(translatePolygon(circlePolygon(radiusKm*coverageSuggestionClipRadiusScale, coverageSuggestionCircleVertices), point))
 		remainderPoly := safePolyclipOp(func() polyclip.Polygon {
 			return toPolyclip(current).Construct(polyclip.DIFFERENCE, coverCircle)
 		})
@@ -948,7 +968,7 @@ const coverageInteriorPointCandidates = 10
 //
 // Returns ok=false if no grid point falls inside frag (a sliver thinner than
 // the grid resolution); callers should fall back to a vertex-based heuristic.
-func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm float64, countryLocal polyclip.Polygon) (geometry.Point, bool) {
+func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm float64, countryLocal polyclip.Polygon, addedPoints []geometry.Point) (geometry.Point, bool) {
 	bbox := boundingBox(frag)
 	stepX := (bbox.MaxX - bbox.MinX) / float64(coverageSuggestionGridSteps)
 	stepY := (bbox.MaxY - bbox.MinY) / float64(coverageSuggestionGridSteps)
@@ -999,6 +1019,26 @@ func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm f
 			pt := geometry.Point{X: x, Y: y}
 			if !fragForContains.Contains(pt) {
 				continue
+			}
+			// Proximity rejection: discard any candidate within
+			// radiusKm×coverageSuggestionSeparationFactor of a suggestion
+			// already placed in this iterative run. This prevents the grid
+			// from proposing a point whose coverage circle would heavily
+			// overlap the previous one (clustering).
+			if radiusKm > 0 {
+				minSep := radiusKm * coverageSuggestionSeparationFactor
+				tooClose := false
+				for _, ap := range addedPoints {
+					dx := pt.X - ap.X
+					dy := pt.Y - ap.Y
+					if dx*dx+dy*dy < minSep*minSep {
+						tooClose = true
+						break
+					}
+				}
+				if tooClose {
+					continue
+				}
 			}
 			// Virgin zone (no branches): score by squared distance to the
 			// polygon boundary — maximising this gives the true geometric

@@ -11,6 +11,9 @@ const MIN_POP_MAX = 500_000;
 const MIN_POP_STEP = 10_000;
 const MIN_POP_DEFAULT = 0;
 
+const MAX_SUGG_MAX = 20;
+const MAX_SUGG_STEP = 1;
+
 export type TerritoryMode = "national" | "custom";
 
 interface CoverageSimulatorPanelProps {
@@ -18,6 +21,9 @@ interface CoverageSimulatorPanelProps {
   onAreaChange: (areaKm2: number) => void;
   onConfirm: (areaKm2: number, minPopulation: number) => void;
   onMinPopulationChange?: (minPopulation: number) => void;
+  /** Maximum number of mathematical suggestions (0 = no limit). */
+  maxSuggestions?: number;
+  onMaxSuggestionsChange?: (n: number) => void;
   scopeLabel: string;
   disabled?: boolean;
   /** Current territory mode — used to show the drawing-in-progress indicator. */
@@ -40,6 +46,8 @@ export function CoverageSimulatorPanel({
   onAreaChange,
   onConfirm,
   onMinPopulationChange,
+  maxSuggestions = 0,
+  onMaxSuggestionsChange,
   scopeLabel,
   disabled = false,
   territoryMode = "national",
@@ -57,6 +65,7 @@ export function CoverageSimulatorPanel({
   // values so the user can type freely without React reverting partial input.
   const [areaInput, setAreaInput] = useState(() => String(areaKm2));
   const [popInput, setPopInput] = useState(() => String(MIN_POP_DEFAULT));
+  const [maxSugInput, setMaxSugInput] = useState(() => String(maxSuggestions));
 
   const hasBoundary = customBoundaryPoints >= 3;
   const predefined = regions.filter((r) => r.type === "predefined");
@@ -219,6 +228,49 @@ export function CoverageSimulatorPanel({
         disabled={disabled}
         className="w-full accent-slate-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         aria-label="Población mínima requerida para ciudades candidatas"
+      />
+
+      <div className="flex items-center justify-between gap-2 text-sm pt-1">
+        <span className="text-slate-600 dark:text-slate-300">Máx. sucursales sugeridas</span>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min={0}
+            max={MAX_SUGG_MAX}
+            step={MAX_SUGG_STEP}
+            value={maxSugInput}
+            onChange={(e) => setMaxSugInput(e.target.value)}
+            onBlur={() => {
+              const raw = Number(maxSugInput);
+              const v = isNaN(raw) ? 0 : Math.max(0, Math.min(MAX_SUGG_MAX, Math.round(raw)));
+              onMaxSuggestionsChange?.(v);
+              setMaxSugInput(String(v));
+            }}
+            disabled={disabled}
+            placeholder="0"
+            className="w-16 text-right text-xs font-mono font-semibold px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            aria-label="Cantidad máxima de sucursales sugeridas (0 = sin límite)"
+          />
+          <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0 w-14">
+            {maxSuggestions === 0 ? "sin límite" : "máx."}
+          </span>
+        </div>
+      </div>
+
+      <input
+        type="range"
+        min={0}
+        max={MAX_SUGG_MAX}
+        step={MAX_SUGG_STEP}
+        value={maxSuggestions}
+        onChange={(e) => {
+          const v = Number(e.target.value);
+          onMaxSuggestionsChange?.(v);
+          setMaxSugInput(String(v));
+        }}
+        disabled={disabled}
+        className="w-full accent-indigo-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+        aria-label="Cantidad máxima de sucursales sugeridas"
       />
 
       <p className="text-xs text-slate-500 dark:text-slate-400">
