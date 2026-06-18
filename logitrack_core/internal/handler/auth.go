@@ -74,11 +74,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	
 	user, err := h.repo.FindUser(req.Username, req.Password)
 	if err != nil {
-		h.logWithContext(c, req.Username, "", "", model.AccessEventLoginFailure, "invalid_credentials")
 		if err == repository.ErrAccountInactive {
+			h.logWithContext(c, req.Username, "", "", model.AccessEventLoginFailure, "account_inactive")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "account_inactive"})
 			return
 		}
+		h.logWithContext(c, req.Username, "", "", model.AccessEventLoginFailure, "invalid_credentials")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_credentials"})
 		return
 	}
