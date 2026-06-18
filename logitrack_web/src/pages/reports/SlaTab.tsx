@@ -1052,7 +1052,21 @@ export function CoberturaTab() {
   // Fetch saved regions (predefined + custom) for the zone selector.
   useEffect(() => { regionsApi.list().then(setRegions).catch(() => {}); }, []);
 
+  // Limpia el último diagnóstico confirmado (sugerencias, ciudades aterrizadas,
+  // errores, proyección). Se llama al cambiar de zona para que el resultado de
+  // la zona anterior no quede dibujado en el mapa/panel hasta el próximo
+  // "Diagnosticar" — apenas cambia la zona, el diagnóstico viejo desaparece.
+  // La proyección se limpia sola: su efecto la setea en null cuando simResult lo es.
+  const resetDiagnosis = useCallback(() => {
+    setSimResult(null);
+    setSnappedCities(null);
+    setSnapError(null);
+    setSimError(null);
+    setBlacklistedCities([]);
+  }, []);
+
   const handleRegionChange = useCallback((id: string) => {
+    resetDiagnosis();
     setSelectedRegionId(id);
     if (id === "national") {
       setCustomBoundary(null);
@@ -1067,14 +1081,15 @@ export function CoberturaTab() {
     setTerritoryMode("custom");
     setIsDrawingBoundary(false);
     coverageMapRef.current?.fitBoundsToPolygon(coords);
-  }, [regions]);
+  }, [regions, resetDiagnosis]);
 
   const handleStartDrawNewRegion = useCallback(() => {
+    resetDiagnosis();
     setSelectedRegionId("national");
     setCustomBoundary(null);
     setTerritoryMode("custom");
     setIsDrawingBoundary(true);
-  }, []);
+  }, [resetDiagnosis]);
 
   const handleBoundaryComplete = useCallback((pts: [number, number][]) => {
     setCustomBoundary(pts);
@@ -1395,16 +1410,34 @@ export function CoberturaTab() {
     });
   }, [diagram, simResult, allBranches, includeInactive]);
 
-  // Context-aware branch filtering: when a custom boundary is active, only
-  // show branches whose site falls inside the polygon (ray-casting).
-  const visiblePanelBranches = useMemo((): PanelBranchItem[] => {
-    if (territoryMode !== "custom" || !customBoundary || customBoundary.length < 3) {
-      return panelBranches;
-    }
-    return panelBranches.filter(
-      (b) => b.lat != null && b.lng != null && rayCastPointInPolygon(b.lat, b.lng, customBoundary),
-    );
-  }, [panelBranches, territoryMode, customBoundary]);
+  // Partición por zona de análisis: cuando hay una zona personalizada activa,
+  // el panel de sucursales sigue listando TODAS las sucursales, pero separadas
+  // en dos grupos — dentro y fuera de la zona. El cálculo de Voronoi es global
+  // (una sucursal fuera de la zona igual afecta las celdas de adentro), así que
+  // las de afuera siguen siendo interactivas. `inZoneBranchIds` se reutiliza
+  // para acotar la Proyección de Impacto a las sucursales de la zona.
+  const isZoneActive = territoryMode === "custom" && !!customBoundary && customBoundary.length >= 3;
+
+  const isBranchInZone = useCallback(
+    (b: PanelBranchItem) =>
+      b.lat != null && b.lng != null && !!customBoundary && rayCastPointInPolygon(b.lat, b.lng, customBoundary),
+    [customBoundary],
+  );
+
+  const inZonePanelBranches = useMemo((): PanelBranchItem[] => {
+    if (!isZoneActive) return panelBranches;
+    return panelBranches.filter(isBranchInZone);
+  }, [panelBranches, isZoneActive, isBranchInZone]);
+
+  const outOfZonePanelBranches = useMemo((): PanelBranchItem[] => {
+    if (!isZoneActive) return [];
+    return panelBranches.filter((b) => !isBranchInZone(b));
+  }, [panelBranches, isZoneActive, isBranchInZone]);
+
+  const inZoneBranchIds = useMemo(
+    () => new Set(inZonePanelBranches.map((b) => b.id)),
+    [inZonePanelBranches],
+  );
 
   // Resumen de fallos por tipo de error en el último lote de snapping.
   const failureSummary = useMemo(() => {
@@ -1440,6 +1473,15 @@ export function CoberturaTab() {
       .catch(() => setProjectionError("No se pudo calcular la proyección de impacto en este momento."))
       .finally(() => setProjectionLoading(false));
   }, [simResult, activeSuggestionLocations]);
+
+  // Proyección de Impacto acotada: cuando hay una zona de análisis activa, solo
+  // mostramos las sucursales que están dentro de la zona (a diferencia del panel
+  // de Sucursales, que lista las de adentro y las de afuera por separado).
+  const visibleProjection = useMemo((): BranchProjection[] | null => {
+    if (!projection) return null;
+    if (!isZoneActive) return projection;
+    return projection.filter((p) => inZoneBranchIds.has(p.branch_id));
+  }, [projection, isZoneActive, inZoneBranchIds]);
 
   const gaps = useMemo<CoverageCell[]>(() => {
     if (!diagram) return [];
@@ -1706,10 +1748,11 @@ export function CoberturaTab() {
                       })()}
                     </>
                   )}
-                  {(projection || projectionLoading || projectionError) && (
+                  {((visibleProjection && visibleProjection.length > 0) || projectionLoading || projectionError) && (
                     <div className="mt-3 pt-3 border-t border-slate-200 dark:border-gray-700">
                       <p className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                         <Gauge className="w-3.5 h-3.5" /> Proyección de impacto
+                        {isZoneActive && <span className="font-medium normal-case tracking-normal text-slate-400">· sucursales de la zona</span>}
                       </p>
                       {projectionLoading && (
                         <p className="text-xs text-slate-400">Calculando proyección…</p>
@@ -1717,9 +1760,9 @@ export function CoberturaTab() {
                       {projectionError && (
                         <p className="text-xs text-rose-600 dark:text-rose-400">{projectionError}</p>
                       )}
-                      {projection && projection.length > 0 && (
+                      {visibleProjection && visibleProjection.length > 0 && (
                         <ul className="space-y-1.5">
-                          {projection.map((p) => (
+                          {visibleProjection.map((p) => (
                             <li
                               key={p.branch_id}
                               className="flex items-center justify-between gap-2 text-xs"
@@ -1773,7 +1816,9 @@ export function CoberturaTab() {
               }
             >
               <BranchSimulationPanel
-                branches={visiblePanelBranches}
+                branches={inZonePanelBranches}
+                outOfZoneBranches={outOfZonePanelBranches}
+                zoneActive={isZoneActive}
                 hiddenBranchIds={hiddenBranchIds}
                 closedBranchIds={closedBranchIds}
                 includeInactive={includeInactive}
@@ -2090,6 +2135,8 @@ interface PanelBranchItem {
 
 function BranchSimulationPanel({
   branches,
+  outOfZoneBranches,
+  zoneActive,
   hiddenBranchIds,
   closedBranchIds,
   includeInactive,
@@ -2098,7 +2145,12 @@ function BranchSimulationPanel({
   onToggleClose,
   onFlyTo,
 }: {
+  /** Sucursales dentro de la zona de análisis (o todas, si no hay zona activa). */
   branches: PanelBranchItem[];
+  /** Sucursales fuera de la zona — solo se usa cuando `zoneActive` es true. */
+  outOfZoneBranches: PanelBranchItem[];
+  /** true cuando hay una zona personalizada activa → se muestran dos listas. */
+  zoneActive: boolean;
   hiddenBranchIds: string[];
   closedBranchIds: string[];
   includeInactive: boolean;
@@ -2109,6 +2161,19 @@ function BranchSimulationPanel({
 }) {
   const closedCount = closedBranchIds.length;
   const hiddenCount = hiddenBranchIds.length;
+
+  const renderCard = (b: PanelBranchItem) => (
+    <BranchSimulationCard
+      key={b.id}
+      branch={b}
+      isHidden={hiddenBranchIds.includes(b.id)}
+      isClosed={closedBranchIds.includes(b.id)}
+      onToggleHide={() => onToggleHide(b.id)}
+      onToggleClose={() => onToggleClose(b.id)}
+      onFlyTo={b.lat != null && b.lng != null ? () => onFlyTo(b.lat!, b.lng!) : undefined}
+    />
+  );
+
   return (
     <div className="space-y-3">
       {/* Toggle includeInactive */}
@@ -2124,22 +2189,34 @@ function BranchSimulationPanel({
         </span>
       </label>
 
-      {branches.length === 0 ? (
+      {branches.length === 0 && outOfZoneBranches.length === 0 ? (
         <p className="text-sm text-slate-400">No hay sucursales disponibles.</p>
+      ) : zoneActive ? (
+        <>
+          {/* Dentro de la zona */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              En la zona de análisis ({branches.length})
+            </p>
+            {branches.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">Ninguna sucursal cae dentro de la zona.</p>
+            ) : (
+              <ul className="space-y-2">{branches.map(renderCard)}</ul>
+            )}
+          </div>
+
+          {/* Fuera de la zona */}
+          {outOfZoneBranches.length > 0 && (
+            <div className="space-y-2 pt-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                Fuera de la zona ({outOfZoneBranches.length})
+              </p>
+              <ul className="space-y-2">{outOfZoneBranches.map(renderCard)}</ul>
+            </div>
+          )}
+        </>
       ) : (
-        <ul className="space-y-2">
-          {branches.map((b) => (
-            <BranchSimulationCard
-              key={b.id}
-              branch={b}
-              isHidden={hiddenBranchIds.includes(b.id)}
-              isClosed={closedBranchIds.includes(b.id)}
-              onToggleHide={() => onToggleHide(b.id)}
-              onToggleClose={() => onToggleClose(b.id)}
-              onFlyTo={b.lat != null && b.lng != null ? () => onFlyTo(b.lat!, b.lng!) : undefined}
-            />
-          ))}
-        </ul>
+        <ul className="space-y-2">{branches.map(renderCard)}</ul>
       )}
 
       {(closedCount > 0 || hiddenCount > 0) && (

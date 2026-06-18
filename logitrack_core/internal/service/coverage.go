@@ -587,6 +587,27 @@ func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCe
 		log.Printf("[MathSugg] computeTierraFertil → %d contours", len(tierraFertil))
 		otherCellsGlobal := projectCellsLocal(coverageCells, globalProj)
 		mathSuggestions = computeMathematicalSuggestions(tierraFertil, branchSites, radiusKm, globalProj, otherCellsGlobal, maxSuggestions)
+
+		// Cross-source + cross-fragment de-overlap: the per-cell SuggestedLocations
+		// and the global MathematicalSuggestions are two independent
+		// Pole-of-Inaccessibility passes over the *same* uncovered void, so they
+		// can land near-on-top of each other (a math suggestion whose coverage
+		// circle heavily overlaps a per-cell one barely adds new terrain). Drop
+		// any math suggestion within minSeparationKm of a per-cell suggestion or
+		// of an already-kept math suggestion. Per-cell suggestions win ties — they
+		// carry concrete branch attribution ("descomprimirá las zonas de…").
+		if len(mathSuggestions) > 0 {
+			kept := make([]model.SuggestedLocation, 0, len(mathSuggestions))
+			for _, ms := range mathSuggestions {
+				if tooCloseToExisting(ms, suggestions, minSeparationKm) || tooCloseToExisting(ms, kept, minSeparationKm) {
+					log.Printf("[MathSugg] de-overlap: dropping suggestion at (%.4f, %.4f) — within %.0f km of an existing suggestion", ms.Lat, ms.Lng, minSeparationKm)
+					continue
+				}
+				kept = append(kept, ms)
+			}
+			mathSuggestions = kept
+		}
+
 		if snapToCities && len(mathSuggestions) > 0 {
 			log.Printf("[MathSugg] snap: starting snapMathSuggestionsInPlace for %d suggestions (searchRadius≤%.0fkm)", len(mathSuggestions), math.Min(radiusKm/2, snapToCityMaxRadiusKm))
 			s.snapMathSuggestionsInPlace(mathSuggestions, radiusKm, 0, dangerousZones)
