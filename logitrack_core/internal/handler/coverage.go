@@ -58,16 +58,22 @@ func (h *CoverageHandler) BranchForPoint(c *gin.Context) {
 	})
 }
 
-// Diagnose evaluates a simulated new-branch coverage radius (area_km2 query
-// param, in km²) against every branch's real post-clip Voronoi area, for the
-// coverage simulator panel's "Confirmar y Diagnosticar" action.
+// Diagnose evaluates a simulated new-branch coverage radius against every
+// branch's real post-clip Voronoi area, for the coverage simulator panel's
+// "Confirmar y Diagnosticar" action. Accepts a JSON body (DiagnoseRequest):
+// area_km2 (required), excluded_branch_ids (optional array), and
+// custom_bounding_area (optional polygon — clips Voronoi to the drawn region).
 func (h *CoverageHandler) Diagnose(c *gin.Context) {
-	areaKm2, err := strconv.ParseFloat(c.Query("area_km2"), 64)
-	if err != nil || areaKm2 <= 0 {
+	var req model.DiagnoseRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.AreaKm2 <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "area_km2 es requerido y debe ser un número positivo"})
 		return
 	}
-	c.JSON(http.StatusOK, h.svc.Diagnose(areaKm2))
+	if len(req.ExcludedBranchIDs) == 0 {
+		c.JSON(http.StatusOK, h.svc.Diagnose(req.AreaKm2, req.CustomBoundingArea, req.DangerousZones, req.IncludeInactive, req.MaxSuggestions, req.SnapToCities))
+	} else {
+		c.JSON(http.StatusOK, h.svc.DiagnoseExcluding(req.AreaKm2, req.ExcludedBranchIDs, req.CustomBoundingArea, req.DangerousZones, req.IncludeInactive, req.MaxSuggestions, req.SnapToCities))
+	}
 }
 
 // SnapToCity resolves a batch of geometric suggested-location points (from a
@@ -83,7 +89,7 @@ func (h *CoverageHandler) SnapToCity(c *gin.Context) {
 		return
 	}
 
-	results := h.svc.SnapToCities(req.Points, req.RadiusKm)
+	results := h.svc.SnapToCities(req.Points, req.RadiusKm, req.MinPopulation, req.BlacklistedCities)
 
 	c.JSON(http.StatusOK, model.SnapToCityResponse{Results: results})
 }
@@ -100,5 +106,5 @@ func (h *CoverageHandler) Project(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, h.svc.ProjectScenario(req.AreaKm2, req.Suggestions))
+	c.JSON(http.StatusOK, h.svc.ProjectScenario(req.AreaKm2, req.Suggestions, req.CustomBoundingArea, req.DangerousZones))
 }

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"log"
 	"math"
 	"net/http"
 	"sort"
@@ -57,12 +58,13 @@ const (
 	// max(simulated coverage radius, this constant) — see dedupeSuggestion.
 	coverageSuggestionMinSeparationKm = 150.0
 
-	// coverageSuggestionGridSteps is the resolution of the grid-search
-	// ("Pole of Inaccessibility") heuristic used to place a new-branch
-	// suggestion inside an uncovered fragment: a
-	// (coverageSuggestionGridSteps+1) x (coverageSuggestionGridSteps+1) grid
-	// over the fragment's bounding box.
-	coverageSuggestionGridSteps = 30
+	// coverageSuggestionGridSteps controls the Pole-of-Inaccessibility grid
+	// density: a (N+1)×(N+1) mesh over the fragment's km-space bounding box.
+	// The mesh adapts automatically to any polygon size because it divides the
+	// bounding box into equal steps — 50 steps gives ≈ 2 600 candidate points
+	// per fragment, enough to resolve slivers at any scale from a 5 km²
+	// neighbourhood to the entire national territory.
+	coverageSuggestionGridSteps = 50
 
 	// coverageSuggestionMaxPerFragment caps how many suggestions the
 	// iterative greedy-covering loop (fillFragmentIteratively) can place
@@ -70,6 +72,21 @@ const (
 	// a safety bound against pathological/degenerate geometry producing an
 	// unbounded loop.
 	coverageSuggestionMaxPerFragment = 4
+
+	// coverageSuggestionSeparationFactor is the minimum allowed distance
+	// between two suggestions placed in the same iterative run, expressed as
+	// a multiple of radiusKm. A value of 1.5 means that if a new candidate is
+	// within 1.5× the coverage radius of an already-placed suggestion, it is
+	// rejected during the grid search — preventing heavy overlap (clustering).
+	coverageSuggestionSeparationFactor = 1.5
+
+	// coverageSuggestionClipRadiusScale expands the coverage circle used for
+	// the DIFFERENCE operation (subtracting each placed branch from the
+	// remaining fragment) by this factor. The expansion eliminates micro-sliver
+	// residuals that polyclip leaves when the subtraction circle matches the
+	// scoring circle exactly, preventing the next iteration from obsessing over
+	// pixel-scale leftovers.
+	coverageSuggestionClipRadiusScale = 1.05
 )
 
 // coverageConfigProvider supplies the configurable coverage threshold. Both
@@ -366,26 +383,86 @@ func (s *CoverageService) store(d *model.CoverageDiagram) {
 	s.mu.Unlock()
 }
 
+// listBranches returns the branch list for simulation, optionally including
+// inactive ("inactivo" / "fuera_de_servicio") branches.
+func (s *CoverageService) listBranches(includeInactive bool) []model.Branch {
+	if includeInactive {
+		return s.branchRepo.List()
+	}
+	return s.branchRepo.ListActive()
+}
+
 // Diagnose evaluates a hypothetical new-branch coverage radius — expressed as
 // an area in km², chosen via the frontend simulator slider — against every
 // branch's real, post-clip Voronoi area.
 //
-// The simulated radius is modelled as a circle centred on the branch site and
-// intersected with the cell's (already country-clipped) Voronoi polygon:
-// coveragePercentage = AreaIntersectada / cell.AreaKm2 * 100, where
-// AreaIntersectada is the portion of the simulated circle that actually falls
-// within this branch's jurisdiction. Using the raw circle area instead would
-// let the percentage exceed 100% whenever the circle spills over into a
-// neighbouring cell or the ocean — intersecting first guarantees
-// AreaIntersectada <= cell.AreaKm2.
+// customBoundary, when non-nil and at least 3 points, clips the Voronoi cells
+// against the drawn polygon instead of Argentina's national outline, so the
+// diagnosis is restricted to the user-drawn region (e.g. AMBA, a province).
+// A nil/empty slice uses the cached national-boundary diagram.
 //
-// A low percentage means the simulated radius would only cover a small
-// fraction of the branch's assigned territory, surfaced as a capacity gap
-// (crítico/moderado/leve) independent of the admin-configured
-// MaxCoverageAreaKm2 threshold used by the main diagram.
-func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationResult {
-	d := s.Diagram()
-	cells := make([]model.SimulationDiagnosis, 0, len(d.Cells))
+// dangerousZones is an optional list of exclusion polygons subtracted from the
+// boundary before Voronoi construction (see computeTierraFertil). When
+// non-empty the cached diagram cannot be reused and the Voronoi is rebuilt.
+func (s *CoverageService) Diagnose(simulatedAreaKm2 float64, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, includeInactive bool, maxSuggestions int, snapToCities bool) model.SimulationResult {
+	// Rebuild when inactive branches, a custom boundary, or dangerous zones are
+	// in play — the cached active-only national diagram cannot be reused.
+	if includeInactive || len(customBoundary) >= 3 || len(dangerousZones) > 0 {
+		branches := s.listBranches(includeInactive)
+		var sites []voronoiSite
+		for _, b := range branches {
+			if b.Latitude == nil || b.Longitude == nil {
+				continue
+			}
+			sites = append(sites, voronoiSite{
+				branchID:   b.ID,
+				branchName: b.Name,
+				province:   b.Province,
+				lat:        *b.Latitude,
+				lng:        *b.Longitude,
+			})
+		}
+		return s.diagnoseWithCells(simulatedAreaKm2, s.buildVoronoiCells(sites, customBoundary, dangerousZones), customBoundary, dangerousZones, maxSuggestions, snapToCities)
+	}
+	return s.diagnoseWithCells(simulatedAreaKm2, s.Diagram().Cells, nil, nil, maxSuggestions, snapToCities)
+}
+
+// DiagnoseExcluding is like Diagnose but recomputes the Voronoi diagram after
+// removing the listed branch IDs — the "Simulador de cierre de sucursales"
+// feature. An empty slice is equivalent to calling Diagnose directly.
+// customBoundary and dangerousZones follow the same semantics as in Diagnose.
+func (s *CoverageService) DiagnoseExcluding(simulatedAreaKm2 float64, excludedBranchIDs []string, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, includeInactive bool, maxSuggestions int, snapToCities bool) model.SimulationResult {
+	if len(excludedBranchIDs) == 0 {
+		return s.Diagnose(simulatedAreaKm2, customBoundary, dangerousZones, includeInactive, maxSuggestions, snapToCities)
+	}
+	excluded := make(map[string]bool, len(excludedBranchIDs))
+	for _, id := range excludedBranchIDs {
+		excluded[id] = true
+	}
+	branches := s.listBranches(includeInactive)
+	var sites []voronoiSite
+	for _, b := range branches {
+		if b.Latitude == nil || b.Longitude == nil || excluded[b.ID] {
+			continue
+		}
+		sites = append(sites, voronoiSite{
+			branchID:   b.ID,
+			branchName: b.Name,
+			province:   b.Province,
+			lat:        *b.Latitude,
+			lng:        *b.Longitude,
+		})
+	}
+	return s.diagnoseWithCells(simulatedAreaKm2, s.buildVoronoiCells(sites, customBoundary, dangerousZones), customBoundary, dangerousZones, maxSuggestions, snapToCities)
+}
+
+// diagnoseWithCells is the core diagnosis logic shared by Diagnose and
+// DiagnoseExcluding. coverageCells is the set of Voronoi cells to evaluate —
+// either the cached diagram (Diagnose) or a freshly-computed filtered set
+// (DiagnoseExcluding). customBoundary and dangerousZones are forwarded to
+// computeTierraFertil for per-cell clipping and for the global void search.
+func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCells []model.CoverageCell, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, maxSuggestions int, snapToCities bool) model.SimulationResult {
+	diagCells := make([]model.SimulationDiagnosis, 0, len(coverageCells))
 	suggestions := make([]model.SuggestedLocation, 0)
 
 	// The circle is the same in every cell's site-centred projection (always
@@ -407,12 +484,12 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 
 	// All active branch sites, used by the grid-search heuristic below to
 	// push suggestions away from already-covered areas (see bestInteriorPoint).
-	branchSites := make([]model.LatLng, len(d.Cells))
-	for i, c := range d.Cells {
+	branchSites := make([]model.LatLng, len(coverageCells))
+	for i, c := range coverageCells {
 		branchSites[i] = c.Site
 	}
 
-	for _, c := range d.Cells {
+	for _, c := range coverageCells {
 		var intersectedAreaKm2 float64
 		var proj equirectProjector
 		var cellPoly polyclip.Polygon
@@ -432,8 +509,8 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 			intersection := fromPolyclip(cellPoly.Construct(polyclip.INTERSECTION, circle))
 			intersectedAreaKm2 = sumArea(intersection)
 
-			countryLocal = projectCountry(geo.ArgentinaContour(), proj)
-			otherCellsLocal = projectCellsLocal(d.Cells, proj)
+			countryLocal = computeTierraFertil(customBoundary, dangerousZones, proj)
+			otherCellsLocal = projectCellsLocal(coverageCells, proj)
 		}
 
 		var pct float64
@@ -452,7 +529,7 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 		if deficit < 0 {
 			deficit = 0
 		}
-		cells = append(cells, model.SimulationDiagnosis{
+		diagCells = append(diagCells, model.SimulationDiagnosis{
 			BranchID:           c.BranchID,
 			BranchName:         c.BranchName,
 			VoronoiAreaKm2:     c.AreaKm2,
@@ -469,10 +546,80 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 			}
 		}
 	}
+	// MathematicalSuggestions: Pole-of-Inaccessibility from the global uncovered
+	// void (Tierra Fértil − ∪ all coverage circles).
+	//
+	// Reference point for the global projector (in order of preference):
+	//   1. Centroid of existing branch sites (most accurate when branches exist).
+	//   2. Centroid of the custom boundary polygon (0-branch case).
+	//   3. Approximate centre of Argentina (no boundary, no branches).
+	var mathSuggestions []model.SuggestedLocation
+	if simulatedAreaKm2 > 0 {
+		var refLat, refLng float64
+		var projSource string
+		switch {
+		case len(coverageCells) > 0:
+			for _, c := range coverageCells {
+				refLat += c.Site.Lat
+				refLng += c.Site.Lng
+			}
+			refLat /= float64(len(coverageCells))
+			refLng /= float64(len(coverageCells))
+			projSource = "centroid of coverageCells"
+		case len(customBoundary) >= 3:
+			for _, v := range customBoundary {
+				refLat += v.Lat
+				refLng += v.Lng
+			}
+			refLat /= float64(len(customBoundary))
+			refLng /= float64(len(customBoundary))
+			projSource = "centroid of customBoundary"
+		default:
+			refLat, refLng = -38.0, -63.5
+			projSource = "Argentina default"
+		}
+		globalProj := newProjector(refLat, refLng)
+		radiusKm := math.Sqrt(simulatedAreaKm2 / math.Pi)
+		log.Printf("[MathSugg] diagnoseWithCells: cells=%d branchSites=%d simulatedAreaKm2=%.0f radiusKm=%.3f boundary=%d pts dangerousZones=%d",
+			len(coverageCells), len(branchSites), simulatedAreaKm2, radiusKm, len(customBoundary), len(dangerousZones))
+		log.Printf("[MathSugg] projector: ref=(%.4f, %.4f) source=%q", refLat, refLng, projSource)
+		tierraFertil := computeTierraFertil(customBoundary, dangerousZones, globalProj)
+		log.Printf("[MathSugg] computeTierraFertil → %d contours", len(tierraFertil))
+		otherCellsGlobal := projectCellsLocal(coverageCells, globalProj)
+		mathSuggestions = computeMathematicalSuggestions(tierraFertil, branchSites, radiusKm, globalProj, otherCellsGlobal, maxSuggestions)
+
+		// Cross-source + cross-fragment de-overlap: the per-cell SuggestedLocations
+		// and the global MathematicalSuggestions are two independent
+		// Pole-of-Inaccessibility passes over the *same* uncovered void, so they
+		// can land near-on-top of each other (a math suggestion whose coverage
+		// circle heavily overlaps a per-cell one barely adds new terrain). Drop
+		// any math suggestion within minSeparationKm of a per-cell suggestion or
+		// of an already-kept math suggestion. Per-cell suggestions win ties — they
+		// carry concrete branch attribution ("descomprimirá las zonas de…").
+		if len(mathSuggestions) > 0 {
+			kept := make([]model.SuggestedLocation, 0, len(mathSuggestions))
+			for _, ms := range mathSuggestions {
+				if tooCloseToExisting(ms, suggestions, minSeparationKm) || tooCloseToExisting(ms, kept, minSeparationKm) {
+					log.Printf("[MathSugg] de-overlap: dropping suggestion at (%.4f, %.4f) — within %.0f km of an existing suggestion", ms.Lat, ms.Lng, minSeparationKm)
+					continue
+				}
+				kept = append(kept, ms)
+			}
+			mathSuggestions = kept
+		}
+
+		if snapToCities && len(mathSuggestions) > 0 {
+			log.Printf("[MathSugg] snap: starting snapMathSuggestionsInPlace for %d suggestions (searchRadius≤%.0fkm)", len(mathSuggestions), math.Min(radiusKm/2, snapToCityMaxRadiusKm))
+			s.snapMathSuggestionsInPlace(mathSuggestions, radiusKm, 0, dangerousZones)
+		}
+	}
+
 	return model.SimulationResult{
-		SimulatedAreaKm2:   simulatedAreaKm2,
-		Cells:              cells,
-		SuggestedLocations: suggestions,
+		SimulatedAreaKm2:        simulatedAreaKm2,
+		Cells:                   diagCells,
+		SuggestedLocations:      suggestions,
+		MathematicalSuggestions: mathSuggestions,
+		DiagramCells:            coverageCells,
 	}
 }
 
@@ -489,11 +636,11 @@ type voronoiSite struct {
 
 // buildVoronoiCells runs the same Voronoi-diagram + country-clip pipeline as
 // Refresh, but over an arbitrary set of sites instead of the active branch
-// set — used by ProjectScenario to compute "what if" cells for a network that
-// also includes candidate new-branch locations. Returns one CoverageCell per
-// site, in the same order as sites. Cells carry BranchID/BranchName/Province
-// copied from the corresponding site (empty for suggestion sites).
-func (s *CoverageService) buildVoronoiCells(sites []voronoiSite) []model.CoverageCell {
+// set — used by DiagnoseExcluding and ProjectScenario. Returns one CoverageCell
+// per site, in the same order as sites. customBoundary replaces Argentina's
+// national outline as the clipping polygon when non-nil (≥3 points).
+// dangerousZones are subtracted from the clipping polygon via computeTierraFertil.
+func (s *CoverageService) buildVoronoiCells(sites []voronoiSite, customBoundary []model.LatLng, dangerousZones [][]model.LatLng) []model.CoverageCell {
 	if len(sites) == 0 {
 		return nil
 	}
@@ -520,7 +667,7 @@ func (s *CoverageService) buildVoronoiCells(sites []voronoiSite) []model.Coverag
 	}
 	cells := geometry.VoronoiCells(pts, bbox)
 
-	country := projectCountry(geo.ArgentinaContour(), proj)
+	country := computeTierraFertil(customBoundary, dangerousZones, proj)
 
 	out := make([]model.CoverageCell, len(cells))
 	for i, cell := range cells {
@@ -574,7 +721,11 @@ func coveragePercentageForCell(cell model.CoverageCell, radiusKm float64) float6
 // current coverage percentage (from Diagnose) alongside the projected one in
 // the combined network — both using the same simulatedAreaKm2 coverage
 // circle.
-func (s *CoverageService) ProjectScenario(simulatedAreaKm2 float64, suggestions []model.LatLng) model.ProjectionResult {
+// customBoundary and dangerousZones scope the projection to a region: when set,
+// both the current and the projected Voronoi cells are clipped against the
+// boundary (minus the dangerous zones), so the percentages reflect that zone
+// instead of the national territory. Nil/empty = national scope.
+func (s *CoverageService) ProjectScenario(simulatedAreaKm2 float64, suggestions []model.LatLng, customBoundary []model.LatLng, dangerousZones [][]model.LatLng) model.ProjectionResult {
 	branches := s.branchRepo.ListActive()
 
 	var sites []voronoiSite
@@ -606,13 +757,13 @@ func (s *CoverageService) ProjectScenario(simulatedAreaKm2 float64, suggestions 
 		radiusKm = math.Sqrt(simulatedAreaKm2 / math.Pi)
 	}
 
-	current := s.Diagnose(simulatedAreaKm2)
+	current := s.Diagnose(simulatedAreaKm2, customBoundary, dangerousZones, false, 0, false)
 	currentByID := make(map[string]float64, len(current.Cells))
 	for _, c := range current.Cells {
 		currentByID[c.BranchID] = c.CoveragePercentage
 	}
 
-	newCells := s.buildVoronoiCells(sites)
+	newCells := s.buildVoronoiCells(sites, customBoundary, dangerousZones)
 	branchProjections := make([]model.BranchProjection, 0, len(branches))
 	for _, cell := range newCells {
 		if cell.BranchID == "" {
@@ -661,7 +812,7 @@ func suggestLocationsFromDifference(cell model.CoverageCell, proj equirectProjec
 
 	var out []model.SuggestedLocation
 	for _, frag := range remainder {
-		out = append(out, fillFragmentIteratively(cell, proj, frag, radiusKm, &sites, countryLocal, otherCells)...)
+		out = append(out, fillFragmentIteratively(cell, proj, frag, radiusKm, &sites, countryLocal, otherCells, coverageSuggestionMinFragmentAreaKm2)...)
 	}
 	return out
 }
@@ -683,28 +834,34 @@ func suggestLocationsFromDifference(cell model.CoverageCell, proj equirectProjec
 //     the gap would now be covered by the new branch" — and continues with
 //     the largest remaining sub-fragment.
 //
-// Stops when the (sub-)fragment drops below
-// coverageSuggestionMinFragmentAreaKm2, when DIFFERENCE leaves nothing, or
-// after coverageSuggestionMaxPerFragment iterations (safety bound).
-func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, frag geometry.Polygon, radiusKm float64, sites *[]geometry.Point, countryLocal polyclip.Polygon, otherCells []namedCellPoly) []model.SuggestedLocation {
+// Stops when the (sub-)fragment drops below minFragAreaKm2, when DIFFERENCE
+// leaves nothing, or after coverageSuggestionMaxPerFragment iterations (safety
+// bound). minFragAreaKm2 should be coverageSuggestionMinFragmentAreaKm2 for
+// per-cell national-scale suggestions, or an adaptive smaller value (see
+// computeMathematicalSuggestions) for small custom zones.
+func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, frag geometry.Polygon, radiusKm float64, sites *[]geometry.Point, countryLocal polyclip.Polygon, otherCells []namedCellPoly, minFragAreaKm2 float64) []model.SuggestedLocation {
 	var out []model.SuggestedLocation
 	current := frag
+	// addedPoints tracks suggestions placed during THIS run so bestInteriorPoint
+	// can reject candidates that would cluster too close to them.
+	var addedPoints []geometry.Point
 
 	for i := 0; i < coverageSuggestionMaxPerFragment; i++ {
 		area := current.Area()
-		if area < coverageSuggestionMinFragmentAreaKm2 {
+		if area < minFragAreaKm2 {
 			break
 		}
 
-		point, ok := bestInteriorPoint(current, *sites, radiusKm, countryLocal)
+		point, ok := bestInteriorPoint(current, *sites, radiusKm, countryLocal, addedPoints)
 		if !ok {
 			// Degenerate fragment (e.g. a sliver thinner than the grid
 			// resolution, with no grid point strictly inside): fall back to
 			// the vertex farthest from the branch site, and stop — the
 			// circle-subtraction step below assumes an interior point.
-			actualAddedKm2, affected := suggestionImpact(farthestVertex(current), radiusKm, countryLocal, otherCells)
+			fallback := farthestVertex(current)
+			actualAddedKm2, affected := suggestionImpact(fallback, radiusKm, countryLocal, otherCells)
 			out = append(out, model.SuggestedLocation{
-				LatLng:           proj.unproject(farthestVertex(current)),
+				LatLng:           proj.unproject(fallback),
 				BranchID:         cell.BranchID,
 				BranchName:       cell.BranchName,
 				GapAreaKm2:       area,
@@ -713,6 +870,16 @@ func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, fr
 			})
 			break
 		}
+
+		// Guard: polyclip or projection arithmetic occasionally produces NaN
+		// coordinates when chained boolean operations accumulate float64 error.
+		// Rather than propagating poison values, skip and stop.
+		if math.IsNaN(point.X) || math.IsNaN(point.Y) || math.IsInf(point.X, 0) || math.IsInf(point.Y, 0) {
+			log.Printf("[MathSugg] fillFragmentIteratively[%d]: invalid point (NaN/Inf) coordinates — breaking", i)
+			break
+		}
+
+		log.Printf("[MathSugg] fillFragmentIteratively[%d]: area=%.2f km² point=(%.1f, %.1f)", i, area, point.X, point.Y)
 
 		actualAddedKm2, affected := suggestionImpact(point, radiusKm, countryLocal, otherCells)
 		out = append(out, model.SuggestedLocation{
@@ -724,24 +891,40 @@ func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, fr
 			AffectedBranches: affected,
 		})
 
-		// Update 1: future grid searches (this fragment's remaining
-		// iterations, later fragments, and other cells' suggestions via the
-		// shared slice) repel from this new suggestion too.
+		// Update 1: track for (a) global repulsion across all fragments via
+		// the shared sites slice, and (b) local proximity rejection inside
+		// this fragment's remaining iterations via addedPoints.
 		*sites = append(*sites, point)
+		addedPoints = append(addedPoints, point)
 
 		if radiusKm <= 0 {
 			break
 		}
 
-		// Update 2: model this new branch's own coverage circle and subtract
-		// it from the current fragment — the part of the gap it would now
-		// cover.
-		coverCircle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), point))
-		remainder := fromPolyclip(toPolyclip(current).Construct(polyclip.DIFFERENCE, coverCircle))
+		// Update 2: subtract a slightly enlarged circle (×coverageSuggestionClipRadiusScale)
+		// from the current fragment. The expansion cleans up micro-sliver
+		// residuals that polyclip leaves when using the exact scoring radius,
+		// preventing subsequent iterations from fixating on pixel-scale leftovers.
+		coverCircle := toPolyclip(translatePolygon(circlePolygon(radiusKm*coverageSuggestionClipRadiusScale, coverageSuggestionCircleVertices), point))
+		remainderPoly := safePolyclipOp(func() polyclip.Polygon {
+			return toPolyclip(current).Construct(polyclip.DIFFERENCE, coverCircle)
+		})
+		remainder := fromPolyclip(remainderPoly)
 		if len(remainder) == 0 {
 			break
 		}
-		current = largestFragment(remainder)
+		next := largestFragment(remainder)
+		// Area-shrink guard: if the DIFFERENCE removed less than 0.1 km²,
+		// polyclip returned degenerate/identical geometry — stop to avoid
+		// an infinite loop. A ratio-based guard (e.g. 1%) would fire on
+		// national-scale fragments where a 44 km circle shrinks a 1.2 M km²
+		// void by only ~0.36%, which is a genuine reduction.
+		if area-next.Area() < 0.1 {
+			log.Printf("[MathSugg] fillFragmentIteratively[%d]: fragment didn't shrink (%.2f→%.2f km²) — breaking",
+				i, area, next.Area())
+			break
+		}
+		current = next
 	}
 	return out
 }
@@ -810,8 +993,43 @@ const coverageInteriorPointCandidates = 10
 //
 // Returns ok=false if no grid point falls inside frag (a sliver thinner than
 // the grid resolution); callers should fall back to a vertex-based heuristic.
-func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm float64, countryLocal polyclip.Polygon) (geometry.Point, bool) {
+func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm float64, countryLocal polyclip.Polygon, addedPoints []geometry.Point) (geometry.Point, bool) {
 	bbox := boundingBox(frag)
+	stepX := (bbox.MaxX - bbox.MinX) / float64(coverageSuggestionGridSteps)
+	stepY := (bbox.MaxY - bbox.MinY) / float64(coverageSuggestionGridSteps)
+	log.Printf("[MathSugg] bestInteriorPoint: bbox X[%.1f→%.1f] Y[%.1f→%.1f] stepX=%.3f stepY=%.3f sites=%d radiusKm=%.3f frag_vertices=%d",
+		bbox.MinX, bbox.MaxX, bbox.MinY, bbox.MaxY, stepX, stepY, len(sites), radiusKm, len(frag))
+
+	// Degenerate bbox guard: if the fragment collapses to a line or point,
+	// no grid point can land strictly inside it.
+	if bbox.MaxX-bbox.MinX < 1e-9 || bbox.MaxY-bbox.MinY < 1e-9 {
+		log.Printf("[MathSugg] bestInteriorPoint: degenerate bbox (width=%.2e height=%.2e) — returning false",
+			bbox.MaxX-bbox.MinX, bbox.MaxY-bbox.MinY)
+		return geometry.Point{}, false
+	}
+
+	// Polyclip can accumulate vertices on the outer ring after repeated
+	// DIFFERENCE operations even when the clipping circle does not intersect
+	// the fragment. An O(n_vertices) ray-cast called 2601 times becomes the
+	// bottleneck when n_vertices grows into the hundreds or thousands.
+	//
+	// Mitigation: if the fragment has more than coverageMaxContainsVertices
+	// vertices, build a decimated copy (every k-th vertex) for the grid's
+	// Contains check. We keep the full polygon for Pass 2 (usefulCircleArea),
+	// which uses a polyclip INTERSECTION rather than Contains, so precision
+	// is preserved where it matters.
+	const coverageMaxContainsVertices = 100
+	fragForContains := frag
+	if len(frag) > coverageMaxContainsVertices {
+		step := (len(frag) + coverageMaxContainsVertices - 1) / coverageMaxContainsVertices
+		simplified := make(geometry.Polygon, 0, coverageMaxContainsVertices)
+		for k := 0; k < len(frag); k += step {
+			simplified = append(simplified, frag[k])
+		}
+		fragForContains = simplified
+		log.Printf("[MathSugg] bestInteriorPoint: frag decimated %d→%d vertices for grid Contains",
+			len(frag), len(fragForContains))
+	}
 
 	type candidate struct {
 		point geometry.Point
@@ -824,13 +1042,63 @@ func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm f
 		for j := 0; j <= coverageSuggestionGridSteps; j++ {
 			y := bbox.MinY + (bbox.MaxY-bbox.MinY)*float64(j)/float64(coverageSuggestionGridSteps)
 			pt := geometry.Point{X: x, Y: y}
-			if !frag.Contains(pt) {
+			if !fragForContains.Contains(pt) {
 				continue
 			}
-			candidates = append(candidates, candidate{point: pt, dist2: nearestSiteDist2(pt, sites)})
+			// Proximity rejection: discard any candidate within
+			// radiusKm×coverageSuggestionSeparationFactor of a suggestion
+			// already placed in this iterative run. This prevents the grid
+			// from proposing a point whose coverage circle would heavily
+			// overlap the previous one (clustering).
+			if radiusKm > 0 {
+				minSep := radiusKm * coverageSuggestionSeparationFactor
+				tooClose := false
+				for _, ap := range addedPoints {
+					dx := pt.X - ap.X
+					dy := pt.Y - ap.Y
+					if dx*dx+dy*dy < minSep*minSep {
+						tooClose = true
+						break
+					}
+				}
+				if tooClose {
+					continue
+				}
+			}
+			// Virgin zone (no branches): score by squared distance to the
+			// polygon boundary — maximising this gives the true geometric
+			// Pole of Inaccessibility (Chebyshev centre), the point deepest
+			// inside the zone away from all edges.
+			// With branches: score by distance to nearest branch site, so the
+			// suggestion lands in the most under-served part of the gap.
+			var score float64
+			if len(sites) == 0 {
+				score = distToPolygonBoundary2(pt, frag)
+			} else {
+				score = nearestSiteDist2(pt, sites)
+			}
+			candidates = append(candidates, candidate{point: pt, dist2: score})
 		}
 	}
+	log.Printf("[MathSugg] bestInteriorPoint: grid %dx%d → %d interior candidates",
+		coverageSuggestionGridSteps+1, coverageSuggestionGridSteps+1, len(candidates))
 	if len(candidates) == 0 {
+		log.Printf("[MathSugg] bestInteriorPoint: NONE — sliver/degenerate fragment, falling back to farthestVertex")
+		return geometry.Point{}, false
+	}
+
+	// Filter NaN scores before sorting: sort.Slice's total-order requirement
+	// is violated by NaN (a > NaN == false for any a), which can corrupt the
+	// sort output in pathological cases with degenerate projected geometry.
+	clean := candidates[:0]
+	for _, c := range candidates {
+		if !math.IsNaN(c.dist2) {
+			clean = append(clean, c)
+		}
+	}
+	candidates = clean
+	if len(candidates) == 0 {
+		log.Printf("[MathSugg] bestInteriorPoint: all candidates had NaN score — returning false")
 		return geometry.Point{}, false
 	}
 
@@ -840,6 +1108,8 @@ func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm f
 	}
 
 	if radiusKm <= 0 {
+		log.Printf("[MathSugg] bestInteriorPoint: radiusKm=0, returning first candidate (%.1f, %.1f)",
+			candidates[0].point.X, candidates[0].point.Y)
 		return candidates[0].point, true
 	}
 
@@ -852,7 +1122,23 @@ func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm f
 			bestUsefulArea = area
 		}
 	}
+	log.Printf("[MathSugg] bestInteriorPoint: BEST (%.1f, %.1f) score=%.1f usefulArea=%.2f km²",
+		best.point.X, best.point.Y, best.dist2, bestUsefulArea)
 	return best.point, true
+}
+
+// safePolyclipOp executes a polyclip boolean operation safely: if the library
+// panics (which can happen on degenerate geometry from chained DIFFERENCE ops),
+// the panic is recovered and an empty polygon is returned. This prevents a
+// single bad geometry from crashing the server goroutine.
+func safePolyclipOp(fn func() polyclip.Polygon) (result polyclip.Polygon) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[MathSugg] PANIC in polyclip op: %v — returning empty result", r)
+			result = polyclip.Polygon{}
+		}
+	}()
+	return fn()
 }
 
 // usefulCircleArea returns the area (km²) of a simulated coverage circle of
@@ -861,7 +1147,8 @@ func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm f
 // circle that would actually contribute coverage on national territory.
 func usefulCircleArea(point geometry.Point, radiusKm float64, countryLocal polyclip.Polygon) float64 {
 	circle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), point))
-	return sumArea(fromPolyclip(circle.Construct(polyclip.INTERSECTION, countryLocal)))
+	result := safePolyclipOp(func() polyclip.Polygon { return circle.Construct(polyclip.INTERSECTION, countryLocal) })
+	return sumArea(fromPolyclip(result))
 }
 
 // boundingBox returns the axis-aligned bounding box of poly's vertices.
@@ -877,8 +1164,9 @@ func boundingBox(poly geometry.Polygon) geometry.BBox {
 }
 
 // nearestSiteDist2 returns the squared distance from pt to the nearest of
-// sites. An empty sites slice (no branches at all) scores every candidate
-// equally via +Inf, so the grid search degenerates to "any interior point".
+// sites. Returns +Inf for an empty sites slice; bestInteriorPoint dispatches
+// to distToPolygonBoundary2 before reaching this function in that case, so
+// +Inf acts only as a safety guard for unexpected callers.
 func nearestSiteDist2(pt geometry.Point, sites []geometry.Point) float64 {
 	if len(sites) == 0 {
 		return math.Inf(1)
@@ -890,6 +1178,43 @@ func nearestSiteDist2(pt geometry.Point, sites []geometry.Point) float64 {
 		}
 	}
 	return best
+}
+
+// distToPolygonBoundary2 returns the squared minimum distance from pt to the
+// nearest edge of poly. Used as the Pass-1 score for bestInteriorPoint in
+// "virgin zone" mode (no branch sites): the point that maximises this distance
+// is the true geometric Pole of Inaccessibility — the Chebyshev centre of the
+// polygon, as deep as possible from every boundary.
+func distToPolygonBoundary2(pt geometry.Point, poly geometry.Polygon) float64 {
+	n := len(poly)
+	if n < 2 {
+		return 0
+	}
+	min2 := math.Inf(1)
+	for i := 0; i < n; i++ {
+		a, b := poly[i], poly[(i+1)%n]
+		if d2 := pointToSegment2(pt, a, b); d2 < min2 {
+			min2 = d2
+		}
+	}
+	return min2
+}
+
+// pointToSegment2 returns the squared distance from pt to the line segment [a, b].
+func pointToSegment2(pt, a, b geometry.Point) float64 {
+	dx, dy := b.X-a.X, b.Y-a.Y
+	if dx == 0 && dy == 0 {
+		return geometry.Dist2(pt, a)
+	}
+	t := ((pt.X-a.X)*dx + (pt.Y-a.Y)*dy) / (dx*dx + dy*dy)
+	if t < 0 {
+		t = 0
+	} else if t > 1 {
+		t = 1
+	}
+	cx, cy := a.X+t*dx, a.Y+t*dy
+	ddx, ddy := pt.X-cx, pt.Y-cy
+	return ddx*ddx + ddy*ddy
 }
 
 // farthestVertex returns the vertex of poly with the greatest Euclidean
@@ -949,11 +1274,13 @@ func projectCellsLocal(cells []model.CoverageCell, proj equirectProjector) []nam
 func suggestionImpact(point geometry.Point, radiusKm float64, countryLocal polyclip.Polygon, cells []namedCellPoly) (float64, []string) {
 	circle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), point))
 
-	actualAddedKm2 := sumArea(fromPolyclip(circle.Construct(polyclip.INTERSECTION, countryLocal)))
+	country := safePolyclipOp(func() polyclip.Polygon { return circle.Construct(polyclip.INTERSECTION, countryLocal) })
+	actualAddedKm2 := sumArea(fromPolyclip(country))
 
 	affected := make([]string, 0)
 	for _, nc := range cells {
-		if sumArea(fromPolyclip(circle.Construct(polyclip.INTERSECTION, nc.poly))) > 0 {
+		cell := safePolyclipOp(func() polyclip.Polygon { return circle.Construct(polyclip.INTERSECTION, nc.poly) })
+		if sumArea(fromPolyclip(cell)) > 0 {
 			affected = append(affected, nc.name)
 		}
 	}

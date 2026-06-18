@@ -90,12 +90,26 @@ export interface SuggestedLocation {
   actual_added_km2: number;
   /** Sucursales existentes cuyas celdas de Voronoi se ven aliviadas por esta sugerencia. */
   affected_branches: string[];
+  /** Nombre de la ciudad real más cercana al punto matemático (solo en mathematical_suggestions). */
+  city_name?: string;
+  /** true cuando el servidor aterrizó esta sugerencia en una ciudad real (Phase 4). */
+  is_snapped?: boolean;
+  /** Población de la ciudad aterrizda; 0 cuando is_snapped=false. */
+  population?: number;
 }
 
 export interface SimulationResult {
   simulated_area_km2: number;
   cells: SimulationDiagnosis[];
   suggested_locations: SuggestedLocation[];
+  /** Sugerencias globales derivadas del vacío total (TierraFértil − ∪ círculos de cobertura).
+   *  El backend las devuelve separadas; el cliente las fusiona en `suggested_locations`
+   *  al recibir la respuesta para que todo el pipeline (mapa, snap-to-city, descarte) las
+   *  trate de forma homogénea. */
+  mathematical_suggestions?: SuggestedLocation[];
+  /** Voronoi cells with polygon geometry from this diagnosis run. Only present
+   *  when branches were excluded — the client uses them to update map shapes. */
+  diagram_cells?: CoverageCell[];
 }
 
 /**
@@ -110,6 +124,10 @@ export interface SnappedCity {
   lng: number;
   city_name: string;
   is_snapped: boolean;
+  /** Población efectiva de la ciudad elegida (tag OSM o fallback por tipo). 0 / ausente cuando is_snapped=false. */
+  population?: number;
+  /** Razón por la que no se encontró ciudad. "TIMEOUT" = error de red/API; "NO_RESULTS" = no hay ciudad en el radio. */
+  error_reason?: string;
   /**
    * Frontend-only (no proviene del backend): true cuando el usuario "pausó"
    * esta sugerencia para un análisis What-If sin descartarla. Las
@@ -153,10 +171,21 @@ export const coverageApi = {
         r.data.branch_id ? (r.data as BranchRecommendation) : null
       ),
 
-  /** Evalúa un radio de cobertura simulado (km²) contra el área Voronoi real de cada sucursal. */
-  diagnose: (areaKm2: number) =>
+  /**
+   * Evalúa un radio de cobertura simulado (km²) contra el área Voronoi real de cada sucursal.
+   * excludedBranchIds: IDs de sucursales a excluir del cálculo (simulación de cierre).
+   * customBoundingArea: polígono dibujado por el usuario — recorta el diagnóstico a esa zona.
+   */
+  diagnose: (areaKm2: number, excludedBranchIds?: string[], customBoundingArea?: LatLng[], includeInactive?: boolean, maxSuggestions?: number, snapToCities?: boolean) =>
     api
-      .get<SimulationResult>("/coverage/diagnose", { params: { area_km2: areaKm2 } })
+      .post<SimulationResult>("/coverage/diagnose", {
+        area_km2: areaKm2,
+        ...(excludedBranchIds?.length ? { excluded_branch_ids: excludedBranchIds } : {}),
+        ...(customBoundingArea?.length ? { custom_bounding_area: customBoundingArea } : {}),
+        ...(includeInactive ? { include_inactive: true } : {}),
+        ...(maxSuggestions && maxSuggestions > 0 ? { max_suggestions: maxSuggestions } : {}),
+        ...(snapToCities ? { snap_to_cities: true } : {}),
+      })
       .then((r) => r.data),
 
   /**
@@ -165,9 +194,18 @@ export const coverageApi = {
    * `radiusKm` (la zona de cobertura simulada). Devuelve un resultado por
    * punto, en el mismo orden.
    */
-  snapToCity: (points: LatLng[], radiusKm: number) =>
+  /**
+   * blacklistedCities: nombres de ciudades a excluir de la selección en este reintento
+   * (ciudades descartadas por el usuario en reintentos anteriores).
+   */
+  snapToCity: (points: LatLng[], radiusKm: number, minPopulation = 0, blacklistedCities?: string[]) =>
     api
-      .post<SnapToCityResponse>("/coverage/snap-to-city", { points, radius_km: radiusKm })
+      .post<SnapToCityResponse>("/coverage/snap-to-city", {
+        points,
+        radius_km: radiusKm,
+        min_population: minPopulation,
+        ...(blacklistedCities?.length ? { blacklisted_cities: blacklistedCities } : {}),
+      })
       .then((r) => r.data.results),
 
   /**
@@ -175,9 +213,13 @@ export const coverageApi = {
    * sugerencias activas y devuelve, para cada sucursal existente, su
    * cobertura actual vs. proyectada con el mismo área simulada.
    */
-  project: (areaKm2: number, suggestions: LatLng[]) =>
+  project: (areaKm2: number, suggestions: LatLng[], customBoundingArea?: LatLng[]) =>
     api
-      .post<ProjectionResult>("/coverage/project", { area_km2: areaKm2, suggestions })
+      .post<ProjectionResult>("/coverage/project", {
+        area_km2: areaKm2,
+        suggestions,
+        ...(customBoundingArea?.length ? { custom_bounding_area: customBoundingArea } : {}),
+      })
       .then((r) => r.data),
 };
 

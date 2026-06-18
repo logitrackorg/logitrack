@@ -25,7 +25,7 @@ func TestBestInteriorPoint_BalancesMultipleSites(t *testing.T) {
 	// each is the midpoint of the top edge, (5, 10).
 	sites := []geometry.Point{{X: 0, Y: 0}, {X: 10, Y: 0}}
 
-	pt, ok := bestInteriorPoint(square, sites, 0, nil)
+	pt, ok := bestInteriorPoint(square, sites, 0, nil, nil)
 	if !ok {
 		t.Fatal("expected an interior point to be found")
 	}
@@ -51,7 +51,7 @@ func TestBestInteriorPoint_ResultIsInsidePolygon(t *testing.T) {
 	}
 	sites := []geometry.Point{{X: -50, Y: -50}}
 
-	pt, ok := bestInteriorPoint(square, sites, 0, nil)
+	pt, ok := bestInteriorPoint(square, sites, 0, nil, nil)
 	if !ok {
 		t.Fatal("expected an interior point to be found")
 	}
@@ -65,7 +65,7 @@ func TestBestInteriorPoint_ResultIsInsidePolygon(t *testing.T) {
 // farthestVertex.
 func TestBestInteriorPoint_NoneForDegenerateFragment(t *testing.T) {
 	line := geometry.Polygon{{X: 0, Y: 0}, {X: 1, Y: 0}}
-	if _, ok := bestInteriorPoint(line, nil, 0, nil); ok {
+	if _, ok := bestInteriorPoint(line, nil, 0, nil, nil); ok {
 		t.Error("expected no interior point for a degenerate (zero-area) fragment")
 	}
 }
@@ -98,7 +98,7 @@ func TestBestInteriorPoint_PrefersUsefulAreaOverRawDistance(t *testing.T) {
 		{X: 0, Y: 50},
 	})
 
-	pt, ok := bestInteriorPoint(square, sites, 3, country)
+	pt, ok := bestInteriorPoint(square, sites, 3, country, nil)
 	if !ok {
 		t.Fatal("expected an interior point to be found")
 	}
