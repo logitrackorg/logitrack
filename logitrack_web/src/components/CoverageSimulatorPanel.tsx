@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import type { Region } from "../api/regions";
 
-export const SIM_AREA_MIN = 100;
+export const SIM_AREA_MIN = 50;
 export const SIM_AREA_MAX = 1_000_000;
 export const SIM_AREA_STEP = 1_000;
 export const SIM_AREA_DEFAULT = 500_000;
@@ -52,6 +52,11 @@ export function CoverageSimulatorPanel({
   onStartDrawNewRegion,
 }: CoverageSimulatorPanelProps) {
   const [minPopulation, setMinPopulation] = useState(MIN_POP_DEFAULT);
+
+  // Draft strings for the number inputs — decoupled from the controlled slider
+  // values so the user can type freely without React reverting partial input.
+  const [areaInput, setAreaInput] = useState(() => String(areaKm2));
+  const [popInput, setPopInput] = useState(() => String(MIN_POP_DEFAULT));
 
   const hasBoundary = customBoundaryPoints >= 3;
   const predefined = regions.filter((r) => r.type === "predefined");
@@ -133,11 +138,28 @@ export function CoverageSimulatorPanel({
         </div>
       )}
 
-      <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center justify-between gap-2 text-sm">
         <span className="text-slate-600 dark:text-slate-300">Radio de prueba</span>
-        <span className="font-mono font-semibold text-orange-600 dark:text-orange-400">
-          {areaKm2.toLocaleString("es-AR")} km²
-        </span>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min={SIM_AREA_MIN}
+            max={SIM_AREA_MAX}
+            step={SIM_AREA_STEP}
+            value={areaInput}
+            onChange={(e) => setAreaInput(e.target.value)}
+            onBlur={() => {
+              const raw = Number(areaInput);
+              const v = isNaN(raw) ? SIM_AREA_MIN : Math.max(SIM_AREA_MIN, Math.min(SIM_AREA_MAX, raw));
+              onAreaChange(v);
+              setAreaInput(String(v));
+            }}
+            disabled={disabled}
+            className="w-24 text-right text-xs font-mono font-semibold px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            aria-label="Área de cobertura simulada en kilómetros cuadrados"
+          />
+          <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0">km²</span>
+        </div>
       </div>
 
       <input
@@ -146,17 +168,40 @@ export function CoverageSimulatorPanel({
         max={SIM_AREA_MAX}
         step={SIM_AREA_STEP}
         value={areaKm2}
-        onChange={(e) => onAreaChange(Number(e.target.value))}
+        onChange={(e) => {
+          const v = Number(e.target.value);
+          onAreaChange(v);
+          setAreaInput(String(v));
+        }}
         disabled={disabled}
         className="w-full accent-orange-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         aria-label="Área de cobertura simulada en kilómetros cuadrados"
       />
 
-      <div className="flex items-center justify-between text-sm pt-1">
+      <div className="flex items-center justify-between gap-2 text-sm pt-1">
         <span className="text-slate-600 dark:text-slate-300">Población mínima requerida</span>
-        <span className="font-mono font-semibold text-slate-700 dark:text-slate-200">
-          {minPopulation === 0 ? "Sin filtro" : minPopulation.toLocaleString("es-AR")}
-        </span>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min={0}
+            max={MIN_POP_MAX}
+            step={MIN_POP_STEP}
+            value={popInput}
+            onChange={(e) => setPopInput(e.target.value)}
+            onBlur={() => {
+              const raw = Number(popInput);
+              const v = isNaN(raw) ? 0 : Math.max(0, Math.min(MIN_POP_MAX, raw));
+              setMinPopulation(v);
+              setPopInput(String(v));
+              onMinPopulationChange?.(v);
+            }}
+            disabled={disabled}
+            placeholder="0"
+            className="w-24 text-right text-xs font-mono font-semibold px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            aria-label="Población mínima requerida para ciudades candidatas"
+          />
+          <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0">hab.</span>
+        </div>
       </div>
 
       <input
@@ -168,6 +213,7 @@ export function CoverageSimulatorPanel({
         onChange={(e) => {
           const v = Number(e.target.value);
           setMinPopulation(v);
+          setPopInput(String(v));
           onMinPopulationChange?.(v);
         }}
         disabled={disabled}

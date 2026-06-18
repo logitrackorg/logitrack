@@ -56,3 +56,15 @@ func (r *postgresRegionRepository) CountByType(regionType string) (int, error) {
 	err := r.db.QueryRow(`SELECT COUNT(*) FROM regions WHERE type = $1`, regionType).Scan(&count)
 	return count, err
 }
+
+func (r *postgresRegionRepository) UpdateCoordinatesByName(name string, coords []model.LatLng) error {
+	coordsJSON, err := json.Marshal(coords)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Exec(
+		`UPDATE regions SET coordinates = $1 WHERE name = $2`,
+		coordsJSON, name,
+	)
+	return err
+}

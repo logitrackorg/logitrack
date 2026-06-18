@@ -7,4 +7,5 @@ type RegionRepository interface {
 	List() ([]model.Region, error)
 	Create(r model.Region) error
 	CountByType(regionType string) (int, error)
+	UpdateCoordinatesByName(name string, coords []model.LatLng) error
 }

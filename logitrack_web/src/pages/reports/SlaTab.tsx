@@ -1382,6 +1382,17 @@ export function CoberturaTab() {
     });
   }, [diagram, simResult, allBranches, includeInactive]);
 
+  // Context-aware branch filtering: when a custom boundary is active, only
+  // show branches whose site falls inside the polygon (ray-casting).
+  const visiblePanelBranches = useMemo((): PanelBranchItem[] => {
+    if (territoryMode !== "custom" || !customBoundary || customBoundary.length < 3) {
+      return panelBranches;
+    }
+    return panelBranches.filter(
+      (b) => b.lat != null && b.lng != null && rayCastPointInPolygon(b.lat, b.lng, customBoundary),
+    );
+  }, [panelBranches, territoryMode, customBoundary]);
+
   // Resumen de fallos por tipo de error en el último lote de snapping.
   const failureSummary = useMemo(() => {
     if (!snappedCities) return null;
@@ -1536,6 +1547,11 @@ export function CoberturaTab() {
               {simResult !== null && (
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                   Último diagnóstico confirmado para {formatKm2(simResult.simulated_area_km2)} ({simScopeLabel}).
+                </p>
+              )}
+              {simResult !== null && simResult.suggested_locations.length === 0 && !simError && (
+                <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
+                  No se detectaron vacíos de cobertura con este radio. Reducí el radio de prueba para ver sugerencias de nuevas sucursales.
                 </p>
               )}
               {simError && (
@@ -1742,7 +1758,7 @@ export function CoberturaTab() {
               }
             >
               <BranchSimulationPanel
-                branches={panelBranches}
+                branches={visiblePanelBranches}
                 hiddenBranchIds={hiddenBranchIds}
                 closedBranchIds={closedBranchIds}
                 includeInactive={includeInactive}
@@ -2236,6 +2252,23 @@ function BranchSimulationCard({
       ) : null}
     </li>
   );
+}
+
+// ── Geometry utilities ────────────────────────────────────────────────────────
+
+/** Ray-casting point-in-polygon for lat/lng coordinates.
+ *  polygon is `[lat, lng][]` — the same format as `customBoundary`. */
+function rayCastPointInPolygon(lat: number, lng: number, polygon: [number, number][]): boolean {
+  let inside = false;
+  const n = polygon.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const [yi, xi] = polygon[i];
+    const [yj, xj] = polygon[j];
+    if (((yi > lat) !== (yj > lat)) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
 // ── Diagnóstico del simulador ─────────────────────────────────────────────────
