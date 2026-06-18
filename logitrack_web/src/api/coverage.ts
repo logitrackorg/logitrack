@@ -96,6 +96,11 @@ export interface SimulationResult {
   simulated_area_km2: number;
   cells: SimulationDiagnosis[];
   suggested_locations: SuggestedLocation[];
+  /** Sugerencias globales derivadas del vacío total (TierraFértil − ∪ círculos de cobertura).
+   *  El backend las devuelve separadas; el cliente las fusiona en `suggested_locations`
+   *  al recibir la respuesta para que todo el pipeline (mapa, snap-to-city, descarte) las
+   *  trate de forma homogénea. */
+  mathematical_suggestions?: SuggestedLocation[];
   /** Voronoi cells with polygon geometry from this diagnosis run. Only present
    *  when branches were excluded — the client uses them to update map shapes. */
   diagram_cells?: CoverageCell[];

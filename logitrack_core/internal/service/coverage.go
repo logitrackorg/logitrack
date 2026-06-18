@@ -811,9 +811,10 @@ func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, fr
 			// resolution, with no grid point strictly inside): fall back to
 			// the vertex farthest from the branch site, and stop — the
 			// circle-subtraction step below assumes an interior point.
-			actualAddedKm2, affected := suggestionImpact(farthestVertex(current), radiusKm, countryLocal, otherCells)
+			fallback := farthestVertex(current)
+			actualAddedKm2, affected := suggestionImpact(fallback, radiusKm, countryLocal, otherCells)
 			out = append(out, model.SuggestedLocation{
-				LatLng:           proj.unproject(farthestVertex(current)),
+				LatLng:           proj.unproject(fallback),
 				BranchID:         cell.BranchID,
 				BranchName:       cell.BranchName,
 				GapAreaKm2:       area,
@@ -822,6 +823,16 @@ func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, fr
 			})
 			break
 		}
+
+		// Guard: polyclip or projection arithmetic occasionally produces NaN
+		// coordinates when chained boolean operations accumulate float64 error.
+		// Rather than propagating poison values, skip and stop.
+		if math.IsNaN(point.X) || math.IsNaN(point.Y) || math.IsInf(point.X, 0) || math.IsInf(point.Y, 0) {
+			log.Printf("[MathSugg] fillFragmentIteratively[%d]: invalid point (NaN/Inf) coordinates — breaking", i)
+			break
+		}
+
+		log.Printf("[MathSugg] fillFragmentIteratively[%d]: area=%.2f km² point=(%.1f, %.1f)", i, area, point.X, point.Y)
 
 		actualAddedKm2, affected := suggestionImpact(point, radiusKm, countryLocal, otherCells)
 		out = append(out, model.SuggestedLocation{
@@ -844,13 +855,27 @@ func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, fr
 
 		// Update 2: model this new branch's own coverage circle and subtract
 		// it from the current fragment — the part of the gap it would now
-		// cover.
+		// cover. Use safePolyclipOp so a degenerate DIFFERENCE doesn't panic.
 		coverCircle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), point))
-		remainder := fromPolyclip(toPolyclip(current).Construct(polyclip.DIFFERENCE, coverCircle))
+		remainderPoly := safePolyclipOp(func() polyclip.Polygon {
+			return toPolyclip(current).Construct(polyclip.DIFFERENCE, coverCircle)
+		})
+		remainder := fromPolyclip(remainderPoly)
 		if len(remainder) == 0 {
 			break
 		}
-		current = largestFragment(remainder)
+		next := largestFragment(remainder)
+		// Area-shrink guard: if the DIFFERENCE removed less than 0.1 km²,
+		// polyclip returned degenerate/identical geometry — stop to avoid
+		// an infinite loop. A ratio-based guard (e.g. 1%) would fire on
+		// national-scale fragments where a 44 km circle shrinks a 1.2 M km²
+		// void by only ~0.36%, which is a genuine reduction.
+		if area-next.Area() < 0.1 {
+			log.Printf("[MathSugg] fillFragmentIteratively[%d]: fragment didn't shrink (%.2f→%.2f km²) — breaking",
+				i, area, next.Area())
+			break
+		}
+		current = next
 	}
 	return out
 }
@@ -923,8 +948,39 @@ func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm f
 	bbox := boundingBox(frag)
 	stepX := (bbox.MaxX - bbox.MinX) / float64(coverageSuggestionGridSteps)
 	stepY := (bbox.MaxY - bbox.MinY) / float64(coverageSuggestionGridSteps)
-	log.Printf("[MathSugg] bestInteriorPoint: bbox X[%.1f→%.1f] Y[%.1f→%.1f] stepX=%.3f stepY=%.3f sites=%d radiusKm=%.3f",
-		bbox.MinX, bbox.MaxX, bbox.MinY, bbox.MaxY, stepX, stepY, len(sites), radiusKm)
+	log.Printf("[MathSugg] bestInteriorPoint: bbox X[%.1f→%.1f] Y[%.1f→%.1f] stepX=%.3f stepY=%.3f sites=%d radiusKm=%.3f frag_vertices=%d",
+		bbox.MinX, bbox.MaxX, bbox.MinY, bbox.MaxY, stepX, stepY, len(sites), radiusKm, len(frag))
+
+	// Degenerate bbox guard: if the fragment collapses to a line or point,
+	// no grid point can land strictly inside it.
+	if bbox.MaxX-bbox.MinX < 1e-9 || bbox.MaxY-bbox.MinY < 1e-9 {
+		log.Printf("[MathSugg] bestInteriorPoint: degenerate bbox (width=%.2e height=%.2e) — returning false",
+			bbox.MaxX-bbox.MinX, bbox.MaxY-bbox.MinY)
+		return geometry.Point{}, false
+	}
+
+	// Polyclip can accumulate vertices on the outer ring after repeated
+	// DIFFERENCE operations even when the clipping circle does not intersect
+	// the fragment. An O(n_vertices) ray-cast called 2601 times becomes the
+	// bottleneck when n_vertices grows into the hundreds or thousands.
+	//
+	// Mitigation: if the fragment has more than coverageMaxContainsVertices
+	// vertices, build a decimated copy (every k-th vertex) for the grid's
+	// Contains check. We keep the full polygon for Pass 2 (usefulCircleArea),
+	// which uses a polyclip INTERSECTION rather than Contains, so precision
+	// is preserved where it matters.
+	const coverageMaxContainsVertices = 100
+	fragForContains := frag
+	if len(frag) > coverageMaxContainsVertices {
+		step := (len(frag) + coverageMaxContainsVertices - 1) / coverageMaxContainsVertices
+		simplified := make(geometry.Polygon, 0, coverageMaxContainsVertices)
+		for k := 0; k < len(frag); k += step {
+			simplified = append(simplified, frag[k])
+		}
+		fragForContains = simplified
+		log.Printf("[MathSugg] bestInteriorPoint: frag decimated %d→%d vertices for grid Contains",
+			len(frag), len(fragForContains))
+	}
 
 	type candidate struct {
 		point geometry.Point
@@ -937,7 +993,7 @@ func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm f
 		for j := 0; j <= coverageSuggestionGridSteps; j++ {
 			y := bbox.MinY + (bbox.MaxY-bbox.MinY)*float64(j)/float64(coverageSuggestionGridSteps)
 			pt := geometry.Point{X: x, Y: y}
-			if !frag.Contains(pt) {
+			if !fragForContains.Contains(pt) {
 				continue
 			}
 			// Virgin zone (no branches): score by squared distance to the
@@ -962,12 +1018,29 @@ func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm f
 		return geometry.Point{}, false
 	}
 
+	// Filter NaN scores before sorting: sort.Slice's total-order requirement
+	// is violated by NaN (a > NaN == false for any a), which can corrupt the
+	// sort output in pathological cases with degenerate projected geometry.
+	clean := candidates[:0]
+	for _, c := range candidates {
+		if !math.IsNaN(c.dist2) {
+			clean = append(clean, c)
+		}
+	}
+	candidates = clean
+	if len(candidates) == 0 {
+		log.Printf("[MathSugg] bestInteriorPoint: all candidates had NaN score — returning false")
+		return geometry.Point{}, false
+	}
+
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].dist2 > candidates[j].dist2 })
 	if len(candidates) > coverageInteriorPointCandidates {
 		candidates = candidates[:coverageInteriorPointCandidates]
 	}
 
 	if radiusKm <= 0 {
+		log.Printf("[MathSugg] bestInteriorPoint: radiusKm=0, returning first candidate (%.1f, %.1f)",
+			candidates[0].point.X, candidates[0].point.Y)
 		return candidates[0].point, true
 	}
 
@@ -980,7 +1053,23 @@ func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm f
 			bestUsefulArea = area
 		}
 	}
+	log.Printf("[MathSugg] bestInteriorPoint: BEST (%.1f, %.1f) score=%.1f usefulArea=%.2f km²",
+		best.point.X, best.point.Y, best.dist2, bestUsefulArea)
 	return best.point, true
+}
+
+// safePolyclipOp executes a polyclip boolean operation safely: if the library
+// panics (which can happen on degenerate geometry from chained DIFFERENCE ops),
+// the panic is recovered and an empty polygon is returned. This prevents a
+// single bad geometry from crashing the server goroutine.
+func safePolyclipOp(fn func() polyclip.Polygon) (result polyclip.Polygon) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[MathSugg] PANIC in polyclip op: %v — returning empty result", r)
+			result = polyclip.Polygon{}
+		}
+	}()
+	return fn()
 }
 
 // usefulCircleArea returns the area (km²) of a simulated coverage circle of
@@ -989,7 +1078,8 @@ func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm f
 // circle that would actually contribute coverage on national territory.
 func usefulCircleArea(point geometry.Point, radiusKm float64, countryLocal polyclip.Polygon) float64 {
 	circle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), point))
-	return sumArea(fromPolyclip(circle.Construct(polyclip.INTERSECTION, countryLocal)))
+	result := safePolyclipOp(func() polyclip.Polygon { return circle.Construct(polyclip.INTERSECTION, countryLocal) })
+	return sumArea(fromPolyclip(result))
 }
 
 // boundingBox returns the axis-aligned bounding box of poly's vertices.
@@ -1115,11 +1205,13 @@ func projectCellsLocal(cells []model.CoverageCell, proj equirectProjector) []nam
 func suggestionImpact(point geometry.Point, radiusKm float64, countryLocal polyclip.Polygon, cells []namedCellPoly) (float64, []string) {
 	circle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), point))
 
-	actualAddedKm2 := sumArea(fromPolyclip(circle.Construct(polyclip.INTERSECTION, countryLocal)))
+	country := safePolyclipOp(func() polyclip.Polygon { return circle.Construct(polyclip.INTERSECTION, countryLocal) })
+	actualAddedKm2 := sumArea(fromPolyclip(country))
 
 	affected := make([]string, 0)
 	for _, nc := range cells {
-		if sumArea(fromPolyclip(circle.Construct(polyclip.INTERSECTION, nc.poly))) > 0 {
+		cell := safePolyclipOp(func() polyclip.Polygon { return circle.Construct(polyclip.INTERSECTION, nc.poly) })
+		if sumArea(fromPolyclip(cell)) > 0 {
 			affected = append(affected, nc.name)
 		}
 	}

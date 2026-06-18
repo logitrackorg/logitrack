@@ -40,27 +40,27 @@ const (
 func computeTierraFertil(boundary []model.LatLng, dangerousZones [][]model.LatLng, proj equirectProjector) polyclip.Polygon {
 	var fertile polyclip.Polygon
 	if len(boundary) >= 3 {
-		projected := projectRings([][]model.LatLng{boundary}, proj)
-		// Ensure the outer ring is CCW (positive signed area) so that polyclip
-		// boolean operations and voidFragments work correctly regardless of
-		// whether the caller drew the polygon clockwise or counter-clockwise.
-		for i, c := range projected {
-			if len(c) < 3 {
-				continue
-			}
-			ring := make(geometry.Polygon, len(c))
-			for j, v := range c {
-				ring[j] = geometry.Point{X: v.X, Y: v.Y}
-			}
-			if ring.SignedArea() < 0 {
-				for l, r := 0, len(projected[i])-1; l < r; l, r = l+1, r-1 {
-					projected[i][l], projected[i][r] = projected[i][r], projected[i][l]
-				}
-			}
-		}
-		fertile = projected
+		fertile = projectRings([][]model.LatLng{boundary}, proj)
 	} else {
 		fertile = projectCountry(geo.ArgentinaContour(), proj)
+	}
+	// Ensure every outer ring is CCW (positive signed area) regardless of the
+	// source — user-drawn polygons are often CW, and geo.ArgentinaContour()
+	// also uses CW winding. polyclip boolean operations and voidFragments both
+	// rely on CCW = outer, CW = hole.
+	for i, c := range fertile {
+		if len(c) < 3 {
+			continue
+		}
+		ring := make(geometry.Polygon, len(c))
+		for j, v := range c {
+			ring[j] = geometry.Point{X: v.X, Y: v.Y}
+		}
+		if ring.SignedArea() < 0 {
+			for l, r := 0, len(fertile[i])-1; l < r; l, r = l+1, r-1 {
+				fertile[i][l], fertile[i][r] = fertile[i][r], fertile[i][l]
+			}
+		}
 	}
 	for _, zone := range dangerousZones {
 		if len(zone) < 3 {
@@ -102,7 +102,7 @@ func voidFragments(p polyclip.Polygon) []geometry.Polygon {
 			log.Printf("[MathSugg] voidFragments: ring[%d] signedArea=%.2f km² → SKIP (hole/CW)", idx, sa)
 			continue
 		}
-		log.Printf("[MathSugg] voidFragments: ring[%d] signedArea=%.2f km² → KEEP", idx, sa)
+		log.Printf("[MathSugg] voidFragments: ring[%d] signedArea=%.2f km² vertices=%d → KEEP", idx, sa, len(ring))
 		out = append(out, ring)
 	}
 	return out
@@ -132,7 +132,17 @@ func computeMathematicalSuggestions(
 	radiusKm float64,
 	proj equirectProjector,
 	otherCells []namedCellPoly,
-) []model.SuggestedLocation {
+) (out []model.SuggestedLocation) {
+	// Top-level panic guard: polyclip can panic on degenerate geometry produced
+	// by successive boolean operations. We prefer returning 0 suggestions over
+	// crashing the server goroutine.
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[MathSugg] PANIC recovered in computeMathematicalSuggestions: %v — returning 0 suggestions", r)
+			out = nil
+		}
+	}()
+
 	log.Printf("[MathSugg] computeMathematicalSuggestions: branchSites=%d, radiusKm=%.3f, tierraFertil contours=%d",
 		len(branchSites), radiusKm, len(tierraFertil))
 
@@ -183,7 +193,6 @@ func computeMathematicalSuggestions(
 	frags := voidFragments(void)
 	log.Printf("[MathSugg] voidFragments: void had %d contours → %d outer fragments", len(void), len(frags))
 
-	var out []model.SuggestedLocation
 	for i, frag := range frags {
 		area := frag.Area()
 		if area < minFragAreaKm2 {

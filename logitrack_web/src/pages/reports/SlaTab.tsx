@@ -1147,7 +1147,17 @@ export function CoberturaTab() {
     setBlacklistedCities([]);
     coverageApi
       .diagnose(area, closed.length > 0 ? closed : undefined, boundingArea, inactive || undefined)
-      .then(setSimResult)
+      .then((result) => {
+        // Fusionar mathematical_suggestions en suggested_locations para que
+        // todo el pipeline (mapa, snap-to-city, descarte) las trate igual.
+        setSimResult({
+          ...result,
+          suggested_locations: [
+            ...result.suggested_locations,
+            ...(result.mathematical_suggestions ?? []),
+          ],
+        });
+      })
       .catch(() => setSimError("No se pudo calcular el diagnóstico en este momento."));
   }, []); // intentionally empty deps — reads from refs only
 
