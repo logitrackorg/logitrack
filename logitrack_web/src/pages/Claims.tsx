@@ -126,17 +126,12 @@ export function Claims() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadClaims(); }, []);
 
+  // Sucursales activas: las usa el filtro del gerente y la resolución de nombres
+  // en el historial. El dropdown de derivación NO usa esta lista: carga por
+  // reclamo solo las sucursales del recorrido (ver handleOpenTransferModal).
   useEffect(() => {
-    if (isManager) {
-      branchApi.listActive().then(setBranches).catch(() => {});
-    }
-  }, [isManager]);
-
-  useEffect(() => {
-    if (isSupervisor) {
-      branchApi.listActive().then(setTransferBranches).catch(() => {});
-    }
-  }, [isSupervisor]);
+    branchApi.listActive().then(setBranches).catch(() => {});
+  }, []);
 
   // If route includes a claim id, open it on load
   const { id: routeClaimId } = useParams();
@@ -278,7 +273,13 @@ export function Claims() {
   const handleOpenTransferModal = (claimId: string) => {
     setTransferBranchId("");
     setTransferNotes("");
+    setTransferBranches([]);
     setTransferModal({ claimId });
+    // Solo se puede derivar a las sucursales del recorrido del envío
+    // (origen, intermedias y destino), excluyendo la sucursal actual.
+    claimsApi.transferBranches(claimId).then(setTransferBranches).catch(() => {
+      setError("No se pudieron cargar las sucursales del recorrido.");
+    });
   };
 
   const handleTransfer = async () => {
@@ -810,6 +811,11 @@ export function Claims() {
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
               </select>
+              {transferBranches.filter((b) => b.id !== myBranchId).length === 0 && (
+                <p className="text-xs dark:text-gray-400 text-slate-500">
+                  No hay otras sucursales en el recorrido de este envío para derivar.
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wide">
