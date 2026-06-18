@@ -90,6 +90,12 @@ export interface SuggestedLocation {
   actual_added_km2: number;
   /** Sucursales existentes cuyas celdas de Voronoi se ven aliviadas por esta sugerencia. */
   affected_branches: string[];
+  /** Nombre de la ciudad real más cercana al punto matemático (solo en mathematical_suggestions). */
+  city_name?: string;
+  /** true cuando el servidor aterrizó esta sugerencia en una ciudad real (Phase 4). */
+  is_snapped?: boolean;
+  /** Población de la ciudad aterrizda; 0 cuando is_snapped=false. */
+  population?: number;
 }
 
 export interface SimulationResult {

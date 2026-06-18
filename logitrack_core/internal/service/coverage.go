@@ -572,6 +572,10 @@ func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCe
 		log.Printf("[MathSugg] computeTierraFertil → %d contours", len(tierraFertil))
 		otherCellsGlobal := projectCellsLocal(coverageCells, globalProj)
 		mathSuggestions = computeMathematicalSuggestions(tierraFertil, branchSites, radiusKm, globalProj, otherCellsGlobal)
+		if len(mathSuggestions) > 0 {
+			log.Printf("[MathSugg] snap: starting snapMathSuggestionsInPlace for %d suggestions (searchRadius≤%.0fkm)", len(mathSuggestions), math.Min(radiusKm/2, snapToCityMaxRadiusKm))
+			s.snapMathSuggestionsInPlace(mathSuggestions, radiusKm, 0, dangerousZones)
+		}
 	}
 
 	return model.SimulationResult{

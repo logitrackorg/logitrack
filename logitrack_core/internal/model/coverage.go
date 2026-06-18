@@ -85,6 +85,16 @@ type SuggestedLocation struct {
 	// cells intersect this suggestion's simulated coverage circle — the
 	// branches that would be relieved by a new branch at this location.
 	AffectedBranches []string `json:"affected_branches"`
+
+	// Phase 4 auto-snapping: the following fields are populated server-side
+	// for MathematicalSuggestions only. Per-cell SuggestedLocations leave
+	// these empty (client-side snap-to-city handles those via the "Aterrizar"
+	// button). When IsSnapped is false the coordinates are the raw
+	// mathematical Pole-of-Inaccessibility; when true they are the city's
+	// real lat/lng.
+	CityName   string `json:"city_name,omitempty"`
+	IsSnapped  bool   `json:"is_snapped,omitempty"`
+	Population int    `json:"population,omitempty"`
 }
 
 // SimulationResult is the response of CoverageService.Diagnose: the per-branch

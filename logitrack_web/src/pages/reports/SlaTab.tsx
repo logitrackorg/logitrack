@@ -1148,15 +1148,28 @@ export function CoberturaTab() {
     coverageApi
       .diagnose(area, closed.length > 0 ? closed : undefined, boundingArea, inactive || undefined)
       .then((result) => {
-        // Fusionar mathematical_suggestions en suggested_locations para que
-        // todo el pipeline (mapa, snap-to-city, descarte) las trate igual.
-        setSimResult({
-          ...result,
-          suggested_locations: [
-            ...result.suggested_locations,
-            ...(result.mathematical_suggestions ?? []),
-          ],
-        });
+        const mathSuggs = result.mathematical_suggestions ?? [];
+        const merged = [...result.suggested_locations, ...mathSuggs];
+        // Pre-populate snappedCities para sugerencias matemáticas que el
+        // servidor ya aterrizó server-side (Fase 4). Las sugerencias por celda
+        // quedan sin aterrizar hasta que el usuario pulsa "Aterrizar".
+        const baseLen = result.suggested_locations.length;
+        if (mathSuggs.some((s) => s.is_snapped)) {
+          setSnappedCities(
+            merged.map((loc, i) =>
+              i >= baseLen && loc.is_snapped
+                ? {
+                    lat: loc.lat,
+                    lng: loc.lng,
+                    city_name: loc.city_name ?? "",
+                    is_snapped: true,
+                    population: loc.population,
+                  }
+                : { lat: loc.lat, lng: loc.lng, city_name: "", is_snapped: false },
+            ),
+          );
+        }
+        setSimResult({ ...result, suggested_locations: merged });
       })
       .catch(() => setSimError("No se pudo calcular el diagnóstico en este momento."));
   }, []); // intentionally empty deps — reads from refs only

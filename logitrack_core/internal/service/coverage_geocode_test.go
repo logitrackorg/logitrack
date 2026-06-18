@@ -28,7 +28,7 @@ func TestBestSnapCandidate_PrefersHigherPopulation(t *testing.T) {
 		Tags: map[string]string{"place": "town", "name": "Pueblo Cercano"},
 	}
 
-	best, found := bestSnapCandidate([]overpassElement{town, city}, originLat, originLng, 100, 0, nil)
+	best, found := bestSnapCandidate([]overpassElement{town, city}, originLat, originLng, 100, 0, nil, nil)
 	if !found {
 		t.Fatal("expected a candidate to be found")
 	}
@@ -52,7 +52,7 @@ func TestBestSnapCandidate_PopulationBreaksTie(t *testing.T) {
 		Tags: map[string]string{"place": "city", "name": "Ciudad Capital", "population": "1300000"},
 	}
 
-	best, found := bestSnapCandidate([]overpassElement{small, big}, originLat, originLng, 100, 0, nil)
+	best, found := bestSnapCandidate([]overpassElement{small, big}, originLat, originLng, 100, 0, nil, nil)
 	if !found {
 		t.Fatal("expected a candidate to be found")
 	}
@@ -71,7 +71,7 @@ func TestBestSnapCandidate_SkipsUnnamed(t *testing.T) {
 		{Lat: -34.2, Lon: -64.0, Tags: map[string]string{"place": "town", "name": "Pueblo Chico"}},
 	}
 
-	best, found := bestSnapCandidate(elements, originLat, originLng, 150, 0, nil)
+	best, found := bestSnapCandidate(elements, originLat, originLng, 150, 0, nil, nil)
 	if !found {
 		t.Fatal("expected a candidate to be found")
 	}
@@ -95,7 +95,7 @@ func TestBestSnapCandidate_SkipsBeyondRadius(t *testing.T) {
 		Tags: map[string]string{"place": "town", "name": "Pueblo Cercano"},
 	}
 
-	best, found := bestSnapCandidate([]overpassElement{tooFar, withinRadius}, originLat, originLng, 60, 0, nil)
+	best, found := bestSnapCandidate([]overpassElement{tooFar, withinRadius}, originLat, originLng, 60, 0, nil, nil)
 	if !found {
 		t.Fatal("expected a candidate within the radius to be found")
 	}
@@ -107,17 +107,17 @@ func TestBestSnapCandidate_SkipsBeyondRadius(t *testing.T) {
 // TestBestSnapCandidate_NoneFound verifies the empty/no-candidates and
 // all-beyond-radius cases report found=false rather than a zero-value match.
 func TestBestSnapCandidate_NoneFound(t *testing.T) {
-	if _, found := bestSnapCandidate(nil, -34.0, -64.0, 100, 0, nil); found {
+	if _, found := bestSnapCandidate(nil, -34.0, -64.0, 100, 0, nil, nil); found {
 		t.Error("expected found=false for an empty candidate list")
 	}
 
 	unnamed := []overpassElement{{Lat: -34.0, Lon: -64.0, Tags: map[string]string{"place": "city"}}}
-	if _, found := bestSnapCandidate(unnamed, -34.0, -64.0, 100, 0, nil); found {
+	if _, found := bestSnapCandidate(unnamed, -34.0, -64.0, 100, 0, nil, nil); found {
 		t.Error("expected found=false when no candidate has a name")
 	}
 
 	tooFar := []overpassElement{{Lat: -35.0, Lon: -64.0, Tags: map[string]string{"place": "city", "name": "Lejos"}}}
-	if _, found := bestSnapCandidate(tooFar, -34.0, -64.0, 10, 0, nil); found {
+	if _, found := bestSnapCandidate(tooFar, -34.0, -64.0, 10, 0, nil, nil); found {
 		t.Error("expected found=false when every named candidate is beyond radiusKm")
 	}
 }
@@ -139,7 +139,7 @@ func TestBestSnapCandidate_DiscardsOutsideArgentina(t *testing.T) {
 		Tags: map[string]string{"place": "town", "name": "La Plata"},
 	}
 
-	best, found := bestSnapCandidate([]overpassElement{outsideArgentina, insideArgentina}, originLat, originLng, 5000, 0, nil)
+	best, found := bestSnapCandidate([]overpassElement{outsideArgentina, insideArgentina}, originLat, originLng, 5000, 0, nil, nil)
 	if !found {
 		t.Fatal("expected a candidate to be found")
 	}
@@ -157,7 +157,7 @@ func TestBestSnapCandidate_NoneFound_AllOutsideArgentina(t *testing.T) {
 		{Lat: -15.78, Lon: -47.93, Tags: map[string]string{"place": "city", "name": "Brasilia"}},
 	}
 
-	if _, found := bestSnapCandidate(outsideArgentina, originLat, originLng, 5000, 0, nil); found {
+	if _, found := bestSnapCandidate(outsideArgentina, originLat, originLng, 5000, 0, nil, nil); found {
 		t.Error("expected found=false when every candidate is outside Argentina")
 	}
 }
