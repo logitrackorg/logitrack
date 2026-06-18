@@ -1,13 +1,10 @@
-import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ToastContainer } from "./components/Toast";
 import { SupervisorFatigueGuard } from "./components/SupervisorFatigueGuard";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { TwoFAGuard } from "./components/TwoFAGuard";
 import { ThemeProvider } from "./context/ThemeContext";
 import { OrganizationThemeProvider } from "./context/OrganizationThemeContext";
-import { cn } from "@/lib/utils";
-import { ThemeToggle } from "./components/ThemeToggle";
-import { useIsMobile } from "./hooks/useIsMobile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Sidebar } from "./components/Sidebar";
 import { useSidebarOffset } from "./components/sidebarLayout";
@@ -25,7 +22,6 @@ import { NewShipment } from "./pages/NewShipment";
 import { PublicTracking } from "./pages/PublicTracking";
 import { Login } from "./pages/Login";
 import { DriverRoute } from "./pages/DriverRoute";
-import { DriverInterBranchTrip } from "./pages/DriverInterBranchTrip";
 import { DriverShipmentDetail } from "./pages/DriverShipmentDetail";
 import { VehicleList } from "./pages/VehicleList";
 import { VehicleStatus } from "./pages/VehicleStatus";
@@ -48,6 +44,7 @@ import { FatigueConfig } from "./pages/FatigueConfig";
 import { AutoReports } from "./pages/AutoReports";
 import { SupervisorFatigue } from "./pages/SupervisorFatigue";
 import { DriverScanVehicle } from "./pages/DriverScanVehicle";
+import { DriverLayout } from "./components/DriverLayout";
 import { Repartos } from "./pages/Repartos";
 import { OperatorTripReception } from "./pages/OperatorTripReception";
 import { InterSucursal } from "./pages/InterSucursal";
@@ -60,50 +57,6 @@ import { EmployeeProfile } from "./pages/EmployeeProfile";
 import { DashboardConfig } from "./pages/DashboardConfig";
 import { MetricPermissionsProvider } from "./context/MetricPermissionsContext";
 import { DashboardPrefsProvider } from "./context/DashboardPrefsContext";
-
-function DriverNav() {
-  const { user, logout } = useAuth();
-  const isMobile = useIsMobile();
-  if (!user) return null;
-
-  const isInterBranch = user.driver_type === "intersucursal";
-  const linkClass = ({ isActive }: { isActive: boolean }) =>
-    cn("no-underline font-medium text-sm", isActive ? "text-blue-300" : "text-slate-300");
-
-  return (
-    <nav className="bg-[var(--sidebar-bg)] text-white flex items-center px-3 sm:px-6 gap-3 sm:gap-6 min-h-[52px]">
-      <span className="font-extrabold text-[15px] sm:text-[17px] tracking-[1px]">LogiTrack</span>
-      {isInterBranch ? (
-        <NavLink to="/driver/trip" className={linkClass}>Mi viaje</NavLink>
-      ) : (
-        <NavLink to="/driver/route" className={linkClass}>Mi ruta</NavLink>
-      )}
-
-      <div className="ml-auto flex items-center gap-2 sm:gap-3.5">
-        <ThemeToggle compact />
-        {isMobile ? (
-          <NavLink to="/profile" className="no-underline">
-            <span className="text-xs text-slate-200 font-semibold">{user.username}</span>
-          </NavLink>
-        ) : (
-          <NavLink to="/profile" className="no-underline">
-            <span className="text-[13px] text-slate-400 cursor-pointer">
-              <strong className="text-slate-200 font-semibold">{user.username}</strong>
-              {" · "}
-              <span className="text-slate-500 bg-[#0f2744] px-2 py-0.5 rounded-[10px] text-[11px]">
-                {isInterBranch ? "Chofer Intersucursal" : "Chofer"}
-              </span>
-            </span>
-          </NavLink>
-        )}
-        <button onClick={logout}
-          className="bg-transparent border border-slate-700 text-slate-400 rounded-md px-2 sm:px-3 py-1 text-xs sm:text-sm cursor-pointer">
-          {isMobile ? "✕" : "Cerrar sesión"}
-        </button>
-      </div>
-    </nav>
-  );
-}
 
 /** Layout wrapper for non-driver roles: sidebar (fixed) + topbar (sticky) + main with left offset. */
 function AppShell({ children }: { children: React.ReactNode }) {
@@ -133,41 +86,17 @@ function AppRoutes() {
   if (user?.role === "driver") {
     const isInterBranch = user.driver_type === "intersucursal";
     const defaultPath = isInterBranch ? "/driver/scan" : "/driver/route";
-
     return (
-      <>
-        <DriverNav />
-        <main>
-          <Routes>
-            <Route path="/driver/route" element={
-              <ProtectedRoute roles={["driver"]}>
-                <DriverRoute />
-              </ProtectedRoute>
-            } />
-            <Route path="/driver/trip" element={
-              <ProtectedRoute roles={["driver"]}>
-                <DriverInterBranchTrip />
-              </ProtectedRoute>
-            } />
-            <Route path="/driver/scan" element={
-              <ProtectedRoute roles={["driver"]}>
-                <DriverScanVehicle />
-              </ProtectedRoute>
-            } />
-            <Route path="/shipments/:trackingId" element={
-              <ProtectedRoute roles={["driver"]}>
-                <DriverShipmentDetail />
-              </ProtectedRoute>
-            } />
-            <Route path="/profile" element={
-              <ProtectedRoute roles={["driver"]}>
-                <UserProfile />
-              </ProtectedRoute>
-            } />
-            <Route path="*" element={<Navigate to={defaultPath} replace />} />
-          </Routes>
-        </main>
-      </>
+      <Routes>
+        <Route element={<ProtectedRoute roles={["driver"]}><DriverLayout /></ProtectedRoute>}>
+          <Route path="/driver/route" element={<DriverRoute />} />
+          <Route path="/driver/trip" element={<DriverRoute />} />
+          <Route path="/driver/scan" element={<DriverScanVehicle />} />
+          <Route path="/driver/shipments/:trackingId" element={<DriverShipmentDetail />} />
+          <Route path="/profile" element={<UserProfile />} />
+        </Route>
+        <Route path="*" element={<Navigate to={defaultPath} replace />} />
+      </Routes>
     );
   }
 

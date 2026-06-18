@@ -1,19 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Ban,
-  Camera,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Clock,
   Film,
   MapPin,
+  Navigation,
   Package,
+  Play,
+  QrCode,
   RefreshCw,
   Truck,
+  Weight,
   WifiOff,
+  X,
   XCircle,
 } from "lucide-react";
 import { compare as bcryptCompare } from "bcryptjs";
@@ -30,22 +38,30 @@ import {
   clearDayCache,
 } from "../offline/db";
 import { syncQueue } from "../offline/sync";
-import { driverApi, type DriverRouteResponse, type TouchEventPayload } from "../api/driver";
-import { interBranchTripsApi } from "../api/interBranchTrips";
+import { DeliveryActionSheet } from "../components/driver/DeliveryActionSheet";
+
+import { driverApi, type DriverRouteResponse } from "../api/driver";
+import { interBranchTripsApi, type InterBranchTrip, type TripQRResponse } from "../api/interBranchTrips";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Skeleton } from "../components/ui/skeleton";
 import { CameraCapture } from "../components/ui/CameraCapture";
 import { MapView } from "../components/ui/MapView";
 import { NextStopCard } from "../components/ui/NextStopCard";
 import { ZoneAlert } from "../components/ui/ZoneAlert";
-import { BottomSheet } from "../components/ui/bottom-sheet";
-import { WhatsAppQuickButton } from "../components/ui/WhatsAppQuickButton";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
+import { useMisfireTracking } from "../hooks/useMisfireTracking";
+import { useMidRouteFatigue } from "../hooks/useMidRouteFatigue";
 import { zoneApi, type Zone } from "../api/zones";
 import { isInDangerZone } from "../utils/pointInPolygon";
+import { publicTrackingApi } from "../api/publicTracking";
+import type { Branch } from "../api/branches";
+import { haversineKm, cityAbbrev } from "../utils/geo";
+import { fmtDate, fmtDateTime } from "../utils/date";
 import {
   FAILED_REASONS,
   REJECTED_REASONS,
@@ -54,11 +70,36 @@ import {
   recipientView,
   timeWindowTone,
 } from "../utils/driverActions";
-import { getPendingFatigueStep } from "../utils/fatigueWizardProgress";
 
 type Tab = "pendientes" | "completados";
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function mapsUrl(lat: number, lng: number, label: string): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=${encodeURIComponent(label)}`;
+}
+
+function formatDuration(hours: number): string {
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h} h`;
+  return `${h} h ${m} min`;
+}
+
+// ── Main component: gate by driver_type ──────────────────────────────────────
+
 export function DriverRoute() {
+  const { user } = useAuth();
+  if (user?.driver_type === "intersucursal") {
+    return <InterBranchTripView />;
+  }
+  return <LastMileView />;
+}
+
+// ── LastMileView ─────────────────────────────────────────────────────────────
+
+function LastMileView() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isOnline = useOffline();
@@ -70,7 +111,7 @@ export function DriverRoute() {
   // BUG-43: velocidad GPS real del chofer (sin fallback permisivo). El valor
   // efectivo y la fuente se computan más abajo, una vez conocido el estado del
   // simulador (ver simulationActive / effectiveSpeed).
-  const { speedKmh: gpsSpeedKmh, locationReady, permissionDenied: locationPermissionDenied, requesting: locationRequesting, locationErrorMsg, requestLocation } = useCurrentSpeed();
+  const { speedKmh: gpsSpeedKmh, locationReady, requestLocation } = useCurrentSpeed();
 
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,19 +120,14 @@ export function DriverRoute() {
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
 
-  // Bloqueo automático de pantalla por alerta de fatiga (LOGITRACK-499).
-  const [fatigueBlocked, setFatigueBlocked] = useState(false);
-  const [fatigueUnblockedBy, setFatigueUnblockedBy] = useState<string | null>(null);
-  // Clave del evento de desbloqueo actualmente en pantalla (para persistir el ACK en sessionStorage).
-  const pendingAckRef = useRef<string | null>(null);
-
   // Gate de re-test en ruta: true = mostrar KssCheckIn antes de actualizar la lista.
-  const [midRouteCheckin, setMidRouteCheckin] = useState(false);
-  // Misfires capturados en el momento en que se activa el overlay, para mostrarlo
-  // en el toast de "Saltar test" dentro de KssCheckIn.
-  const [checkinMisfires, setCheckinMisfires] = useState(0);
-  // true si el driver aún no reportó sueño para el día logístico actual.
-  const [requiresSleepData, setRequiresSleepData] = useState(true);
+  const {
+    showGate: midRouteCheckin,
+    misfireCount: checkinMisfires,
+    requiresSleepData,
+    triggerGate,
+    closeGate: closeMidRouteGate,
+  } = useMidRouteFatigue();
 
   // sheets
   const [deliverShipment, setDeliverShipment] = useState<Shipment | null>(null);
@@ -113,26 +149,10 @@ export function DriverRoute() {
   // Stores the distance (m) and a callback to execute if the driver confirms.
   const [geoWarning, setGeoWarning] = useState<{ distanceM: number; onConfirm: () => void } | null>(null);
   const [tab, setTab] = useState<Tab>("pendientes");
-  // Badge minimizado de zona peligrosa — true cuando el cartel grande fue descartado.
-  // Debe declararse ANTES de cualquier early return para cumplir las reglas de hooks.
   const [isDangerDismissed, setIsDangerDismissed] = useState(false);
 
-  // US4 global: contador de misfires para toda la vista de ruta.
-  // Cualquier click que no sea detenido por e.stopPropagation() en un botón
-  // válido burbujea hasta document y suma +1. Se usa useRef para evitar
-  // re-renders en cada tap y para leer el valor corriente en funciones async.
-  const misfireRef = useRef(0);
-  // Ref espejo de midRouteCheckin para el listener (evita closure stale).
-  const midRouteCheckinRef = useRef(false);
-  useEffect(() => { midRouteCheckinRef.current = midRouteCheckin; }, [midRouteCheckin]);
-  // Listener global: monta/desmonta con el componente (cleanup en el return).
-  useEffect(() => {
-    const handleGlobalClick = () => {
-      if (!midRouteCheckinRef.current) misfireRef.current++;
-    };
-    document.addEventListener("click", handleGlobalClick);
-    return () => document.removeEventListener("click", handleGlobalClick);
-  }, []);
+  const { getMisfires, resetMisfires, triggerCheckin, closeCheckin } =
+    useMisfireTracking();
 
   const load = () =>
     driverApi
@@ -232,30 +252,6 @@ export function DriverRoute() {
     return () => { cancelled = true; };
   }, [isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Polling de bloqueo por fatiga — cada 5 s mientras la ruta está activa (LOGITRACK-499).
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const status = await driverApi.getFatigueBlockStatus();
-        const nowBlocked = status.blocked ?? false;
-        setFatigueBlocked(nowBlocked);
-        if (!nowBlocked && status.recently_unblocked && status.unblocked_by) {
-          const ackKey = (status as { unblocked_at?: string }).unblocked_at ?? "seen";
-          const storedAck = sessionStorage.getItem("lt_fatigue_ack_route");
-          pendingAckRef.current = ackKey;
-          if (ackKey !== storedAck) {
-            setFatigueUnblockedBy(status.unblocked_by);
-          }
-        }
-      } catch {
-        // Error de red → mantener estado actual (conservador)
-      }
-    };
-    poll();
-    const interval = setInterval(poll, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
   // Returns the driver's current GPS coordinates (null in simulation mode or without fix).
   // Returns the driver's current position (real GPS or simulated) for geofence checking.
   const driverCoords = (): { lat: number; lng: number } | null => userLocation ?? null;
@@ -271,15 +267,16 @@ export function DriverRoute() {
 
   // Opens a sheet after checking geofence. If outside radius, shows the warning
   // first and only opens the sheet if the driver confirms.
-  const openDeliverSheet = (shipment: Shipment) => {
+  const openDeliverSheet = (shipment: Shipment, onReady?: () => void) => {
     // Resetear antes de cargar para evitar que queden intentos de un envío anterior.
     setOfflineKeywordAttempts(0);
     getKeywordAttempts(shipment.tracking_id).then(setOfflineKeywordAttempts).catch(() => {});
     const distM = checkGeofence(shipment);
     if (distM !== null && distM > GEOFENCE_RADIUS_M) {
-      setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setDeliverShipment(shipment); } });
+      setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setDeliverShipment(shipment); onReady?.(); } });
     } else {
       setDeliverShipment(shipment);
+      onReady?.();
     }
   };
 
@@ -301,23 +298,6 @@ export function DriverRoute() {
     }
   };
 
-  // Aplica el resultado de una acción offline directamente en `data` y el routeCache,
-  // para que el conteo de completados sea inmediato y correcto aunque el componente
-  // se remonte mientras sigue offline.
-  const applyOfflineStatus = (trackingId: string, newStatus: string) => {
-    setData((prev) => {
-      if (!prev) return prev;
-      const updated = {
-        ...prev,
-        shipments: prev.shipments.map((s) =>
-          s.tracking_id === trackingId ? { ...s, status: newStatus as Shipment["status"] } : s,
-        ),
-      };
-      if (user) cacheRoute(user.id, updated).catch(() => {});
-      return updated;
-    });
-  };
-
   const closeSheets = () => {
     setDeliverShipment(null);
     setFailedShipment(null);
@@ -332,39 +312,15 @@ export function DriverRoute() {
     setDeliveryPhoto(null);
   };
 
-  // Secuencia post-entrega:
-  //  1) Lee los misfires globales acumulados en misfireRef
-  //  2) Consulta el gate enviando ese conteo al backend
-  //  3) Resetea el contador local y el registro del backend
-  //  4) Si se requiere test: pausa el simulador + despliega el overlay
-  //  5) Si no: reanuda el simulador y refresca la ruta
   const checkReTestGate = async () => {
-    const misfires = misfireRef.current;
-    let requireTest = false;
-    try {
-      const eligibility = await driverApi.getTestEligibility({ misfires });
-      requireTest = eligibility.require_test;
-    } catch {
-      // error de red → continuar sin bloquear
-    }
-    const capturedMisfires = misfireRef.current;
-    misfireRef.current = 0; // resetear contador local siempre
-    if (requireTest) {
-      // Consultar si ya se registraron horas de sueño hoy para no pedirlas de nuevo.
-      try {
-        const checkin = await driverApi.getTodayCheckin().catch(() => ({ ok: false, requires_sleep_data: true }));
-        setRequiresSleepData(checkin.requires_sleep_data ?? true);
-      } catch {
-        setRequiresSleepData(true);
-      }
-      // No resetear el backend todavía: SubmitCheckin leerá los misfires
-      // almacenados y los incluirá en el registro. El reset se hace en onDone.
-      setCheckinMisfires(capturedMisfires);
+    const misfires = getMisfires();
+    resetMisfires();
+    const triggered = await triggerGate(misfires);
+    if (triggered) {
+      triggerCheckin(misfires);
       pause();
-      setMidRouteCheckin(true);
       return;
     }
-    driverApi.resetMisfires().catch(() => {}); // sin gate: resetear para el próximo paquete
     play();
     load();
   };
@@ -442,9 +398,8 @@ export function DriverRoute() {
           longitude: coords?.lng,
         },
         photoBlob: deliveryPhoto ?? undefined,
-        enqueuedAt: Date.now(),
+        enqueuedAt: new Date().getTime(),
       });
-      applyOfflineStatus(deliverShipment.tracking_id, "delivered");
       setPendingSyncIds((prev) => new Set(prev).add(deliverShipment.tracking_id));
       closeSheets();
       setSubmitting(false);
@@ -508,9 +463,8 @@ export function DriverRoute() {
         type: "delivery_failed",
         trackingId: failedShipment.tracking_id,
         payload: { status: "delivery_failed", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource, latitude: coords?.lat, longitude: coords?.lng },
-        enqueuedAt: Date.now(),
+        enqueuedAt: new Date().getTime(),
       });
-      applyOfflineStatus(failedShipment.tracking_id, "delivery_failed");
       setPendingSyncIds((prev) => new Set(prev).add(failedShipment.tracking_id));
       closeSheets();
       setSubmitting(false);
@@ -540,7 +494,7 @@ export function DriverRoute() {
   const handleRejected = async () => {
     if (!rejectedShipment || !rejectedReason) return;
     const reasonEntry = REJECTED_REASONS.find((r) => r.id === rejectedReason);
-    const reasonLabel = reasonEntry ? `${reasonEntry.emoji} ${reasonEntry.label}` : rejectedReason;
+    const reasonLabel = reasonEntry ? reasonEntry.label : rejectedReason;
     const note = [reasonLabel, rejectedNotes.trim()].filter(Boolean).join(" — ");
 
     setSubmitting(true);
@@ -552,9 +506,8 @@ export function DriverRoute() {
         type: "rejected",
         trackingId: rejectedShipment.tracking_id,
         payload: { status: "delivery_failed", location: "", notes: note, rejected_by_recipient: true, current_speed: effectiveSpeed, speed_source: speedSource, latitude: coords?.lat, longitude: coords?.lng },
-        enqueuedAt: Date.now(),
+        enqueuedAt: new Date().getTime(),
       });
-      applyOfflineStatus(rejectedShipment.tracking_id, "delivery_failed");
       setPendingSyncIds((prev) => new Set(prev).add(rejectedShipment.tracking_id));
       closeSheets();
       setSubmitting(false);
@@ -584,7 +537,6 @@ export function DriverRoute() {
 
   // Hooks que necesitan estar antes de cualquier return condicional
 
-
   const routePoints = useMemo(() => {
     const origin = data?.origin;
     const wps = data?.waypoints ?? [];
@@ -610,22 +562,6 @@ export function DriverRoute() {
 
   const { position: userLocation, mode: simulationMode, isPaused, pause, play, reset } =
     useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier, deliveryPoints);
-
-  // Router Guard anti-bypass por F5: si quedó un wizard de fatiga a mitad de
-  // camino (persistido en sessionStorage), forzar el gate de inmediato — el
-  // backend ya da por completo el check-in apenas se envía el paso KSS, así
-  // que no podemos confiar solo en su respuesta para decidir si mostrarlo.
-  useEffect(() => {
-    if (!user) return;
-    if (!getPendingFatigueStep(user.id)) return;
-    driverApi.getTodayCheckin()
-      .then((checkin) => setRequiresSleepData(checkin.requires_sleep_data ?? true))
-      .catch(() => setRequiresSleepData(true))
-      .finally(() => {
-        pause();
-        setMidRouteCheckin(true);
-      });
-  }, [user, pause]);
 
   const cycleSpeedMultiplier = () =>
     setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));
@@ -688,9 +624,8 @@ export function DriverRoute() {
         misfireCount={checkinMisfires}
         requiresSleepData={requiresSleepData}
         onDone={() => {
-          setMidRouteCheckin(false);
-          setRequiresSleepData(false); // sueño ya registrado, no pedir de nuevo hoy
-          driverApi.resetMisfires().catch(() => {}); // resetear tras el check-in, no antes
+          closeMidRouteGate();
+          closeCheckin();
           play();
           load();
         }}
@@ -703,8 +638,6 @@ export function DriverRoute() {
   if (!data) return null;
 
   const routeStatus = data.route.status ?? "pendiente";
-  const [ry, rm, rd] = data.route.date.split("-");
-  const today = `${rd}/${rm}/${ry}`;
 
   const pendingList = data.shipments.filter(
     (s) => s.status === "out_for_delivery" && !pendingSyncIds.has(s.tracking_id),
@@ -716,6 +649,7 @@ export function DriverRoute() {
   const done = completedList.length;
   const pending = pendingList.length;
   const progressPct = total === 0 ? 0 : Math.round((done / total) * 100);
+  const today = fmtDate(new Date().toISOString());
 
   if (routeEffectivelyDone) {
     return <RouteCompletedView data={data} today={today} pendingSyncIds={pendingSyncIds} />;
@@ -747,13 +681,12 @@ export function DriverRoute() {
     ? (data?.shipments.find((s) => s.tracking_id === nextStop.tracking_id) ?? null)
     : null;
 
-  // Zonas peligrosas donde está el chofer actualmente
   const activeDangerZones = userLocation
     ? zones.filter((z) => z.active && isInDangerZone(userLocation.lat, userLocation.lng, [z]))
     : [];
 
   return (
-    <div className="pb-32">
+    <div className="pb-16">
       {/* Banner offline */}
       {(!isOnline || syncing) && (
         <div className={`fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 px-4 py-2 text-xs font-semibold ${syncing ? "bg-amber-400 text-amber-900" : "bg-slate-700 text-white"}`}>
@@ -767,123 +700,82 @@ export function DriverRoute() {
         </div>
       )}
 
-      {/* Header sticky con progreso y tabs */}
-      <header className={`sticky z-10 bg-white/95 backdrop-blur border-b dark:border-gray-700 border-slate-200 ${(!isOnline || syncing) ? "top-8" : "top-0"}`}>
-        <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-3 pb-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
-                <Truck className="w-4.5 h-4.5" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-lg font-bold dark:text-gray-100 text-slate-900 leading-tight tracking-tight">Mi ruta</h1>
-                <p className="text-[11px] dark:text-gray-400 text-slate-500 leading-tight">
-                  {today} · {done}/{total} completados
-                </p>
-              </div>
-            </div>
-
-            {/*  Toggle Lista/Mapa */}
-            {canAct && (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'list'
-                    ? 'bg-[var(--sidebar-bg)] text-white'
-                    : 'dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100'
-                    }`}
-                >
-                  <Package className="w-3.5 h-3.5" />
-                  Lista
-                </button>
-                <button
-                  onClick={() => setViewMode('map')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'map'
-                    ? 'bg-[var(--sidebar-bg)] text-white'
-                    : 'dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100'
-                    }`}
-                >
-                  <MapPin className="w-3.5 h-3.5" />
-                  Mapa
-                </button>
-              </div>
-            )}
-
-            {!simActive && simulationMode === "real" && (
-              <button
-                onClick={() => { setSimActive(true); setViewMode('map'); }}
-                title="Activar simulación GPS"
-                className="text-[16px] opacity-30 hover:opacity-70 transition-opacity cursor-pointer select-none"
-              >
-                <Film size={16} />
-              </button>
-            )}
-
-            {/* Badge minimizado de zona peligrosa — visible solo cuando el cartel grande fue descartado */}
-            {isDangerDismissed && (
-              <span
-                title="Zona peligrosa activa"
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 border border-red-300 text-red-600 text-[11px] font-bold shrink-0 animate-pulse"
-              >
-                <AlertTriangle size={12} className="mr-0.5" /> Zona
-              </span>
-            )}
-            <RouteStatusPill status={routeStatus} />
-          </div>
-
-          <div className="mt-3">
-            <div className="h-1.5 w-full rounded-full dark:bg-gray-700/50 bg-slate-100 overflow-hidden">
-              <div
-                ref={el => { if (el) el.style.width = `${progressPct}%`; }}
-                className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-[width] duration-500"
-              />
-            </div>
-          </div>
-
-          {canAct && viewMode === 'list' && (
-            <div className="mt-3 -mx-4 sm:-mx-6 px-4 sm:px-6 flex gap-1 border-b-0">
-              <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
-                Pendientes
-                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                  {pending}
-                </span>
-              </TabButton>
-              <TabButton active={tab === "completados"} onClick={() => setTab("completados")}>
-                Completados
-                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                  {done}
-                </span>
-              </TabButton>
-            </div>
-          )}
-        </div>
-      </header>
-
-      <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-4">
-        {actionError && (
-          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span className="flex-1">{actionError}</span>
-            <button
-              onClick={() => setActionError("")}
-              className="text-xs font-semibold text-rose-700 hover:text-rose-900 cursor-pointer"
-            >
-              Cerrar
+      {/* Toolbar */}
+      <div className="flex items-center justify-between gap-3 mb-2 px-4 max-w-2xl mx-auto pt-2">
+        {/* Toggle Lista/Mapa */}
+        {canAct && (
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setViewMode('list')} className={viewMode === 'list' ? `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] bg-[var(--sidebar-bg)] text-white` : `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100`}>
+              <Package className="w-4 h-4" /> Lista
+            </button>
+            <button onClick={() => setViewMode('map')} className={viewMode === 'map' ? `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] bg-[var(--sidebar-bg)] text-white` : `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100`}>
+              <MapPin className="w-4 h-4" /> Mapa
             </button>
           </div>
         )}
 
+        <div className="flex items-center gap-2">
+          {!simActive && simulationMode === "real" && (
+            <button onClick={() => { setSimActive(true); setViewMode('map'); }} title="Activar simulación GPS" className="min-h-[44px] min-w-[44px] flex items-center justify-center opacity-30 hover:opacity-70 transition-opacity cursor-pointer select-none">
+              <Film size={20} />
+            </button>
+          )}
+          {activeDangerZones.length > 0 && (
+            <span title="Zona peligrosa activa" className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-500/10 border border-red-300 dark:border-red-500/30 text-red-600 dark:text-red-400 text-[11px] font-bold shrink-0">
+              <AlertTriangle size={12} /> Zona
+            </span>
+          )}
+          <RouteStatusPill status={routeStatus} />
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="px-4 max-w-2xl mx-auto mb-3">
+        <div className="h-1.5 w-full rounded-full dark:bg-gray-700/50 bg-slate-100 overflow-hidden">
+          <div ref={el => { if (el) el.style.width = `${progressPct}%`; }} className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-[width] duration-500" />
+        </div>
+      </div>
+
+      {/* Tabs */}
+      {canAct && viewMode === 'list' && (
+        <div className="-mx-4 px-4 flex gap-2 mt-2 mb-2 border-b dark:border-gray-700 border-slate-100 max-w-2xl mx-auto">
+          <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
+            Pendientes
+            <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400">{pending}</span>
+          </TabButton>
+          <TabButton active={tab === "completados"} onClick={() => setTab("completados")}>
+            Completados
+            <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">{done}</span>
+          </TabButton>
+        </div>
+      )}
+
+      {isDangerDismissed && activeDangerZones.length > 0 && (
+        <div className="px-4 max-w-2xl mx-auto mb-2">
+          <ZoneAlert zones={activeDangerZones} onDismissedChange={setIsDangerDismissed} />
+        </div>
+      )}
+
+      <div className="px-4 sm:px-6 max-w-2xl mx-auto">
+        {actionError && (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm font-semibold text-[var(--danger-text)]">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <span className="flex-1">{actionError}</span>
+            <Button variant="ghost" size="sm" onClick={() => setActionError("")} className="shrink-0 min-h-[44px]">Cerrar</Button>
+          </div>
+        )}
+
         {routeStatus === "pendiente" && (
-          <Card className="mb-4 border-amber-200 bg-amber-50/60">
+          <Card className="mb-4 border-[var(--warn-border)] bg-[var(--warn-bg)]">
             <div className="p-4 flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-[var(--warn)] shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm font-bold text-amber-900">Ruta sin iniciar</p>
-                <p className="mt-0.5 text-xs text-amber-800 leading-relaxed">
+                <p className="text-sm font-bold text-[var(--warn-text)]">Ruta sin iniciar</p>
+                <p className="mt-0.5 text-xs text-[var(--warn-text)] leading-relaxed">
                   Iniciá la ruta para habilitar las acciones de entrega. Una vez iniciada, no se pueden agregar nuevos envíos.
                 </p>
                 {data.route.suggested_start_time && (
-                  <p className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-100 border border-amber-300 text-xs font-semibold text-amber-900">
+                  <p className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--warn-bg)] border border-[var(--warn-border)] text-xs font-semibold text-[var(--warn-text)]">
                     <Clock className="w-3.5 h-3.5" />
                     Salida sugerida: {new Date(data.route.suggested_start_time).toLocaleTimeString("es-AR", {
                       hour: "2-digit",
@@ -913,25 +805,34 @@ export function DriverRoute() {
                 onFastForwardTime: () => driverApi.fastForwardCheckinTime().catch(() => {}),
               }}
               zones={zones}
+              dangerZones={activeDangerZones}
               onRouteInfoChange={setRouteInfo}
-              onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
+              onWaypointClick={(trackingId) => navigate(`/driver/shipments/${trackingId}`)}
             />
             <ZoneAlert zones={activeDangerZones} onDismissedChange={setIsDangerDismissed} />
           </>
         ) : (
           <>
             {visibleList.length === 0 ? (
-              <Card className="p-8 text-center">
+              <div className="py-16 text-center">
                 {tab === "pendientes" ? (
                   <>
-                    <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
-                    <p className="text-sm font-semibold dark:text-gray-100 text-slate-900">¡Todo listo por ahora!</p>
-                    <p className="mt-1 text-xs dark:text-gray-400 text-slate-500">No quedan entregas pendientes.</p>
+                    <div className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle2 className="w-8 h-8" />
+                    </div>
+                    <p className="text-lg font-bold dark:text-gray-100 text-slate-900">¡Todo listo por ahora!</p>
+                    <p className="mt-1.5 text-sm dark:text-gray-400 text-slate-500">No quedan entregas pendientes en esta ruta.</p>
                   </>
                 ) : (
-                  <p className="text-sm dark:text-gray-400 text-slate-500">Aún no completaste ninguna entrega.</p>
+                  <>
+                    <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-gray-700/50 text-slate-400 dark:text-gray-500 flex items-center justify-center mx-auto mb-4">
+                      <Package className="w-8 h-8" />
+                    </div>
+                    <p className="text-lg font-bold dark:text-gray-100 text-slate-900">Sin entregas aún</p>
+                    <p className="mt-1.5 text-sm dark:text-gray-400 text-slate-500">Las entregas que completes aparecerán acá.</p>
+                  </>
                 )}
-              </Card>
+              </div>
             ) : (
               <div className="grid gap-3">
                 {visibleList.map((shipment, idx) => (
@@ -939,12 +840,7 @@ export function DriverRoute() {
                     <ShipmentCard
                       shipment={shipment}
                       order={tab === "pendientes" ? idx + 1 : undefined}
-                      canAct={canAct && tab === "pendientes"}
-                      getMisfires={() => misfireRef.current}
-                      onDeliver={() => openDeliverSheet(shipment)}
-                      onFailed={() => openFailedSheet(shipment)}
-                      onRejected={() => openRejectedSheet(shipment)}
-                      onOpen={() => navigate(`/shipments/${shipment.tracking_id}`)}
+                      onOpen={() => navigate(`/driver/shipments/${shipment.tracking_id}`)}
                     />
                     {pendingSyncIds.has(shipment.tracking_id) && (
                       <div className="flex items-center gap-1.5 mt-1 px-3 py-1.5 rounded-b-lg bg-amber-50 border border-t-0 border-amber-200 text-xs text-amber-700 font-medium">
@@ -962,20 +858,23 @@ export function DriverRoute() {
 
       {/* Card próxima parada (solo en vista mapa con ruta en curso) */}
       {viewMode === 'map' && canAct && (
-        <NextStopCard
-          nextStop={nextStop}
-          allPendingStops={allPendingStops}
-          userLocation={userLocation ?? undefined}
-          routeInfo={routeInfo}
-          canAct={canAct}
-          onDeliver={() => {
-            if (!nextShipment) return;
-            openDeliverSheet(nextShipment);
-            if (nextShipment.delivery_method === "ultima_milla") setCameraOpen(true);
-          }}
-          onFailed={() => { if (nextShipment) openFailedSheet(nextShipment); }}
-          onRejected={() => { if (nextShipment) openRejectedSheet(nextShipment); }}
-        />
+        <div className="mt-4">
+          <NextStopCard
+            nextStop={nextStop}
+            allPendingStops={allPendingStops}
+            userLocation={userLocation ?? undefined}
+            routeInfo={routeInfo}
+            canAct={canAct}
+            onDeliver={() => {
+              if (!nextShipment) return;
+              openDeliverSheet(nextShipment, () => {
+                if (nextShipment.delivery_method === "ultima_milla") setCameraOpen(true);
+              });
+            }}
+            onFailed={() => { if (nextShipment) openFailedSheet(nextShipment); }}
+            onRejected={() => { if (nextShipment) openRejectedSheet(nextShipment); }}
+          />
+        </div>
       )}
 
 
@@ -994,7 +893,8 @@ export function DriverRoute() {
       )}
 
       {/* Bottom sheets */}
-      <DeliverSheet
+      <DeliveryActionSheet
+        mode="deliver"
         open={!!deliverShipment && !cameraOpen}
         onClose={closeSheets}
         shipment={deliverShipment}
@@ -1010,15 +910,11 @@ export function DriverRoute() {
         blockMessage={blockMessage}
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
-        locationRequesting={locationRequesting}
-        locationPermissionDenied={locationPermissionDenied}
-        locationErrorMsg={locationErrorMsg}
         error={actionError}
-        photo={deliveryPhoto}
-        onRetakePhoto={() => setCameraOpen(true)}
         offlineKeywordAttempts={offlineKeywordAttempts}
       />
-      <FailedSheet
+      <DeliveryActionSheet
+        mode="failed"
         open={!!failedShipment}
         onClose={() => { setFailedShipment(null); setFailedReason(""); setFailedNotes(""); }}
         shipment={failedShipment}
@@ -1032,11 +928,10 @@ export function DriverRoute() {
         blockMessage={blockMessage}
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
-        locationRequesting={locationRequesting}
-        locationPermissionDenied={locationPermissionDenied}
-        locationErrorMsg={locationErrorMsg}
+        error={actionError}
       />
-      <RejectedSheet
+      <DeliveryActionSheet
+        mode="rejected"
         open={!!rejectedShipment}
         onClose={() => { setRejectedShipment(null); setRejectedReason(""); setRejectedNotes(""); }}
         shipment={rejectedShipment}
@@ -1050,80 +945,42 @@ export function DriverRoute() {
         blockMessage={blockMessage}
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
-        locationRequesting={locationRequesting}
-        locationPermissionDenied={locationPermissionDenied}
-        locationErrorMsg={locationErrorMsg}
+        error={actionError}
       />
-
-      {/* Overlay de bloqueo por fatiga — fixed encima de todo (LOGITRACK-499) */}
-      {fatigueBlocked && (
-        <div className="fixed inset-0 z-[9999] bg-[#1a1a2e] flex flex-col items-center justify-center p-8 text-center gap-6">
-          <AlertTriangle size={64} className="text-red-500" />
-          <h2 className="text-white text-[22px] font-bold m-0">
-            Alerta de fatiga detectada
-          </h2>
-          <p className="text-slate-400 text-base leading-relaxed m-0">
-            Tu supervisor fue notificado.<br/>
-            Esperá su indicación antes de continuar.
-          </p>
-        </div>
-      )}
-
-      {/* Cartelito de autorización — visible cuando el supervisor desbloqueó la ruta (LOGITRACK-501) */}
-      {!fatigueBlocked && fatigueUnblockedBy && (
-        <div className="fixed inset-0 z-[9999] bg-[#0d1f12] flex flex-col items-center justify-center p-8 text-center gap-6">
-          <CheckCircle2 size={64} className="text-emerald-500" />
-          <h2 className="text-white text-[22px] font-bold m-0">
-            Ruta autorizada
-          </h2>
-          <p className="text-green-300 text-base leading-relaxed m-0">
-            Tu supervisor <strong className="text-white">{fatigueUnblockedBy}</strong> autorizó<br/>
-            que continúes la ruta.
-          </p>
-          <button
-            onClick={() => {
-              if (pendingAckRef.current) sessionStorage.setItem("lt_fatigue_ack_route", pendingAckRef.current);
-              setFatigueUnblockedBy(null);
-            }}
-            className="mt-2 px-9 py-3 rounded-[10px] border-none bg-green-600 text-white text-base font-bold cursor-pointer"
-          >
-            Continuar
-          </button>
-        </div>
-      )}
-
       {/* Modal de advertencia de geofence */}
       {geoWarning && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-sm rounded-2xl bg-[var(--bg-card)] shadow-2xl overflow-hidden">
             <div className="flex items-start gap-3 px-5 pt-5 pb-4">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              <div className="w-10 h-10 rounded-xl bg-[var(--warn-bg)] flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-[var(--warn)]" />
               </div>
               <div className="flex-1">
-                <p className="font-bold text-slate-900 dark:text-gray-100">Ubicación fuera de rango</p>
-                <p className="mt-1 text-sm text-slate-600 dark:text-gray-400 leading-relaxed">
-                  Estás a <span className="font-semibold text-amber-700">{Math.round(geoWarning.distanceM)} m</span> del domicilio del destinatario
+                <p className="font-bold text-[var(--text-primary)]">Ubicación fuera de rango</p>
+                <p className="mt-1 text-sm text-[var(--text-secondary)] leading-relaxed">
+                  Estás a <span className="font-semibold text-[var(--warn-text)]">{Math.round(geoWarning.distanceM)} m</span> del domicilio del destinatario
                   (máximo {GEOFENCE_RADIUS_M} m).
                 </p>
-                <p className="mt-2 text-xs text-slate-500 dark:text-gray-500">
+                <p className="mt-2 text-xs text-[var(--text-muted)]">
                   Si confirmás, se registrará un incidente en el envío para revisión del supervisor.
                 </p>
               </div>
             </div>
             <div className="flex gap-2 px-5 pb-5">
-              <button
+              <Button
+                variant="outline"
                 onClick={() => setGeoWarning(null)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold border dark:border-gray-700 border-slate-200 dark:text-gray-300 text-slate-700 dark:hover:bg-gray-800 hover:bg-slate-50 transition-colors"
+                className="flex-1 py-2.5 rounded-xl"
               >
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="accent"
                 onClick={geoWarning.onConfirm}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+                className="flex-1 py-2.5 rounded-xl"
               >
                 Confirmar igual
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1132,19 +989,816 @@ export function DriverRoute() {
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────── */
-/* Sub-componentes                                                      */
-/* ─────────────────────────────────────────────────────────────────── */
+// ── InterBranchTripView ──────────────────────────────────────────────────────
+
+function InterBranchTripView() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // Gate de fatiga en ruta: true = mostrar KssCheckIn bloqueando la pantalla.
+  const {
+    showGate: midTripCheckin,
+    misfireCount: checkinMisfires,
+    requiresSleepData,
+    triggerGate,
+    closeGate: closeMidRouteGate,
+  } = useMidRouteFatigue();
+  const [trip, setTrip] = useState<InterBranchTrip | null>(null);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [noTrip, setNoTrip] = useState(false);
+  const [error, setError] = useState("");
+  const [starting, setStarting] = useState(false);
+  const [unavailablePickups, setUnavailablePickups] = useState<Set<string>>(new Set());
+
+  // Bloqueo automático de pantalla por alerta de fatiga (LOGITRACK-499).
+  const [fatigueBlocked, setFatigueBlocked] = useState(false);
+  const [fatigueUnblockedBy, setFatigueUnblockedBy] = useState<string | null>(null);
+  // Gate de fatiga en ruta: true = mostrar KssCheckIn bloqueando la pantalla.
+  // true si el driver aún no reportó sueño para el día logístico actual.
+  // Evita disparar múltiples consultas al gate cuando el vehículo está detenido.
+  const stopGateCheckedRef = useRef(false);
+  // Índices de checkpoints ya procesados en esta jornada (no repetir la alerta).
+  const checkpointPassedRef = useRef<Set<number>>(new Set());
+  // Último current_stop_index conocido; permite detectar el avance de parada.
+  const prevStopIndexRef = useRef<number | null>(null);
+  // Ref estable al trip actual — usado en handleCheckinDone sin necesitar deps.
+  const tripRef = useRef<typeof trip>(null);
+  // Clave del evento de desbloqueo actualmente en pantalla (para persistir el ACK en sessionStorage).
+  const pendingAckRef = useRef<string | null>(null);
+
+  // QR modal state
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrData, setQrData] = useState<TripQRResponse | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [stopConfirmed, setStopConfirmed] = useState(false);
+  const [confirmedBranchName, setConfirmedBranchName] = useState("");
+
+  // Collapsible
+  const [shipmentsExpanded, setShipmentsExpanded] = useState(false);
+  const [completedExpanded, setCompletedExpanded] = useState(false);
+
+  // Mapa
+  const mapRefInternal = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<unknown>(null);
+  const [mapDivMounted, setMapDivMounted] = useState(false);
+  const mapRef = useCallback((node: HTMLDivElement | null) => {
+    mapRefInternal.current = node;
+    setMapDivMounted(node !== null);
+  }, []);
+
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Abre el gate de fatiga y consulta si el driver ya registró sueño hoy.
+
+  // ── Simulación de ruta (modo ?gps=simulate) ────────────────────────────────
+  // Los routePoints se derivan del trip y las branches. Mientras no haya datos
+  // el hook recibe [] y no inicia el intervalo (ver implementación).
+  const routePoints = useMemo(() => {
+    if (!trip || !branches.length) return [];
+    const origin = branches.find((b) => b.id === trip.origin_branch_id);
+    if (!origin?.latitude) return [];
+    const pts: { lat: number; lng: number }[] = [
+      { lat: origin.latitude!, lng: origin.longitude! },
+    ];
+    const stops = trip.stops ?? [];
+    stops.forEach((s) => {
+      const b = branches.find((br) => br.id === s.branch_id);
+      if (b?.latitude) pts.push({ lat: b.latitude!, lng: b.longitude! });
+    });
+    return pts;
+  }, [trip, branches]);
+
+  // Checkpoints sintéticos: punto medio entre cada par de stops de la ruta.
+  // En un despliegue real estos vendrían de la API (peajes, balanzas, estaciones).
+  // Cuando la posición simulada entra en 500 m de uno de estos puntos, se
+  // consulta el backend y — si el check-in lleva >3h — se fuerza el re-test.
+  const checkpoints = useMemo(() => {
+    if (routePoints.length < 2) return [];
+    const midpoints: { lat: number; lng: number }[] = [];
+    for (let i = 0; i < routePoints.length - 1; i++) {
+      const a = routePoints[i];
+      const b = routePoints[i + 1];
+      midpoints.push({ lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 });
+    }
+    return midpoints;
+  }, [routePoints]);
+
+  const { stoppedTimeMs, position } = useGeolocation(routePoints, undefined, 80);
+
+  useEffect(() => { tripRef.current = trip; }, [trip]);
+
+  const load = useCallback(async () => {
+    try {
+      // Branches usa el endpoint público — los choferes no tienen permiso en /branches.
+      const [t, br] = await Promise.all([
+        interBranchTripsApi.getMyTrip(),
+        publicTrackingApi.getBranches(),
+      ]);
+      setTrip(t);
+      setBranches(br);
+      setNoTrip(false);
+
+      // Verificar estado actual de pickups de paradas completadas.
+      // Solo se muestran los que están loaded o in_transit (están físicamente en el camión).
+      // Los que quedaron en at_hub (no subieron) o en estado terminal se ocultan.
+      const ON_VEHICLE_STATUSES = new Set(["loaded", "in_transit"]);
+      const curIdx = t.current_stop_index ?? 0;
+      const completedPickupIds = (t.stops ?? [])
+        .slice(0, curIdx)
+        .flatMap((s) => s.pickup_shipment_ids ?? []);
+      if (completedPickupIds.length > 0) {
+        const statuses = await Promise.allSettled(
+          completedPickupIds.map((tid) => publicTrackingApi.getShipment(tid))
+        );
+        const notOnVehicle = new Set<string>();
+        statuses.forEach((result, i) => {
+          if (result.status === "fulfilled" && !ON_VEHICLE_STATUSES.has(result.value.status)) {
+            notOnVehicle.add(completedPickupIds[i]);
+          }
+        });
+        setUnavailablePickups(notOnVehicle);
+      }
+    } catch {
+      setNoTrip(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Polling cuando el modal QR está abierto
+  useEffect(() => {
+    if (!qrOpen || !trip) {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      return;
+    }
+    const prevStopIdx = trip.current_stop_index ?? 0;
+    const prevStatus = trip.status;
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const updated = await interBranchTripsApi.getMyTrip();
+        const newIdx = updated.current_stop_index ?? 0;
+        const advanced = newIdx > prevStopIdx || updated.status !== prevStatus;
+        if (advanced) {
+          // Mostrar overlay de éxito antes de cerrar modal
+          const currentStop = trip.stops?.[prevStopIdx];
+          const b = branches.find((br) => br.id === currentStop?.branch_id);
+          setConfirmedBranchName(b?.address.city ?? currentStop?.branch_id ?? "");
+          setStopConfirmed(true);
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          setTimeout(() => {
+            setStopConfirmed(false);
+            setQrOpen(false);
+            setTrip(updated);
+          }, 1800);
+        }
+      } catch { /* ignorar errores de red durante polling */ }
+    }, 4000);
+
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, [qrOpen, trip, branches]);
+
+  // Gate de fatiga por tiempo detenido (solo en modo simulación activa y viaje en tránsito).
+  // Cuando stoppedTimeMs vuelve a 0 el ref se resetea para detectar la próxima parada larga.
+  // La consulta al backend solo se dispara UNA VEZ por parada (al cruzar el umbral de 6 min).
+  useEffect(() => {
+    if (!trip || trip.status !== "en_transito" || midTripCheckin) return;
+
+    if (stoppedTimeMs === 0) {
+      stopGateCheckedRef.current = false; // vehículo en movimiento → resetear para próxima parada
+      return;
+    }
+    if (stoppedTimeMs < 6 * 60 * 1000) return; // todavía bajo el umbral
+    if (stopGateCheckedRef.current) return;     // ya consultamos para esta parada
+
+    stopGateCheckedRef.current = true;
+    triggerGate(0).catch(() => {});
+  }, [stoppedTimeMs, trip, midTripCheckin, triggerGate]);
+
+  // Check-in obligatorio al salir de cada parada intermedia.
+  // Trigger: cuando current_stop_index avanza en tiempo real (el operador
+  // escaneó el QR de recepción en la sucursal de destino).
+  //
+  // IMPORTANTE — NO incluir midTripCheckin en las deps:
+  // El overlay no cambia `trip`, así que el efecto no re-corre mientras está
+  // activo. Incluirlo causaba un loop infinito: al cerrar el overlay,
+  // midTripCheckin volvía a false y el efecto re-disparaba con el ref
+  // desactualizado (era early-return durante el overlay y no se actualizaba).
+  useEffect(() => {
+    if (!trip) return;
+
+    // Al completar el viaje: limpiar la entrada de localStorage.
+    if (trip.status === "completado") {
+      localStorage.removeItem(`trip_checkin_${trip.id}`);
+      prevStopIndexRef.current = null;
+      return;
+    }
+
+    if (trip.status !== "en_transito") {
+      prevStopIndexRef.current = null;
+      return;
+    }
+
+    const curIdx = trip.current_stop_index ?? 0;
+
+    if (prevStopIndexRef.current === null) {
+      // ── Carga inicial (o re-login) ───────────────────────────────────────
+      // Comparar el índice actual contra el último guardado en localStorage.
+      // Si el supervisor avanzó el índice mientras el chofer estaba fuera,
+      // curIdx > stored → mostrar el check-in pendiente.
+      const stored = parseInt(localStorage.getItem(`trip_checkin_${trip.id}`) ?? "0", 10);
+      if (curIdx > stored) {
+        triggerGate(0).catch(() => {});
+      }
+      prevStopIndexRef.current = curIdx;
+      return;
+    }
+
+    if (curIdx > prevStopIndexRef.current) {
+      // El índice subió en tiempo real → nueva parada confirmada por QR.
+      // Mostrar check-in antes de que el chofer salga hacia la siguiente.
+      triggerGate(0).catch(() => {});
+    }
+
+    // Actualizar SIEMPRE el ref, incluso si el gate fue abierto.
+    prevStopIndexRef.current = curIdx;
+  }, [trip]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Geocercas de checkpoints (Regla 5): al entrar en 500 m de un checkpoint
+  // sintético y el viaje está en tránsito, consultar elegibilidad y forzar
+  // el re-test si el último check-in fue hace más de 3 horas.
+  useEffect(() => {
+    if (!position || !trip || trip.status !== "en_transito" || midTripCheckin) return;
+    for (let idx = 0; idx < checkpoints.length; idx++) {
+      if (checkpointPassedRef.current.has(idx)) continue; // ya procesado
+      const distM = haversineKm(position, checkpoints[idx]) * 1000;
+      if (distM <= 500) {
+        checkpointPassedRef.current.add(idx); // marcar como visitado
+        triggerGate(0).catch(() => {});
+        break; // procesar un checkpoint por tick
+      }
+    }
+  }, [position, trip, midTripCheckin, checkpoints, triggerGate]);
+
+  // Mapa Leaflet
+  useEffect(() => {
+    if (!trip || !mapRefInternal.current || !branches.length) return;
+    const origin = branches.find((b) => b.id === trip.origin_branch_id);
+    if (!origin?.latitude) return;
+
+    const stops =
+      trip.stops && trip.stops.length > 0
+        ? trip.stops
+        : trip.destination_branch_id
+          ? [{ branch_id: trip.destination_branch_id, shipment_ids: trip.shipment_ids, total_weight_kg: trip.total_weight_kg }]
+          : [];
+
+    const points: { lat: number; lng: number; branch?: Branch; label: string; completed: boolean; current: boolean }[] = [
+      { lat: origin.latitude!, lng: origin.longitude!, branch: origin, label: "Origen", completed: false, current: false },
+    ];
+    const curIdx = trip.current_stop_index ?? 0;
+    stops.forEach((s, idx) => {
+      const b = branches.find((br) => br.id === s.branch_id);
+      if (b?.latitude)
+        points.push({
+          lat: b.latitude,
+          lng: b.longitude!,
+          branch: b,
+          label: idx === stops.length - 1 ? "Destino final" : `Parada ${idx + 1}`,
+          completed: idx < curIdx,
+          current: idx === curIdx && trip.status === "en_transito",
+        });
+    });
+    if (points.length < 2) return;
+
+    import("leaflet").then((L) => {
+      if (mapInstanceRef.current) {
+        (mapInstanceRef.current as { remove(): void }).remove();
+        mapInstanceRef.current = null;
+      }
+      const map = L.map(mapRefInternal.current!, { zoomControl: false, scrollWheelZoom: false });
+      mapInstanceRef.current = map;
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OSM" }).addTo(map);
+
+      const icon = (bg: string, content: string) =>
+        L.divIcon({
+          className: "",
+          html: `<div style="background:${bg};color:var(--text-on-brand,#fff);border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.3)">${content}</div>`,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
+        });
+
+      points.forEach((p, i) => {
+        let bg = "var(--sidebar-bg)", content = "📍";
+        if (i > 0) {
+          if (p.completed) { bg = "var(--ok)"; content = "✓"; }
+          else if (p.current) { bg = "var(--warn)"; content = "📍"; }
+          else { bg = "var(--brand)"; content = String(i); }
+        }
+        L.marker([p.lat, p.lng], { icon: icon(bg, content) })
+          .addTo(map)
+          .bindPopup(`<div style="font-family:system-ui;min-width:120px;color:var(--text-primary)"><b>${p.label}</b><br><span style="color:var(--text-secondary)">${p.branch?.name ?? ""}${p.branch?.address.city ? '<br>' + p.branch.address.city : ''}</span></div>`, { className: "driver-map-popup" });
+      });
+
+      const latlngs = points.map((p) => [p.lat, p.lng] as [number, number]);
+      // Fit to remaining route: from the last completed stop (or origin) to the end.
+      // This keeps the driver focused on what's ahead after each stop is confirmed.
+      const remainingLatlngs = points.slice(curIdx).map((p) => [p.lat, p.lng] as [number, number]);
+      map.fitBounds(
+        L.latLngBounds(remainingLatlngs.length >= 2 ? remainingLatlngs : latlngs),
+        { padding: [40, 40] },
+      );
+
+      // Ruta real por carretera vía OSRM — usa legs para colorear por segmento
+      const coordStr = points.map((p) => `${p.lng},${p.lat}`).join(";");
+      fetch(`https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=false&geometries=geojson&steps=false&alternatives=false&annotations=false`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.code !== "Ok" || !data.routes?.[0]?.legs) throw new Error("no route");
+          // Pedir geometría por leg individual para colorear completados vs pendientes
+          const legRequests: Promise<Response>[] = [];
+          for (let i = 0; i < points.length - 1; i++) {
+            const from = `${points[i].lng},${points[i].lat}`;
+            const to = `${points[i + 1].lng},${points[i + 1].lat}`;
+            legRequests.push(fetch(`https://router.project-osrm.org/route/v1/driving/${from};${to}?overview=full&geometries=geojson`));
+          }
+          return Promise.all(legRequests).then((responses) =>
+            Promise.all(responses.map((r) => r.json()))
+          ).then((legs) => {
+            legs.forEach((legData, i) => {
+              if (legData.code !== "Ok" || !legData.routes?.[0]) {
+                // fallback línea recta para este segmento
+                L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
+              color: points[i + 1].completed ? "var(--ok)" : "var(--brand)",
+                  weight: 3,
+                  dashArray: points[i + 1].completed ? undefined : "8 6",
+                }).addTo(map);
+                return;
+              }
+              const coords: [number, number][] = legData.routes[0].geometry.coordinates.map(
+                (c: number[]) => [c[1], c[0]] as [number, number],
+              );
+              L.polyline(coords, {
+                color: points[i + 1].completed ? "var(--ok)" : "var(--brand)",
+                weight: 3,
+                opacity: 0.8,
+                dashArray: points[i + 1].completed ? undefined : "8 6",
+              }).addTo(map);
+            });
+          });
+        })
+        .catch(() => {
+          // fallback: líneas rectas si OSRM no responde
+          for (let i = 0; i < points.length - 1; i++) {
+            L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
+              color: points[i + 1].completed ? "var(--ok)" : "var(--brand)",
+              weight: 3,
+              dashArray: points[i + 1].completed ? undefined : "8 6",
+            }).addTo(map);
+          }
+        });
+    }).catch(() => {});
+
+    return () => {
+      if (mapInstanceRef.current) { (mapInstanceRef.current as { remove(): void }).remove(); mapInstanceRef.current = null; }
+    };
+  }, [trip, branches, mapDivMounted]);
+
+  // Polling de bloqueo por fatiga — cada 5 s mientras el viaje está en_transito (LOGITRACK-499).
+  useEffect(() => {
+    if (!trip || trip.status !== "en_transito") return;
+    const poll = async () => {
+      try {
+        const data = await driverApi.getFatigueBlockStatus();
+        const nowBlocked = data.blocked ?? false;
+        setFatigueBlocked(nowBlocked);
+        if (!nowBlocked && data.recently_unblocked && data.unblocked_by) {
+          const ackKey = data.unblocked_at ?? "seen";
+          const storedAck = sessionStorage.getItem("lt_fatigue_ack");
+          pendingAckRef.current = ackKey;
+          if (ackKey !== storedAck) {
+            setFatigueUnblockedBy(data.unblocked_by);
+          }
+        }
+      } catch {
+        // Error de red → mantener estado actual (conservador)
+      }
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, [trip]);
+
+  const openQR = async () => {
+    if (!trip) return;
+    setQrOpen(true);
+    if (!qrData) {
+      setQrLoading(true);
+      try {
+        const data = await interBranchTripsApi.getQR(trip.id);
+        setQrData(data);
+      } catch { /* mostrar fallback */ }
+      finally { setQrLoading(false); }
+    }
+  };
+
+  const doStartTrip = async () => {
+    if (!trip) return;
+    setStarting(true);
+    setError("");
+    try {
+      const updated = await interBranchTripsApi.startTrip(trip.id);
+      setTrip(updated);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setError(msg ?? "No se pudo iniciar el viaje.");
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const handleStart = async () => {
+    // El check-in del inicio del viaje (Buenos Aires) no se requiere.
+    // Los check-ins se disparan en cada PARADA INTERMEDIA, no en el origen.
+    await doStartTrip();
+  };
+
+  // Callback que recibe KssCheckIn al terminar (completar o saltear).
+  // Persiste el índice actual en localStorage para que, si el chofer cierra
+  // sesión y vuelve a entrar, el sistema sepa hasta qué parada ya hizo el test.
+  const handleCheckinDone = useCallback(() => {
+    closeMidRouteGate();
+    const t = tripRef.current;
+    if (t) {
+      const curIdx = t.current_stop_index ?? 0;
+      localStorage.setItem(`trip_checkin_${t.id}`, String(curIdx));
+    }
+  }, [closeMidRouteGate]);
+
+  // Bloqueo por alerta de fatiga: overlay fixed encima del contenido para no
+  // desmontar el mapa ni otros elementos del DOM (LOGITRACK-499).
+  // Se renderiza al final del JSX como portal superpuesto.
+
+  // Gate de fatiga: cubre la pantalla completa antes de que el chofer inicie
+  // el viaje o cuando lleva más de 6 minutos detenido en ruta.
+  if (midTripCheckin && user) {
+    return (
+      <KssCheckIn
+        driverId={user.id}
+        misfireCount={checkinMisfires}
+        requiresSleepData={requiresSleepData}
+        onDone={handleCheckinDone}
+      />
+    );
+  }
+
+  if (loading) return <TripSkeleton />;
+  if (noTrip) return <NoTripView />;
+  if (!trip) return null;
+
+  const stops =
+    trip.stops && trip.stops.length > 0
+      ? trip.stops
+      : trip.destination_branch_id
+        ? [{ branch_id: trip.destination_branch_id, shipment_ids: trip.shipment_ids, total_weight_kg: trip.total_weight_kg, pickup_shipment_ids: [], pickup_weight_kg: 0 }]
+        : [];
+
+  const curIdx = trip.current_stop_index ?? 0;
+  const origin = branches.find((b) => b.id === trip.origin_branch_id);
+  const currentStop = stops[curIdx];
+  const currentStopBranch = branches.find((b) => b.id === currentStop?.branch_id);
+
+  // Distancia restante = desde la última posición conocida (origen si no completó
+  // paradas, o la última parada completada) hasta la próxima parada.
+  const previousLocationBranch =
+    curIdx === 0
+      ? origin
+      : branches.find((b) => b.id === stops[curIdx - 1]?.branch_id);
+  let distRemainingKm: number | null = null;
+  if (previousLocationBranch?.latitude && currentStopBranch?.latitude) {
+    distRemainingKm = Math.round(
+      haversineKm(
+        { lat: previousLocationBranch.latitude!, lng: previousLocationBranch.longitude! },
+        { lat: currentStopBranch.latitude!, lng: currentStopBranch.longitude! },
+      ),
+    );
+  }
+  const etaHours = distRemainingKm !== null ? distRemainingKm / 80 : null;
+
+  const completedStops = stops.slice(0, curIdx);
+  const upcomingStops = stops.slice(curIdx + 1);
+
+  // Pickups cargados en paradas anteriores que viajan en el camión y se
+  // descargan en esta parada (o en la siguiente, si hay más hops).
+  // Se excluyen los que ya tienen estado terminal (cancelado, destruido, etc.).
+  const pickupsInTransit = completedStops
+    .flatMap((s) => s.pickup_shipment_ids ?? [])
+    .filter((tid) => !unavailablePickups.has(tid));
+  const pickupsInTransitWeightKg = completedStops.reduce((sum, s) => sum + (s.pickup_weight_kg ?? 0), 0);
+
+  const totalShipments = trip.shipment_ids.length;
+
+  const statusMap: Record<string, { label: string; cls: string }> = {
+    pendiente: { label: "Pendiente", cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" },
+    en_transito: { label: "En ruta", cls: "bg-[var(--brand-100)] text-[var(--brand-800)] dark:bg-[var(--brand-tint)] dark:text-[var(--brand)]" },
+    completado: { label: "Completado", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" },
+    cancelado: { label: "Cancelado", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
+  };
+  const st = statusMap[trip.status] ?? statusMap.pendiente;
+
+  // ---------- Estado completado ----------
+  if (trip.status === "completado") {
+    return (
+    <div className="flex flex-col items-center justify-center p-6 py-20">
+        <div className="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-5">
+          <CheckCircle2 className="w-10 h-10 text-emerald-600 dark:text-emerald-400" />
+        </div>
+        <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-1">Viaje completado</h1>
+        <p className="text-[var(--text-secondary)] text-sm mb-6 text-center">
+          {stops.length} parada{stops.length !== 1 ? "s" : ""} · {totalShipments} envíos · {trip.license_plate}
+        </p>
+        {trip.completed_at && (
+          <p className="text-xs text-[var(--text-muted)] mb-8">
+            {fmtDateTime(trip.completed_at)}
+          </p>
+        )}
+        <Button
+          onClick={() => navigate("/driver/scan")}
+          className="h-14 px-10 rounded-xl text-base font-bold"
+        >
+          Volver al inicio
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* ── HEADER ── */}
+      <header className="sticky top-0 z-10 bg-[var(--bg-card)]/95 backdrop-blur border-b border-[var(--border)]">
+        <div className="px-4 max-w-2xl mx-auto py-3">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
+              <Truck className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-mono tracking-tight text-base font-bold text-[var(--text-primary)]">{trip.license_plate}</span>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${st.cls}`}>
+                  {st.label}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)] mt-0.5">
+                <span className="flex items-center gap-1">
+                  <Package className="w-3 h-3" />
+                  {totalShipments} envío{totalShipments !== 1 ? "s" : ""}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Weight className="w-3 h-3" />
+                  {trip.total_weight_kg.toFixed(0)} kg
+                </span>
+                <span className="font-mono text-xs text-[var(--text-muted)] truncate">{trip.id}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="px-4 max-w-2xl mx-auto pt-4 space-y-4">
+        {error && (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <span className="flex-1">{error}</span>
+            <Button variant="ghost" size="sm" onClick={() => setError("")} className="shrink-0 min-h-[44px]">Cerrar</Button>
+          </div>
+        )}
+
+        {/* ── PROGRESS: STEPPER HORIZONTAL ── */}
+        <StepperBar
+          origin={origin}
+          stops={stops}
+          currentStopIdx={curIdx}
+          branches={branches}
+          tripStatus={trip.status}
+        />
+
+        {/* ── HERO: PRÓXIMA PARADA ── */}
+        {trip.status === "en_transito" && currentStop && (
+          <HeroNextStop
+            stop={currentStop}
+            stopNumber={curIdx + 1}
+            totalStops={stops.length}
+            branch={currentStopBranch}
+            distKm={distRemainingKm}
+            etaHours={etaHours}
+            pickupsInTransit={pickupsInTransit}
+            pickupsInTransitWeightKg={pickupsInTransitWeightKg}
+            shipmentsExpanded={shipmentsExpanded}
+            onToggleShipments={() => setShipmentsExpanded((v) => !v)}
+          />
+        )}
+
+        {/* ── MAPA ── */}
+        {origin?.latitude != null ? (
+          <Card className="overflow-hidden !p-0 border-[var(--border)]" variant="muted">
+            <div ref={mapRef} className="h-48 w-full" />
+          </Card>
+        ) : (
+          <Card className="!p-4 border-[var(--border)]" variant="muted">
+            <div className="h-48 flex items-center justify-center text-sm text-[var(--text-muted)]">
+              <MapPin className="w-4 h-4 mr-2" />
+              Cargando mapa…
+            </div>
+          </Card>
+        )}
+
+        {/* ── PARADAS COMPLETADAS ── */}
+        {completedStops.length > 0 && (
+          <section>
+            <Button variant="ghost" onClick={() => setCompletedExpanded((v) => !v)} className="w-full justify-start min-h-[44px] text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)] mb-3">
+              {completedExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              Paradas completadas ({completedStops.length})
+            </Button>
+            {completedExpanded && (
+              <div className="space-y-2.5">
+                {completedStops.map((s, idx) => {
+                  const b = branches.find((br) => br.id === s.branch_id);
+                  return (
+                    <Card key={idx} className="!p-4 border-[var(--border)]" variant="muted">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-[var(--text-primary)]">{b?.name ?? s.branch_id}</p>
+                          <p className="text-xs text-[var(--text-secondary)]">{b?.address.city}</p>
+                        </div>
+                        {s.completed_at && (
+                          <p className="text-xs text-[var(--text-muted)] shrink-0">
+                            {new Date(s.completed_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        )}
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── PRÓXIMAS PARADAS ── */}
+        {upcomingStops.length > 0 && (
+          <section>
+            <p className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)] mb-3">
+              Siguientes paradas
+            </p>
+            <div className="space-y-2.5">
+              {upcomingStops.map((s, idx) => {
+                const b = branches.find((br) => br.id === s.branch_id);
+                const realIdx = curIdx + 1 + idx;
+                const prevBranch = branches.find((br) => br.id === stops[realIdx - 1]?.branch_id);
+                let legKm: number | null = null;
+                if (prevBranch?.latitude && b?.latitude) {
+                  legKm = Math.round(haversineKm(
+                    { lat: prevBranch.latitude!, lng: prevBranch.longitude! },
+                    { lat: b.latitude!, lng: b.longitude! },
+                  ));
+                }
+                return (
+                  <Card key={idx} className="!p-4 border-[var(--border)]" variant="muted">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-[var(--bg-muted)] dark:bg-slate-700 flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-[var(--text-secondary)]">{realIdx + 1}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-[var(--text-primary)]">{b?.name ?? s.branch_id}</p>
+                        <p className="text-xs text-[var(--text-secondary)]">
+                          {b?.address.city}{b?.address.province ? `, ${b.address.province}` : ""}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0 text-xs text-[var(--text-muted)] space-y-0.5">
+                        {legKm !== null && <p className="font-medium">+{legKm} km</p>}
+                        <p>{s.shipment_ids.length} env.</p>
+                      </div>
+                    </div>
+                    {(s.pickup_shipment_ids?.length ?? 0) > 0 && (
+                      <div className="flex items-center gap-1.5 mt-2 ml-11">
+                        <ArrowUp className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                        <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                          Cargás {s.pickup_shipment_ids?.length} envío{s.pickup_shipment_ids!.length !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Timestamps */}
+        {trip.started_at && (
+          <p className="text-xs text-[var(--text-muted)] text-center pt-2">
+            Iniciado: {fmtDateTime(trip.started_at)}
+          </p>
+        )}
+      </div>
+
+      {/* ── CTA STICKY BOTTOM ── */}
+      {trip.status === "en_transito" && (
+        <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
+          <div className="max-w-2xl mx-auto">
+            <Button onClick={openQR} className="w-full h-14 rounded-xl text-white text-lg font-bold gap-2.5 shadow-lg shadow-[var(--brand)]/20">
+              <QrCode className="w-5 h-5" />
+              Llegué — mostrar QR al operador
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Fallback para estado pendiente */}
+      {trip.status === "pendiente" && (
+        <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
+          <div className="max-w-2xl mx-auto space-y-3">
+            <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-[var(--warn-bg)] border border-[var(--warn-border)] text-xs text-[var(--warn-text)]">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>Al iniciar el viaje, los envíos pasan a estado <strong>en tránsito</strong>.</span>
+            </div>
+            <Button onClick={handleStart} disabled={starting} className="w-full h-14 rounded-xl text-white text-lg font-bold gap-2.5 shadow-lg">
+              <Play className="w-5 h-5" />
+              {starting ? "Iniciando viaje…" : "Iniciar viaje"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL QR FULLSCREEN ── */}
+      {qrOpen && (
+        <QRModal
+          trip={trip}
+          currentStop={currentStop}
+          currentStopBranch={currentStopBranch}
+          pickupsInTransit={pickupsInTransit}
+          qrData={qrData}
+          qrLoading={qrLoading}
+          stopConfirmed={stopConfirmed}
+          confirmedBranchName={confirmedBranchName}
+          onClose={() => { setQrOpen(false); if (pollingRef.current) clearInterval(pollingRef.current); }}
+        />
+      )}
+
+      {/* Overlay de bloqueo por fatiga — fixed encima de todo, no desmonta el mapa */}
+      {fatigueBlocked && (
+        <div className="fixed inset-0 z-[9999] bg-[var(--sidebar-bg)] flex flex-col items-center justify-center p-8 text-center gap-6">
+          <AlertTriangle size={64} className="text-[var(--danger-c)]" />
+          <h2 className="text-white text-[22px] font-bold m-0">
+            Alerta de fatiga detectada
+          </h2>
+          <p className="text-[var(--text-muted)] text-base leading-relaxed m-0">
+            Tu supervisor fue notificado.<br/>
+            Esperá su indicación antes de continuar.
+          </p>
+        </div>
+      )}
+
+      {/* Cartelito de autorización — se muestra cuando el supervisor desbloqueó la ruta (LOGITRACK-501) */}
+      {!fatigueBlocked && fatigueUnblockedBy && (
+        <div className="fixed inset-0 z-[9999] bg-[var(--sidebar-bg)] flex flex-col items-center justify-center p-8 text-center gap-6">
+          <CheckCircle2 size={64} className="text-[var(--ok)]" />
+          <h2 className="text-white text-[22px] font-bold m-0">
+            Ruta autorizada
+          </h2>
+          <p className="text-[var(--text-secondary)] text-base leading-relaxed m-0">
+            Tu supervisor <strong className="text-white">{fatigueUnblockedBy}</strong> autorizó<br/>
+            que continúes la ruta.
+          </p>
+          <Button onClick={() => {
+            if (pendingAckRef.current) sessionStorage.setItem("lt_fatigue_ack", pendingAckRef.current);
+            setFatigueUnblockedBy(null);
+          }} className="mt-2 px-9 py-3 rounded-xl text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white">
+            Continuar
+          </Button>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Shared sub-components ────────────────────────────────────────────────────
 
 function RouteStatusPill({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
-    pendiente: { label: "Pendiente", cls: "bg-amber-100 text-amber-800" },
-    en_curso: { label: "En curso", cls: "bg-emerald-100 text-emerald-800" },
-    finalizada: { label: "Finalizada", cls: "bg-indigo-100 text-indigo-800" },
+    pendiente: { label: "Pendiente", cls: "bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-400" },
+    en_curso: { label: "En curso", cls: "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-400" },
+    finalizada: { label: "Finalizada", cls: "bg-indigo-100 dark:bg-indigo-500/15 text-indigo-800 dark:text-indigo-400" },
   };
   const c = map[status] ?? map.pendiente;
   return (
-    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${c.cls}`}>
+    <span className={`text-xs font-bold px-3 py-1.5 rounded-full whitespace-nowrap min-h-[44px] inline-flex items-center ${c.cls}`}>
       {c.label}
     </span>
   );
@@ -1152,18 +1806,19 @@ function RouteStatusPill({ status }: { status: string }) {
 
 function TabButton({
   active,
+  color = "var(--brand)",
   onClick,
   children,
-}: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+}: { active: boolean; color?: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
-      className={`relative h-10 px-4 text-sm font-semibold cursor-pointer transition-colors ${active ? "text-[var(--brand)]" : "dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700"
+      className={`relative h-12 px-4 text-sm font-semibold cursor-pointer active:scale-95 transition-all duration-150 ${active ? "text-[var(--brand)]" : "dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700"
         }`}
     >
       {children}
       {active && (
-        <span className="absolute left-2 right-2 -bottom-px h-[2.5px] rounded-full bg-[var(--brand)]" />
+        <span className="absolute left-2 right-2 -bottom-px h-[3px] rounded-full" style={{ backgroundColor: color }} />
       )}
     </button>
   );
@@ -1172,55 +1827,13 @@ function TabButton({
 function ShipmentCard({
   shipment,
   order,
-  canAct,
-  getMisfires,
-  onDeliver,
-  onFailed,
-  onRejected,
   onOpen,
 }: {
   shipment: Shipment;
   order?: number;
-  canAct: boolean;
-  getMisfires: () => number;
-  onDeliver: () => void;
-  onFailed: () => void;
-  onRejected: () => void;
   onOpen: () => void;
 }) {
-  // Momento en que la card se montó — para calcular reaction_time_ms.
-  const renderTimeRef = useRef<number>(0);
-  useEffect(() => { renderTimeRef.current = Date.now(); }, []);
-
-  /** Envía el evento táctil al backend (fire-and-forget). */
-  const fireTouchEvent = (action: TouchEventPayload["action"]) => {
-    driverApi.submitTouchEvent({
-      tracking_id: shipment.tracking_id,
-      action,
-      reaction_time_ms: Date.now() - renderTimeRef.current,
-      misfires: getMisfires(), // leer el contador global del padre
-    }).catch(() => {});
-  };
-
-  const handleDeliverClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // no burbujar al listener global → no cuenta como misfire
-    fireTouchEvent("entregado");
-    onDeliver();
-  };
-
-  const handleFailedClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    fireTouchEvent("no_entregado");
-    onFailed();
-  };
-
-  const handleRejectedClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    fireTouchEvent("no_entregado");
-    onRejected();
-  };
-
-  const { name, phone, fullAddress, specialInstructions } = recipientView(shipment);
+  const { name, fullAddress, specialInstructions } = recipientView(shipment);
   const isCompleted =
     shipment.status === "delivered" ||
     shipment.status === "delivery_failed" ||
@@ -1235,77 +1848,84 @@ function ShipmentCard({
   const fragile = !!shipment.is_fragile;
   const attempts = shipment.delivery_attempts ?? 0;
 
+  const statusColor = isDelivered ? "bg-emerald-500" : isFailed ? "bg-rose-500" : isRejected ? "bg-amber-500" : "";
+
   return (
     <Card
       className={
         isCompleted
-          ? "p-0 dark:bg-gray-800/50 bg-slate-50/60 dark:bg-slate-800/30 dark:border-gray-700 border-slate-200"
+          ? "p-0 dark:bg-gray-800/40 bg-slate-50/60 dark:border-gray-700/50 border-slate-200"
           : "p-0 hover:shadow-md transition-shadow"
       }
     >
       <button
         type="button"
         onClick={onOpen}
-        className="w-full text-left px-4 pt-4 pb-3 cursor-pointer"
+        className="w-full text-left px-3 py-3 cursor-pointer min-h-[44px]"
       >
         <div className="flex items-start gap-3">
           {order !== undefined && (
-            <div className="shrink-0 w-9 h-9 rounded-xl bg-[var(--sidebar-bg)] text-white text-sm font-bold flex items-center justify-center">
+            <div className="shrink-0 w-10 h-10 rounded-xl bg-[var(--sidebar-bg)] text-white text-base font-bold flex items-center justify-center">
               {String(order).padStart(2, "0")}
             </div>
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <p className={`text-base font-bold leading-snug ${isCompleted ? "dark:text-gray-400 text-slate-600" : "dark:text-gray-100 text-slate-900"}`}>
-                {name}
-              </p>
+              <div className="flex items-center gap-2 min-w-0">
+                {isCompleted && (
+                  <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${statusColor}`} />
+                )}
+                <p className={`text-base font-bold leading-snug truncate ${isCompleted ? "dark:text-gray-400 text-slate-500" : "dark:text-gray-100 text-slate-900"}`}>
+                  {name}
+                </p>
+              </div>
               {isDelivered && (
-                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                  <CheckCircle2 className="w-3 h-3" />
+                <span className="shrink-0 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/15 px-2.5 py-1 rounded-full">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
                   Entregado
                 </span>
               )}
               {isFailed && (
-                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
-                  <XCircle className="w-3 h-3" />
+                <span className="shrink-0 inline-flex items-center gap-1 text-xs font-bold text-rose-700 dark:text-rose-400 bg-rose-100 dark:bg-rose-500/15 px-2.5 py-1 rounded-full">
+                  <XCircle className="w-3.5 h-3.5" />
                   Sin entregar
                 </span>
               )}
               {isRejected && (
-                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                  <Ban className="w-3 h-3" />
+                <span className="shrink-0 inline-flex items-center gap-1 text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/15 px-2.5 py-1 rounded-full">
+                  <Ban className="w-3.5 h-3.5" />
                   Rechazado
                 </span>
               )}
             </div>
-            <p className={`mt-1 text-sm leading-snug flex items-start gap-1.5 ${isCompleted ? "dark:text-gray-400 text-slate-500" : "dark:text-gray-300 text-slate-700"}`}>
-              <MapPin className="w-3.5 h-3.5 mt-0.5 dark:text-gray-500 text-slate-400 shrink-0" />
+            <p className={`mt-1 text-base leading-snug flex items-start gap-1.5 ${isCompleted ? "dark:text-gray-400 text-slate-500" : "dark:text-gray-200 text-slate-700"}`}>
+              <MapPin className="w-4 h-4 mt-1 dark:text-gray-500 text-slate-400 shrink-0" />
               <span className="break-words">{fullAddress}</span>
             </p>
           </div>
-          {!isCompleted && <ChevronRight className="w-4 h-4 text-slate-300 mt-1.5 shrink-0" />}
+          {!isCompleted && <ChevronRight className="w-5 h-5 text-slate-300 dark:text-gray-500 mt-1.5 shrink-0" />}
         </div>
 
         {!isCompleted && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             {tw && (
-              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
-                <Clock className="w-3 h-3" />
-                {TIME_WINDOW_LABEL[tw] ?? tw} {TIME_WINDOW_HOURS[tw] && `· ${TIME_WINDOW_HOURS[tw]}`}
+              <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
+                <Clock className="w-3.5 h-3.5" />
+                {TIME_WINDOW_LABEL[tw] ?? tw}{TIME_WINDOW_HOURS[tw] && ` · ${TIME_WINDOW_HOURS[tw]}`}
               </span>
             )}
             {fragile && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
-                <AlertTriangle className="w-3 h-3" />
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--warn-bg)] text-[var(--warn-text)] border-[var(--warn-border)]">
+                <AlertTriangle className="w-3.5 h-3.5" />
                 Frágil
               </span>
             )}
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border dark:bg-gray-800/50 bg-slate-50 dark:text-gray-300 text-slate-700 dark:border-gray-700 border-slate-200">
-              <Package className="w-3 h-3" />
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border dark:bg-gray-700/50 bg-slate-50 dark:text-gray-300 text-slate-600 dark:border-gray-600 border-slate-200">
+              <Package className="w-3.5 h-3.5" />
               {shipment.weight_kg} kg
             </span>
             {attempts > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-500/30">
                 Reintento {attempts + 1}
               </span>
             )}
@@ -1313,550 +1933,19 @@ function ShipmentCard({
         )}
 
         {!isCompleted && specialInstructions && (
-          <div className="mt-3 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-900 flex items-start gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="mt-3 px-3 py-2.5 rounded-xl border border-[var(--warn-border)] bg-[var(--warn-bg)] text-sm text-[var(--warn-text)] flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <span className="leading-relaxed">{specialInstructions}</span>
           </div>
         )}
+
+        <p className="mt-3 text-[11px] font-mono dark:text-gray-500 text-slate-400">
+          {shipment.tracking_id}
+        </p>
       </button>
-
-      {!isCompleted && (
-        <div className="px-4 pb-4 border-t dark:border-gray-700 border-slate-100">
-          <div className="mt-3" onClick={(e) => e.stopPropagation()}>
-            <WhatsAppQuickButton
-              phone={phone}
-              recipientName={name}
-              trackingId={shipment.tracking_id}
-              compact
-            />
-          </div>
-
-          {canAct && (
-            <>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <button
-                  onClick={handleDeliverClick}
-                  className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  Entregar
-                </button>
-                <button
-                  onClick={handleFailedClick}
-                  className="h-12 rounded-xl border-2 border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
-                >
-                  <XCircle className="w-4 h-4" />
-                  No entregado
-                </button>
-              </div>
-              <button
-                onClick={handleRejectedClick}
-                className="w-full mt-2 h-11 rounded-xl border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-800 text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
-              >
-                <Ban className="w-4 h-4" />
-                Rechazado por destinatario
-              </button>
-            </>
-          )}
-
-          <p className="mt-3 text-[10px] font-mono dark:text-gray-500 text-slate-400 text-center">{shipment.tracking_id}</p>
-        </div>
-      )}
-
-      {isCompleted && (
-        <button
-          type="button"
-          onClick={onOpen}
-          className="w-full px-4 pb-3 -mt-1 text-left cursor-pointer"
-        >
-          <p className="text-[10px] font-mono dark:text-gray-500 text-slate-400">{shipment.tracking_id}</p>
-        </button>
-      )}
     </Card>
   );
 }
-
-function DeliverSheet({
-  open,
-  onClose,
-  shipment,
-  keyword,
-  onKeywordChange,
-  useContingency,
-  onUseContingency,
-  dni,
-  onDniChange,
-  submitting,
-  onConfirm,
-  speedBlocked,
-  blockMessage,
-  needsLocation,
-  onRequestLocation,
-  locationRequesting = false,
-  locationPermissionDenied = false,
-  locationErrorMsg = null,
-  error,
-  photo,
-  onRetakePhoto,
-  offlineKeywordAttempts = 0,
-}: {
-  open: boolean;
-  onClose: () => void;
-  shipment: Shipment | null;
-  keyword: string;
-  onKeywordChange: (s: string) => void;
-  useContingency: boolean;
-  onUseContingency: (v: boolean) => void;
-  dni: string;
-  onDniChange: (s: string) => void;
-  submitting: boolean;
-  onConfirm: () => void;
-  speedBlocked: boolean;
-  blockMessage: string;
-  needsLocation: boolean;
-  onRequestLocation: () => void;
-  locationRequesting?: boolean;
-  locationPermissionDenied?: boolean;
-  locationErrorMsg?: string | null;
-  error: string;
-  photo: Blob | null;
-  onRetakePhoto: () => void;
-  offlineKeywordAttempts?: number;
-}) {
-  const keywordRef = useRef<HTMLInputElement>(null);
-  const dniRef = useRef<HTMLInputElement>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      const t = setTimeout(() => {
-        (useContingency ? dniRef : keywordRef).current?.focus();
-      }, 80);
-      return () => clearTimeout(t);
-    }
-  }, [open, useContingency]);
-
-  useEffect(() => {
-    if (!photo) { setPhotoPreview(null); return; }
-    const url = URL.createObjectURL(photo);
-    setPhotoPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [photo]);
-
-  if (!shipment) return null;
-  const { name } = recipientView(shipment);
-  const isLastMile = shipment.delivery_method === "ultima_milla";
-  const keywordAttempts = shipment.keyword_attempts ?? 0;
-  const locked = Math.max(keywordAttempts, offlineKeywordAttempts) >= 3;
-
-  const canConfirm = isLastMile
-    ? (useContingency ? !!dni.trim() : (!locked && !!keyword.trim())) && !!photo
-    : !!dni.trim();
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title="Confirmar entrega"
-      description={`Entrega a ${name}`}
-    >
-      {/* Delivery photo — required for última milla */}
-      {isLastMile && (
-        <div className="mb-4">
-          {photo && photoPreview ? (
-            <div className="relative rounded-xl overflow-hidden">
-              <img src={photoPreview} alt="Foto de entrega" className="w-full h-36 object-cover" />
-              <button
-                onClick={(e) => { e.stopPropagation(); onRetakePhoto(); }}
-                className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-black/70 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full cursor-pointer"
-              >
-                Sacar de nuevo
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRetakePhoto(); }}
-              className="w-full rounded-xl border-2 border-dashed border-emerald-400 dark:border-emerald-600 p-4 flex flex-col items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
-            >
-              <Camera className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Tomar foto de entrega</span>
-              <span className="text-[11px] text-emerald-600/70 dark:text-emerald-500">Obligatoria para confirmar</span>
-            </button>
-          )}
-        </div>
-      )}
-
-      {isLastMile && !useContingency && (
-        <>
-          {locked && (
-            <div className="mb-3 rounded-xl bg-red-50 border border-red-200 px-4 py-3">
-              <p className="text-xs font-bold text-red-700">Campo bloqueado — 3 intentos fallidos</p>
-              <p className="text-[11px] text-red-600 mt-0.5">Usá la opción de entrega con DNI para continuar.</p>
-            </div>
-          )}
-          {!locked && keywordAttempts > 0 && (
-            <div className="mb-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5">
-              <p className="text-[11px] text-amber-700 font-semibold">
-                Intentos fallidos: {keywordAttempts}/3 — quedan {3 - keywordAttempts} intento(s)
-              </p>
-            </div>
-          )}
-          <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
-            Palabra clave de seguridad
-          </label>
-          <input
-            ref={keywordRef}
-            value={keyword}
-            onChange={(e) => onKeywordChange(e.target.value)}
-            autoComplete="off"
-            placeholder="Dictada por el destinatario"
-            disabled={locked}
-            className="w-full h-12 px-4 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 driver-input disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-          <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">
-            El cliente debe decirte su palabra clave al abrir la puerta.
-          </p>
-        </>
-      )}
-
-      {isLastMile && useContingency && (
-        <>
-          <div className="mb-3 rounded-xl bg-amber-50 border border-amber-300 px-4 py-3">
-            <p className="text-xs font-bold text-amber-800"><AlertTriangle size={14} className="inline text-amber-500" /> Entrega de contingencia</p>
-            <p className="text-[11px] text-amber-700 mt-0.5">El registro quedará marcado para auditoría del supervisor.</p>
-          </div>
-          <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
-            DNI del destinatario
-          </label>
-          <input
-            ref={dniRef}
-            value={dni}
-            onChange={(e) => onDniChange(e.target.value.replace(/\D/g, ""))}
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="Ej: 30123456"
-            className="w-full h-12 px-4 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 driver-input"
-          />
-        </>
-      )}
-
-      {!isLastMile && (
-        <>
-          <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
-            DNI del destinatario
-          </label>
-          <input
-            ref={dniRef}
-            value={dni}
-            onChange={(e) => onDniChange(e.target.value.replace(/\D/g, ""))}
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="Ej: 30123456"
-            className="w-full h-12 px-4 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 driver-input"
-          />
-          <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">
-            Solo dígitos. Debe coincidir con el DNI registrado al crear el envío.
-          </p>
-        </>
-      )}
-
-      {error && (
-        <p className="mt-2 text-xs font-semibold text-red-600">{error}</p>
-      )}
-
-      <div className="grid grid-cols-2 gap-2 mt-5">
-        <button
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 bg-transparent dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onConfirm(); }}
-          disabled={!canConfirm || submitting || speedBlocked}
-          className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
-        >
-          {submitting ? "Guardando…" : "Confirmar entrega"}
-        </button>
-      </div>
-
-      {isLastMile && locked && !useContingency && (
-        <button
-          onClick={() => onUseContingency(true)}
-          className="mt-3 w-full h-11 rounded-xl border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-sm font-bold cursor-pointer transition-colors"
-        >
-          Entregar con DNI
-        </button>
-      )}
-      {isLastMile && useContingency && (
-        <button
-          onClick={() => onUseContingency(false)}
-          className="mt-2 w-full text-[11px] dark:text-gray-400 text-slate-500 underline cursor-pointer"
-        >
-          Volver a intentar con palabra clave
-        </button>
-      )}
-
-      {speedBlocked && (
-        <div className="mt-2.5 text-center">
-          <p className="text-xs font-semibold text-amber-600">{blockMessage}</p>
-          {needsLocation && (
-            <>
-              <button
-                onClick={(e) => { e.stopPropagation(); void onRequestLocation(); }}
-                disabled={locationRequesting}
-                className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer disabled:opacity-50"
-              >
-                {locationRequesting ? "Solicitando…" : locationPermissionDenied ? "Ir a Ajustes" : "Activar ubicación"}
-              </button>
-              {locationErrorMsg && (
-                <p className="mt-1 text-[11px] text-red-500 px-2">{locationErrorMsg}</p>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </BottomSheet>
-  );
-}
-
-function FailedSheet({
-  open,
-  onClose,
-  shipment,
-  reason,
-  onReasonChange,
-  notes,
-  onNotesChange,
-  submitting,
-  onConfirm,
-  speedBlocked,
-  blockMessage,
-  needsLocation,
-  onRequestLocation,
-  locationRequesting = false,
-  locationPermissionDenied = false,
-  locationErrorMsg = null,
-}: {
-  open: boolean;
-  onClose: () => void;
-  shipment: Shipment | null;
-  reason: string;
-  onReasonChange: (s: string) => void;
-  notes: string;
-  onNotesChange: (s: string) => void;
-  submitting: boolean;
-  onConfirm: () => void;
-  speedBlocked: boolean;
-  blockMessage: string;
-  needsLocation: boolean;
-  onRequestLocation: () => void;
-  locationRequesting?: boolean;
-  locationPermissionDenied?: boolean;
-  locationErrorMsg?: string | null;
-}) {
-  if (!shipment) return null;
-  const { name } = recipientView(shipment);
-  const requiresNotes = reason === "otro";
-  const canSubmit = !!reason && !(requiresNotes && !notes.trim());
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title="Marcar como no entregado"
-      description={`No entrega a ${name}`}
-    >
-      <p className="text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-2">
-        ¿Qué pasó?
-      </p>
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        {FAILED_REASONS.map((r) => {
-          const active = reason === r.id;
-          return (
-            <button
-              key={r.id}
-              onClick={() => onReasonChange(r.id)}
-              className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${active
-                ? "border-rose-500 bg-rose-50 text-rose-800"
-                : "dark:border-gray-700 border-slate-200 bg-transparent dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700 hover:bg-slate-50"
-                }`}
-            >
-              {r.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
-        Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
-      </label>
-      <textarea
-        value={notes}
-        onChange={(e) => onNotesChange(e.target.value)}
-        placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
-        rows={3}
-        className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-[3px] focus:ring-rose-500/20 focus:border-rose-500 resize-y driver-input"
-      />
-
-      <div className="grid grid-cols-2 gap-2 mt-5">
-        <button
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 bg-transparent dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onConfirm(); }}
-          disabled={!canSubmit || submitting || speedBlocked}
-          className="h-12 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
-        >
-          {submitting ? "Guardando…" : "Confirmar"}
-        </button>
-      </div>
-      {speedBlocked && (
-        <div className="mt-2.5 text-center">
-          <p className="text-xs font-semibold text-amber-600">{blockMessage}</p>
-          {needsLocation && (
-            <>
-              <button
-                onClick={(e) => { e.stopPropagation(); void onRequestLocation(); }}
-                disabled={locationRequesting}
-                className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer disabled:opacity-50"
-              >
-                {locationRequesting ? "Solicitando…" : locationPermissionDenied ? "Ir a Ajustes" : "Activar ubicación"}
-              </button>
-              {locationErrorMsg && (
-                <p className="mt-1 text-[11px] text-red-500 px-2">{locationErrorMsg}</p>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </BottomSheet>
-  );
-}
-
-
-function RejectedSheet({
-  open,
-  onClose,
-  shipment,
-  reason,
-  onReasonChange,
-  notes,
-  onNotesChange,
-  submitting,
-  onConfirm,
-  speedBlocked,
-  blockMessage,
-  needsLocation,
-  onRequestLocation,
-  locationRequesting = false,
-  locationPermissionDenied = false,
-  locationErrorMsg = null,
-}: {
-  open: boolean;
-  onClose: () => void;
-  shipment: Shipment | null;
-  reason: string;
-  onReasonChange: (s: string) => void;
-  notes: string;
-  onNotesChange: (s: string) => void;
-  submitting: boolean;
-  onConfirm: () => void;
-  speedBlocked: boolean;
-  blockMessage: string;
-  needsLocation: boolean;
-  onRequestLocation: () => void;
-  locationRequesting?: boolean;
-  locationPermissionDenied?: boolean;
-  locationErrorMsg?: string | null;
-}) {
-  if (!shipment) return null;
-  const { name } = recipientView(shipment);
-  const requiresNotes = reason === "otro";
-  const canSubmit = !!reason && !(requiresNotes && !notes.trim());
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title="Rechazo por destinatario"
-      description={`${name} rechazó el envío`}
-    >
-      <p className="text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-2">
-        Motivo del rechazo
-      </p>
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        {REJECTED_REASONS.map((r) => {
-          const active = reason === r.id;
-          return (
-            <button
-              key={r.id}
-              onClick={() => onReasonChange(r.id)}
-              className={`h-14 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors flex flex-col items-center justify-center gap-0.5 px-2 ${
-                active
-                  ? "border-amber-500 bg-amber-50 text-amber-900"
-                  : "dark:border-gray-700 border-slate-200 bg-transparent dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700 hover:bg-slate-50"
-              }`}
-            >
-              <span className="text-lg leading-none">{r.emoji}</span>
-              <span className="text-xs leading-tight text-center">{r.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
-        Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
-      </label>
-      <textarea
-        value={notes}
-        onChange={(e) => onNotesChange(e.target.value)}
-        placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
-        rows={2}
-        className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-none driver-input"
-      />
-
-      <div className="grid grid-cols-2 gap-2 mt-5">
-        <button
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 bg-transparent dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onConfirm(); }}
-          disabled={!canSubmit || submitting || speedBlocked}
-          className="h-12 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
-        >
-          {submitting ? "Guardando…" : "Confirmar rechazo"}
-        </button>
-      </div>
-      {speedBlocked && (
-        <div className="mt-2.5 text-center">
-          <p className="text-xs font-semibold text-amber-600">{blockMessage}</p>
-          {needsLocation && (
-            <>
-              <button
-                onClick={(e) => { e.stopPropagation(); void onRequestLocation(); }}
-                disabled={locationRequesting}
-                className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer disabled:opacity-50"
-              >
-                {locationRequesting ? "Solicitando…" : locationPermissionDenied ? "Ir a Ajustes" : "Activar ubicación"}
-              </button>
-              {locationErrorMsg && (
-                <p className="mt-1 text-[11px] text-red-500 px-2">{locationErrorMsg}</p>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </BottomSheet>
-  );
-}
-
 
 function RouteCompletedView({ data, today, pendingSyncIds = new Set() }: { data: DriverRouteResponse; today: string; pendingSyncIds?: Set<string> }) {
   const navigate = useNavigate();
@@ -1883,21 +1972,12 @@ function RouteCompletedView({ data, today, pendingSyncIds = new Set() }: { data:
   const tripActive = qrLoading || tripId !== null;
 
   return (
-    <div className="p-4 sm:p-6 max-w-2xl mx-auto pb-12">
-      <div className="flex items-start gap-3 mb-5 pb-4 border-b dark:border-gray-700 border-slate-200">
-        <div className="w-10 h-10 rounded-xl bg-[var(--sidebar-bg)]/8 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
-          <Truck className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold dark:text-gray-100 text-slate-900 tracking-tight leading-tight">Mi ruta</h1>
-          <p className="mt-1 text-sm dark:text-gray-400 text-slate-500">{today}</p>
-        </div>
-      </div>
+    <div className="px-4 py-4 max-w-2xl mx-auto pb-12">
 
-      <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white p-5 mb-5 shadow-sm">
+      <div className="rounded-2xl bg-gradient-to-br from-[var(--ok)] to-emerald-600 text-white p-5 mb-5 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-6 h-6" />
+          <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-7 h-7" />
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider opacity-90">Ruta finalizada</p>
@@ -1905,27 +1985,28 @@ function RouteCompletedView({ data, today, pendingSyncIds = new Set() }: { data:
               {done} {done === 1 ? "entrega completada" : "entregas completadas"}
             </p>
             {failed > 0 && (
-              <p className="text-xs opacity-90 mt-0.5">
+              <p className="text-sm opacity-90 mt-0.5">
                 {failed} {failed === 1 ? "envío sin entregar" : "envíos sin entregar"}
               </p>
             )}
+            <p className="text-sm opacity-80 mt-0.5">{today}</p>
           </div>
         </div>
       </div>
 
       {/* QR de retorno — siempre que el viaje siga en_transito */}
       {tripActive && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 mb-5">
-          <p className="text-sm font-bold text-amber-900 mb-1">Mostrá este código al operador</p>
-          <p className="text-xs text-amber-700 mb-4">
+        <div className="rounded-2xl border border-[var(--warn-border)] bg-[var(--warn-bg)] p-5 mb-5">
+          <p className="text-sm font-bold text-amber-900 dark:text-amber-300 mb-1">Mostrá este código al operador</p>
+          <p className="text-xs text-amber-700 dark:text-amber-400 mb-4">
             {failed > 0
               ? `Al regresar a la sucursal, el operador escanea este ID para registrar el estado final de los ${failed} ${failed === 1 ? "envío pendiente" : "envíos pendientes"} y liberar el vehículo.`
               : "Al regresar a la sucursal, el operador escanea este ID para liberar el vehículo."
             }
           </p>
           {qrLoading ? (
-            <div className="flex justify-center py-4">
-              <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+            <div className="flex justify-center py-6">
+              <div className="w-8 h-8 border-3 border-amber-400 dark:border-amber-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             qrBase64 && (
@@ -1933,10 +2014,10 @@ function RouteCompletedView({ data, today, pendingSyncIds = new Set() }: { data:
                 <img
                   src={`data:image/png;base64,${qrBase64}`}
                   alt="QR de retorno"
-                  className="w-48 h-48 rounded-xl border border-amber-200"
+                  className="w-48 h-48 rounded-xl border border-[var(--warn-border)]"
                 />
                 {tripId && (
-                  <p className="text-xs font-mono text-amber-800 bg-amber-100 px-3 py-1.5 rounded-lg">
+                  <p className="text-xs font-mono text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-500/15 px-3 py-1.5 rounded-lg">
                     {tripId}
                   </p>
                 )}
@@ -1949,21 +2030,18 @@ function RouteCompletedView({ data, today, pendingSyncIds = new Set() }: { data:
       {/* Sin viaje activo: el operador ya recibió, el chofer puede empezar otro reparto */}
       {!tripActive && (
         <div className="rounded-2xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800/50 bg-slate-50 p-5 flex flex-col items-center gap-3 text-center mb-5">
-          <div className="w-12 h-12 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center">
-            <Truck className="w-6 h-6" />
+          <div className="w-16 h-16 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center">
+            <Truck className="w-8 h-8" />
           </div>
-          <p className="text-sm font-bold dark:text-gray-100 text-slate-900">¿Empezás otro reparto?</p>
-          <p className="text-xs dark:text-gray-400 text-slate-500">Escaneá el QR del vehículo o ingresá la patente para continuar.</p>
-          <button
-            onClick={() => navigate("/driver/scan")}
-            className="h-10 px-6 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white text-sm font-bold cursor-pointer transition-colors"
-          >
+          <p className="text-base font-bold dark:text-gray-100 text-slate-900">¿Empezás otro reparto?</p>
+          <p className="text-sm dark:text-gray-400 text-slate-500">Escaneá el QR del vehículo o ingresá la patente para continuar.</p>
+          <Button onClick={() => navigate("/driver/scan")} className="w-full max-w-xs mx-auto h-14 px-8 rounded-xl text-base font-bold">
             Escanear vehículo
-          </button>
+          </Button>
         </div>
       )}
 
-      <p className="text-xs font-bold dark:text-gray-400 text-slate-500 uppercase tracking-wider mb-2 px-1">
+      <p className="text-xs font-bold dark:text-gray-400 text-slate-500 uppercase tracking-wider mb-3 px-1">
         Resumen del día
       </p>
       <div className="grid gap-2">
@@ -1974,32 +2052,32 @@ function RouteCompletedView({ data, today, pendingSyncIds = new Set() }: { data:
           return (
             <Card
               key={shipment.tracking_id}
-              onClick={() => navigate(`/shipments/${shipment.tracking_id}`)}
-              className="px-4 py-3 cursor-pointer dark:hover:bg-gray-700 hover:bg-slate-50 transition-colors flex items-center gap-3"
+              onClick={() => navigate(`/driver/shipments/${shipment.tracking_id}`)}
+              className="px-3 py-3 cursor-pointer dark:hover:bg-gray-700 hover:bg-slate-50 transition-all flex items-center gap-3"
             >
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
                 delivered
-                  ? "bg-emerald-100 text-emerald-700"
+                  ? "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
                   : rejected
-                  ? "bg-amber-100 text-amber-700"
-                  : "bg-rose-100 text-rose-700"
+                  ? "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                  : "bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400"
               }`}>
                 {delivered ? (
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-5 h-5" />
                 ) : rejected ? (
-                  <Ban className="w-4 h-4" />
+                  <Ban className="w-5 h-5" />
                 ) : (
-                  <XCircle className="w-4 h-4" />
+                  <XCircle className="w-5 h-5" />
                 )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold dark:text-gray-100 text-slate-900 truncate">{name}</p>
-                <code className="text-[10px] font-mono dark:text-gray-500 text-slate-400">{shipment.tracking_id}</code>
+                <code className="text-[11px] font-mono dark:text-gray-500 text-slate-400">{shipment.tracking_id}</code>
                 {rejected && (
-                  <p className="text-[10px] text-amber-600 font-medium">Rechazado por destinatario</p>
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">Rechazado por destinatario</p>
                 )}
               </div>
-              <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+              <ChevronRight className="w-5 h-5 text-slate-300 dark:text-gray-500 shrink-0" />
             </Card>
           );
         })}
@@ -2010,7 +2088,7 @@ function RouteCompletedView({ data, today, pendingSyncIds = new Set() }: { data:
 
 function RouteSkeleton() {
   return (
-    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
+    <div className="px-4 py-4 max-w-2xl mx-auto">
       <div className="flex items-start gap-3 mb-5 pb-4 border-b dark:border-gray-700 border-slate-200">
         <div className="w-10 h-10 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
         <div className="flex-1">
@@ -2020,20 +2098,497 @@ function RouteSkeleton() {
       </div>
       <div className="grid gap-3">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-4">
+          <div key={i} className="rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-3">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
-              <div className="flex-1 space-y-2">
+              <div className="w-10 h-10 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse shrink-0" />
+              <div className="flex-1 space-y-2.5">
                 <div className="h-4 w-3/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
-                <div className="h-3 w-4/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+                <div className="h-4 w-4/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
                 <div className="flex gap-2 mt-3">
-                  <div className="h-6 w-16 rounded-full dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
-                  <div className="h-6 w-20 rounded-full dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+                  <div className="h-7 w-16 rounded-full dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+                  <div className="h-7 w-20 rounded-full dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+                </div>
+                <div className="mt-3 pt-3 border-t dark:border-gray-700 border-slate-100 grid gap-2">
+                  <div className="h-14 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse w-full" />
+                  <div className="h-14 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse w-full" />
                 </div>
               </div>
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Inter-branch trip sub-components ─────────────────────────────────────────
+
+type TripStopShape = {
+  branch_id: string;
+  shipment_ids: string[];
+  total_weight_kg: number;
+  pickup_shipment_ids?: string[];
+  pickup_weight_kg?: number;
+  completed_at?: string;
+  completed_by_user_id?: string;
+};
+
+function StepperBar({
+  origin,
+  stops,
+  currentStopIdx,
+  branches,
+  tripStatus,
+}: {
+  origin?: Branch;
+  stops: TripStopShape[];
+  currentStopIdx: number;
+  branches: Branch[];
+  tripStatus: string;
+}) {
+  const allPoints = [
+    { id: origin?.id ?? "origin", city: origin?.address.city ?? "Origen", isOrigin: true },
+    ...stops.map((s) => {
+      const b = branches.find((br) => br.id === s.branch_id);
+      return { id: s.branch_id, city: b?.address.city ?? s.branch_id, isOrigin: false };
+    }),
+  ];
+
+  return (
+    <Card className="!p-4 border-[var(--border)]" variant="muted">
+      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] mb-3">Progreso</p>
+      <div className="flex items-start gap-0 overflow-x-auto pb-1">
+        {allPoints.map((pt, idx) => {
+          const isOriginPt = pt.isOrigin;
+          const stopIdx = idx - 1;
+          const isCompleted = !isOriginPt && stopIdx < currentStopIdx;
+          const isCurrent =
+            !isOriginPt && stopIdx === currentStopIdx && tripStatus === "en_transito";
+          const isPending = !isOriginPt && stopIdx > currentStopIdx;
+          const isLast = idx === allPoints.length - 1;
+
+          let dotCls = "bg-[var(--text-muted)]";
+          let dotContent = <span className="text-xs font-bold text-white">{idx}</span>;
+          if (isOriginPt) {
+            dotCls = "bg-[var(--sidebar-bg)]";
+            dotContent = <Truck className="w-3.5 h-3.5 text-white" />;
+          } else if (isCompleted) {
+            dotCls = "bg-emerald-500 dark:bg-emerald-600";
+            dotContent = <CheckCircle2 className="w-3.5 h-3.5 text-white" />;
+          } else if (isCurrent) {
+            dotCls = "bg-sky-500 dark:bg-sky-600";
+            dotContent = <MapPin className="w-3.5 h-3.5 text-white" />;
+          }
+
+          return (
+            <div key={pt.id + idx} className="flex items-start flex-1 min-w-0">
+              <div className="flex flex-col items-center min-w-[52px]">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${dotCls} ${
+                    isCurrent ? "ring-[3px] ring-sky-200 dark:ring-sky-500/30" : ""
+                  }`}
+                >
+                  {dotContent}
+                </div>
+                <p
+                  className={`text-xs font-semibold mt-1.5 text-center leading-tight ${
+                    isPending
+                      ? "text-[var(--text-muted)]"
+                      : isCompleted
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : isCurrent
+                          ? "text-sky-700 dark:text-sky-300"
+                          : "text-[var(--text-secondary)]"
+                  }`}
+                >
+                  {cityAbbrev(pt.city)}
+                </p>
+              </div>
+              {!isLast && (
+                <div
+                  className={`flex-1 h-[3px] mt-[16px] mx-0.5 rounded-full ${
+                    isCompleted
+                      ? "bg-emerald-500 dark:bg-emerald-600"
+                      : isCurrent
+                        ? "bg-gradient-to-r from-[var(--ok)] to-[var(--border)]"
+                        : "bg-[var(--border)]"
+                  }`}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function HeroNextStop({
+  stop,
+  stopNumber,
+  totalStops,
+  branch,
+  distKm,
+  etaHours,
+  pickupsInTransit,
+  pickupsInTransitWeightKg,
+  shipmentsExpanded,
+  onToggleShipments,
+}: {
+  stop: TripStopShape;
+  stopNumber: number;
+  totalStops: number;
+  branch?: Branch;
+  distKm: number | null;
+  etaHours: number | null;
+  pickupsInTransit: string[];
+  pickupsInTransitWeightKg: number;
+  shipmentsExpanded: boolean;
+  onToggleShipments: () => void;
+}) {
+  const hasPickup = (stop.pickup_shipment_ids?.length ?? 0) > 0;
+  const allDropoffs = [...stop.shipment_ids, ...pickupsInTransit];
+  const mapsLink =
+    branch?.latitude && branch?.longitude
+      ? mapsUrl(branch.latitude, branch.longitude, branch.name)
+      : null;
+
+  return (
+    <Card className="!p-4 border-2 border-[var(--sidebar-bg)]/10 dark:border-[var(--sidebar-bg)]/20 bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-subtle)]">
+      {/* Chip de parada */}
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-xs font-bold px-3 py-1 rounded-full bg-[var(--brand)]/10 text-[var(--brand)] uppercase tracking-wider">
+          Parada {stopNumber} de {totalStops}
+        </span>
+        {distKm !== null && (
+          <span className="text-xs text-[var(--text-secondary)] font-medium">{distKm} km aprox.</span>
+        )}
+      </div>
+
+      {/* Sucursal */}
+      <div className="mb-4">
+        <h2 className="text-xl font-bold text-[var(--text-primary)] leading-tight">{branch?.name ?? stop.branch_id}</h2>
+        {branch?.address && (
+          <div className="flex items-center gap-1.5 mt-1 text-[var(--text-secondary)]">
+            <MapPin className="w-3.5 h-3.5 shrink-0" />
+            <p className="text-xs leading-snug">
+              {branch.address.street && `${branch.address.street}, `}
+              {branch.address.city}{branch.address.province ? `, ${branch.address.province}` : ""}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ETA */}
+      {etaHours !== null && (
+        <div className="mb-4 px-4 py-3 rounded-xl bg-[var(--bg-muted)] flex items-center gap-3">
+          <span className="text-xs font-semibold text-[var(--text-secondary)]">ETA estimada</span>
+          <span className="ml-auto text-base font-bold text-[var(--brand)]">~{formatDuration(etaHours)}</span>
+        </div>
+      )}
+
+      {/* Carga que baja / sube */}
+      <div className="space-y-2 mb-5">
+        <div className="flex items-center gap-2 py-2.5 text-sm">
+          <ArrowDown className="w-4 h-4 text-[var(--text-muted)]" />
+          <span className="text-[var(--text-primary)]">
+            Bajan: <strong>{allDropoffs.length} envío{allDropoffs.length !== 1 ? "s" : ""}</strong>
+          </span>
+          <Weight className="w-3.5 h-3.5 text-[var(--text-muted)] ml-auto" />
+          <span className="text-[var(--text-secondary)] text-xs">{(stop.total_weight_kg + pickupsInTransitWeightKg).toFixed(1)} kg</span>
+        </div>
+        {pickupsInTransit.length > 0 && (
+          <p className="text-xs text-sky-700 dark:text-sky-400 ml-6">
+            Incluye {pickupsInTransit.length} envío{pickupsInTransit.length !== 1 ? "s" : ""} cargados en parada anterior
+          </p>
+        )}
+        {hasPickup && (
+          <div className="flex items-center gap-2 py-2.5 text-sm text-amber-700 dark:text-amber-400 font-medium">
+            <ArrowUp className="w-4 h-4" />
+            Cargás: <strong>{stop.pickup_shipment_ids!.length} envío{stop.pickup_shipment_ids!.length !== 1 ? "s" : ""}</strong>
+            <span className="ml-auto text-xs font-normal">{(stop.pickup_weight_kg ?? 0).toFixed(1)} kg</span>
+          </div>
+        )}
+      </div>
+
+      {/* Botones */}
+      <div className="flex flex-col gap-2.5">
+        {mapsLink && (
+          <a
+            href={mapsLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full h-14 rounded-xl bg-[var(--brand)] hover:brightness-110 active:brightness-90 text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2"
+          >
+            <Navigation className="w-5 h-5" />
+            Navegar con Maps
+          </a>
+        )}
+        <Button
+          variant="outline"
+          onClick={onToggleShipments}
+          className="w-full h-12 rounded-xl text-sm font-semibold gap-2"
+        >
+          <Package className="w-4 h-4" />
+          Ver lista de envíos
+          {shipmentsExpanded ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
+        </Button>
+        {shipmentsExpanded && allDropoffs.length > 0 && (
+          <div className="mt-1 rounded-xl border border-[var(--border)] divide-y divide-[var(--border)] overflow-hidden">
+            {stop.shipment_ids.map((tid) => (
+              <div key={tid} className="px-4 py-3 flex items-center gap-2 min-h-[44px]">
+                <span className="text-xs font-mono text-[var(--text-primary)]">{tid}</span>
+              </div>
+            ))}
+            {pickupsInTransit.length > 0 && (
+              <>
+                <div className="px-4 py-2 bg-sky-50 dark:bg-sky-950/30">
+                  <p className="text-xs font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wider">
+                    Bajan — Cargados en parada anterior
+                  </p>
+                </div>
+                {pickupsInTransit.map((tid) => (
+                  <div key={tid} className="px-4 py-3 flex items-center gap-2 bg-sky-50/40 dark:bg-sky-950/20 min-h-[44px]">
+                    <span className="text-xs font-mono text-sky-800 dark:text-sky-300">{tid}</span>
+                  </div>
+                ))}
+              </>
+            )}
+            {hasPickup && (
+              <>
+                <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/30">
+                  <p className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                    Para cargar
+                  </p>
+                </div>
+                {stop.pickup_shipment_ids!.map((tid) => (
+                  <div key={tid} className="px-4 py-3 flex items-center gap-2 bg-amber-50/50 dark:bg-amber-950/20 min-h-[44px]">
+                    <span className="text-xs font-mono text-amber-800 dark:text-amber-300">{tid}</span>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function QRModal({
+  trip,
+  currentStop,
+  currentStopBranch,
+  pickupsInTransit,
+  qrData,
+  qrLoading,
+  stopConfirmed,
+  confirmedBranchName,
+  onClose,
+}: {
+  trip: InterBranchTrip;
+  currentStop?: TripStopShape;
+  currentStopBranch?: Branch;
+  pickupsInTransit: string[];
+  qrData: TripQRResponse | null;
+  qrLoading: boolean;
+  stopConfirmed: boolean;
+  confirmedBranchName: string;
+  onClose: () => void;
+}) {
+  return (
+    /* Backdrop — z-[9999] para quedar por encima de Leaflet (z ~400) y del nav */
+    <div
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/70"
+      onClick={onClose}
+    >
+      {/* Card — click dentro no cierra */}
+      <div
+        className="relative w-full sm:max-w-sm bg-[var(--bg-card)] rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Handle / Header */}
+        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[var(--border)] shrink-0">
+          <div>
+            <p className="text-sm font-bold text-[var(--text-primary)]">
+              Entregando en {currentStopBranch?.name ?? currentStop?.branch_id}
+            </p>
+            <p className="text-xs text-[var(--text-secondary)]">{currentStopBranch?.address.city}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-9 h-9 rounded-full bg-[var(--bg-muted)] hover:bg-[var(--bg-inset)] flex items-center justify-center cursor-pointer transition-all"
+          >
+            <X className="w-4 h-4 text-[var(--text-secondary)]" />
+          </button>
+        </div>
+
+        {/* Cuerpo con scroll */}
+        <div className="flex flex-col items-center px-6 py-5 gap-4 overflow-y-auto">
+          {stopConfirmed ? (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <div className="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                <CheckCircle2 className="w-10 h-10 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <p className="text-base font-bold text-[var(--text-primary)]">Recepción confirmada</p>
+              <p className="text-sm text-[var(--text-secondary)]">en {confirmedBranchName}</p>
+            </div>
+          ) : (
+            <>
+              {/* QR */}
+              <div className="flex flex-col items-center gap-2 w-full">
+                {qrLoading ? (
+                  <div className="w-56 h-56 rounded-xl bg-[var(--bg-muted)] animate-pulse" />
+                ) : qrData ? (
+                  <div className="p-3 bg-[var(--bg-card)] rounded-xl border-2 border-[var(--brand)]/20 shadow-md">
+                    <img
+                      src={`data:image/png;base64,${qrData.qr_code_base64}`}
+                      alt="QR del viaje"
+                      className="w-56 h-56"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-56 h-56 rounded-xl border-2 border-dashed border-[var(--border)] flex items-center justify-center">
+                    <p className="text-sm text-[var(--text-muted)] text-center px-4">No se pudo cargar el QR.</p>
+                  </div>
+                )}
+                <p className="text-xs font-mono text-[var(--text-muted)]">{trip.id}</p>
+              </div>
+
+              {/* Indicador de espera */}
+              <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                <div className="w-2 h-2 rounded-full bg-sky-400 dark:bg-sky-500 animate-pulse shrink-0" />
+                Esperando que el operador escanee…
+              </div>
+
+              {/* Envíos que bajan — propios + pickups de paradas anteriores */}
+              {currentStop && (currentStop.shipment_ids.length > 0 || pickupsInTransit.length > 0) && (() => {
+                const allBajan = [...currentStop.shipment_ids, ...pickupsInTransit];
+                return (
+                  <div className="w-full">
+                    <p className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                      ↓ Bajan {allBajan.length} envío{allBajan.length !== 1 ? "s" : ""}
+                    </p>
+                    <div className="rounded-lg border border-[var(--border)] divide-y divide-[var(--border)] overflow-hidden max-h-36 overflow-y-auto">
+                      {currentStop.shipment_ids.map((tid) => (
+                        <div key={tid} className="px-3 py-1.5">
+                          <span className="text-xs font-mono text-[var(--text-primary)]">{tid}</span>
+                        </div>
+                      ))}
+                      {pickupsInTransit.length > 0 && (
+                        <>
+                          <div className="px-3 py-1 bg-sky-50 dark:bg-sky-950/30">
+                            <p className="text-xs font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">
+                              Cargados en parada anterior
+                            </p>
+                          </div>
+                          {pickupsInTransit.map((tid) => (
+                            <div key={tid} className="px-3 py-1.5 bg-sky-50/30 dark:bg-sky-950/20">
+                              <span className="text-xs font-mono text-sky-800 dark:text-sky-300">{tid}</span>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NoTripView() {
+  const navigate = useNavigate();
+  return (
+    <div className="flex flex-col items-center justify-center p-6 py-20">
+      <div className="w-24 h-24 rounded-full bg-[var(--bg-muted)] flex items-center justify-center mb-6">
+        <Package className="w-12 h-12 text-[var(--text-muted)]" />
+      </div>
+      <h1 className="text-xl font-bold text-[var(--text-primary)] mb-2">Sin viajes asignados</h1>
+      <p className="text-sm text-[var(--text-secondary)] text-center max-w-xs mb-8">
+        No tenés ningún viaje inter-sucursal asignado por el momento. Si el operador ya asignó tu vehículo, escaneá el QR para tomar el viaje.
+      </p>
+      <Button
+        onClick={() => navigate("/driver/scan")}
+        className="h-14 px-8 rounded-xl text-base font-bold gap-2"
+      >
+        <QrCode className="w-5 h-5" />
+        Escanear vehículo
+        </Button>
+      </div>
+    );
+  }
+
+function TripSkeleton() {
+  return (
+    <div className="min-h-screen bg-[var(--bg-page)]">
+      {/* Header skeleton */}
+      <div className="sticky top-0 z-10 bg-[var(--bg-card)] border-b border-[var(--border)]">
+        <div className="px-4 max-w-2xl mx-auto py-3">
+          <div className="flex items-center gap-3">
+            <Skeleton className="w-11 h-11 rounded-xl shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Content skeleton */}
+      <div className="px-4 max-w-2xl mx-auto pt-4 space-y-4">
+        {/* Stepper */}
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4">
+          <Skeleton className="h-3 w-20 mb-3" />
+          <div className="flex gap-2">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
+                <Skeleton className="w-8 h-8 rounded-full" />
+                <Skeleton className="h-2.5 w-10" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Hero card */}
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5 space-y-3">
+          <div className="flex justify-between">
+            <Skeleton className="h-6 w-32 rounded-full" />
+            <Skeleton className="h-4 w-16" />
+          </div>
+          <Skeleton className="h-7 w-48" />
+          <Skeleton className="h-4 w-64" />
+          <Skeleton className="h-12 w-full rounded-xl" />
+          <Skeleton className="h-12 w-full rounded-xl" />
+        </div>
+
+        {/* Map */}
+        <Skeleton className="h-48 w-full rounded-xl" />
+
+        {/* Stop cards */}
+        {[1, 2].map((i) => (
+          <div key={i} className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4">
+            <div className="flex items-center gap-3">
+              <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+              <Skeleton className="h-8 w-14 shrink-0" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Bottom CTA skeleton */}
+      <div className="fixed bottom-0 inset-x-0 bg-[var(--bg-card)] border-t border-[var(--border)] px-4 py-3">
+        <div className="max-w-2xl mx-auto">
+          <Skeleton className="h-14 w-full rounded-xl" />
+        </div>
       </div>
     </div>
   );

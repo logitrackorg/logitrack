@@ -36,7 +36,7 @@ function kssBandLabel(v: number): { text: string; cls: string } {
   if (v <= 3) return { text: "Alerta",      cls: "text-emerald-400" };
   if (v <= 5) return { text: "Moderado",    cls: "text-amber-400"   };
   if (v <= 7) return { text: "Somnolencia", cls: "text-orange-400"  };
-  return               { text: "Alto riesgo", cls: "text-rose-400"  };
+  return               { text: "Alto riesgo", cls: "text-[var(--danger-text)]"  };
 }
 
 interface Props {
@@ -221,33 +221,33 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
   // ── Paso de permisos (BUG-46) — bloquea el test hasta que se concedan ──────
   if (step === "permissions") {
     return (
-      <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col items-center justify-center px-6">
+      <div className="fixed inset-0 z-[3000] bg-[var(--sidebar-bg)]/95 backdrop-blur-sm flex flex-col items-center justify-center px-6">
         <div className="max-w-sm w-full text-center">
           {permChecking ? (
             <>
-              <Loader2 className="w-10 h-10 text-blue-400 mx-auto mb-5 animate-spin" />
+              <Loader2 className="w-10 h-10 text-[var(--brand)] mx-auto mb-5 animate-spin" />
               <h1 className="text-lg font-bold text-white mb-2">Verificando permisos</h1>
-              <p className="text-sm text-slate-400 leading-relaxed">
+              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
                 Necesitamos acceso al GPS y al micrófono para iniciar tu test de seguridad.
                 Aceptá los permisos que solicite tu navegador.
               </p>
             </>
           ) : (
             <>
-              <div className="w-14 h-14 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-5">
+              <div className="w-14 h-14 rounded-2xl bg-[var(--danger-bg)] text-[var(--danger-text)] flex items-center justify-center mx-auto mb-5">
                 <ShieldAlert className="w-7 h-7" />
               </div>
               <h1 className="text-lg font-bold text-white mb-2">Permisos requeridos</h1>
-              <p className="text-sm text-slate-300 leading-relaxed mb-5">{permError}</p>
+              <p className="text-sm text-[var(--text-strong)] leading-relaxed mb-5">{permError}</p>
 
               <div className="flex flex-col gap-2 mb-6 text-left">
-                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
-                  <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
-                  <span className="text-xs text-slate-300">Ubicación (GPS) — seguimiento de ruta</span>
+                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-[var(--bg-elevated)]/60 border border-[var(--border)]">
+                  <MapPin className="w-4 h-4 text-[var(--brand)] shrink-0" />
+                  <span className="text-xs text-[var(--text-strong)]">Ubicación (GPS) — seguimiento de ruta</span>
                 </div>
-                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
-                  <Mic className="w-4 h-4 text-blue-400 shrink-0" />
-                  <span className="text-xs text-slate-300">Micrófono — prueba de voz del test</span>
+                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-[var(--bg-elevated)]/60 border border-[var(--border)]">
+                  <Mic className="w-4 h-4 text-[var(--brand)] shrink-0" />
+                  <span className="text-xs text-[var(--text-strong)]">Micrófono — prueba de voz del test</span>
                 </div>
               </div>
 
@@ -277,7 +277,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
   const currentLevel = KSS_LEVELS[kss - 1];
 
   return (
-    <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col">
+    <div className="fixed inset-0 z-[3000] bg-[var(--sidebar-bg)]/95 backdrop-blur-sm flex flex-col">
 
       {/* ── Toast: check-in saltado + conteo de misfires ────────────────── */}
       {showSkipToast && (
@@ -318,7 +318,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
           size="icon"
           onClick={() => setShowInfo(true)}
           aria-label="Información sobre los datos recopilados"
-          className="rounded-full text-slate-400 hover:text-blue-300 hover:bg-slate-700/60"
+                className="rounded-full text-[var(--text-secondary)] hover:text-[var(--brand)] hover:bg-[var(--bg-inset)]/60"
         >
           <Info className="w-4 h-4" />
         </Button>
@@ -340,19 +340,19 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
 
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-300 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-[var(--brand)]/20 text-[var(--brand)] flex items-center justify-center shrink-0">
               <Moon className="w-5 h-5" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-white leading-tight">Check-in de fatiga</h1>
-              <p className="text-xs text-slate-400">Completá el test antes de iniciar tu jornada</p>
+              <p className="text-xs text-[var(--text-secondary)]">Completá el test antes de iniciar tu jornada</p>
             </div>
           </div>
 
           {/* Horas de sueño — solo si no hay registro para el día logístico */}
           {requiresSleepData ? (
             <div className="mb-6">
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider mb-2">
                 Horas de sueño (noche anterior)
               </label>
               <input
@@ -362,16 +362,16 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
                 value={horasSueno}
                 onChange={(e) => setHorasSueno(e.target.value)}
                 placeholder="0 – 10"
-                className="w-full h-12 px-4 rounded-xl bg-slate-800 border border-slate-600 text-white text-base placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full h-12 px-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border)] text-white text-base placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)] focus:border-[var(--brand)]"
               />
               {horasSueno !== "" && !horasValid && (
-                <p className="mt-1.5 text-xs text-rose-400">Ingresá un valor entre 0 y 10.</p>
+                <p className="mt-1.5 text-xs text-[var(--danger-text)]">Ingresá un valor entre 0 y 10.</p>
               )}
             </div>
           ) : (
-            <div className="mb-6 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700">
-              <Moon className="w-4 h-4 text-blue-400 shrink-0" />
-              <p className="text-xs text-slate-400 leading-snug">
+            <div className="mb-6 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-[var(--bg-elevated)]/60 border border-[var(--border)]">
+              <Moon className="w-4 h-4 text-[var(--brand)] shrink-0" />
+              <p className="text-xs text-[var(--text-secondary)] leading-snug">
                 Horas de sueño ya registradas para este día logístico.
               </p>
             </div>
@@ -380,16 +380,16 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
           {/* ── KSS Slider ─────────────────────────────────────────────────── */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-3">
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+              <label className="text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider">
                 Escala de somnolencia KSS
               </label>
-              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 ${band.cls}`}>
+              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[var(--bg-elevated)] border border-[var(--border)] ${band.cls}`}>
                 {band.text}
               </span>
             </div>
 
             {/* Tarjeta del nivel actual */}
-            <div className="mb-5 px-4 py-4 rounded-xl bg-slate-800 border border-slate-700">
+            <div className="mb-5 px-4 py-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border)]">
               <div className="flex items-baseline gap-3 mb-3">
                 <span
                   className="text-4xl font-black tabular-nums transition-colors duration-150"
@@ -403,7 +403,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
               </div>
 
               {/* Barra de progreso */}
-              <div className="h-2 w-full rounded-full bg-slate-700 overflow-hidden">
+              <div className="h-2 w-full rounded-full bg-[var(--bg-inset)] overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-150"
                   style={{ width: `${fillPct}%`, background: accent }}
@@ -440,7 +440,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
                   <span
                     key={lvl.value}
                     className="text-[11px] tabular-nums font-bold transition-colors duration-150"
-                    style={{ color: lvl.value === kss ? accent : "#475569" }}
+                    style={{ color: lvl.value === kss ? accent : "var(--text-muted)" }}
                   >
                     {lvl.value}
                   </span>
@@ -450,7 +450,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
           </div>
 
           {error && (
-            <p className="mb-4 text-sm text-rose-400 text-center">{error}</p>
+            <p className="mb-4 text-sm text-[var(--danger-text)] text-center">{error}</p>
           )}
 
           <Button
@@ -467,10 +467,10 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
       {/* ── Modal de consentimiento informado (Ley 25.326 art. 6) ──────────── */}
       {showInfo && (
         <div className="fixed inset-0 z-[4000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-[#0d1f38] border border-slate-700 shadow-2xl flex flex-col max-h-[90dvh]">
-            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-700 shrink-0">
+          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-[var(--sidebar-bg)] border border-[var(--border)] shadow-2xl flex flex-col max-h-[90dvh]">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-[var(--border)] shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-300 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-[var(--brand)]/20 text-[var(--brand)] flex items-center justify-center shrink-0">
                   <Shield className="w-4 h-4" />
                 </div>
                 <h2 className="text-sm font-bold text-white leading-snug">
@@ -481,15 +481,15 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => setShowInfo(false)}
-                className="rounded-lg text-slate-400 hover:text-white hover:bg-slate-700"
+                className="rounded-lg text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-inset)]"
               >
                 <X className="w-4 h-4" />
               </Button>
             </div>
 
-            <div className="overflow-y-auto px-5 py-4 space-y-4 text-xs text-slate-300 leading-relaxed">
+            <div className="overflow-y-auto px-5 py-4 space-y-4 text-xs text-[var(--text-strong)] leading-relaxed">
               <Section title="¿Qué datos se recopilan?">
-                <ul className="list-disc list-inside space-y-1 text-slate-400">
+                <ul className="list-disc list-inside space-y-1 text-[var(--text-secondary)]">
                   <li>Horas de sueño de la noche anterior</li>
                   <li>Nivel de somnolencia según la Escala KSS (1–8)</li>
                   <li>Métricas acústicas de voz: tono, energía, velocidad de habla y pausas</li>
@@ -499,30 +499,30 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
               </Section>
 
               <Section title="¿Con qué finalidad?">
-                <p className="text-slate-400">
+                <p className="text-[var(--text-secondary)]">
                   Evaluar el riesgo de fatiga antes de iniciar una jornada de conducción, prevenir accidentes derivados de somnolencia y generar registros históricos con fines de seguridad vial y laboral.
                 </p>
               </Section>
 
               <Section title="¿Quién tiene acceso?">
-                <ul className="list-disc list-inside space-y-1 text-slate-400">
+                <ul className="list-disc list-inside space-y-1 text-[var(--text-secondary)]">
                   <li><span className="text-slate-200 font-medium">Vos</span> — podés consultar tu historial completo</li>
                   <li><span className="text-slate-200 font-medium">El supervisor de tu sucursal</span> — ve el estado del día y el historial de tu sucursal</li>
                   <li><span className="text-slate-200 font-medium">La administración de la empresa</span> — con fines de gestión de seguridad</li>
                 </ul>
               </Section>
 
-              <div className="rounded-lg border border-blue-800/50 bg-blue-900/20 px-3 py-2.5">
-                <p className="text-[11px] text-blue-300 font-semibold mb-1">
+              <div className="rounded-lg border border-[var(--brand)]/50 bg-[var(--brand)]/10 px-3 py-2.5">
+                <p className="text-[11px] text-[var(--brand)] font-semibold mb-1">
                   Ley N.º 25.326 — Art. 6 (Argentina)
                 </p>
-                <p className="text-[11px] text-blue-400 leading-relaxed">
+                <p className="text-[11px] text-[var(--brand)]/80 leading-relaxed">
                   Los datos se recopilan con tu consentimiento expreso, son utilizados exclusivamente para los fines informados y no serán cedidos a terceros sin autorización. Tenés derecho a acceder, rectificar y suprimir tus datos en cualquier momento comunicándote con el responsable del tratamiento.
                 </p>
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-slate-700 shrink-0">
+            <div className="px-5 py-4 border-t border-[var(--border)] shrink-0">
               <Button
                 onClick={() => setShowInfo(false)}
                 className="w-full h-10 rounded-xl font-bold"
@@ -537,7 +537,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
       {/* ── Modal de confirmación de salto ─────────────────────────────────── */}
       {showSkipConfirm && (
         <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl bg-[#0f2744] border border-slate-600 p-6 shadow-2xl">
+          <div className="w-full max-w-sm rounded-2xl bg-[var(--sidebar-bg)] border border-[var(--border)] p-6 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5" />
@@ -547,10 +547,10 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
               </h2>
             </div>
 
-            <p className="text-sm text-slate-300 leading-relaxed mb-2">
+            <p className="text-sm text-[var(--text-strong)] leading-relaxed mb-2">
               Tu decisión quedará <strong className="text-white">registrada en el historial</strong> y será visible para tu supervisor.
             </p>
-            <p className="text-sm text-slate-400 leading-relaxed mb-6">
+            <p className="text-sm text-[var(--text-secondary)] leading-relaxed mb-6">
               Podrás acceder a tu ruta por las próximas{" "}
               <strong className="text-slate-200">3 horas</strong>. Pasado ese tiempo, el sistema te pedirá completar el check-in nuevamente.
             </p>
@@ -583,7 +583,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{title}</p>
+      <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">{title}</p>
       {children}
     </div>
   );

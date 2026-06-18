@@ -1027,9 +1027,31 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 .dark { scrollbar-color: #2c3a55 var(--bg-page); }
 
 /* ─── Leaflet popup overrides ────────────────────────────── */
-.leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; }
-.leaflet-popup-content { margin: 14px; }
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  padding: 0;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+}
+.leaflet-popup-content { margin: 14px; color: var(--text-primary); line-height: 1.6; }
+.leaflet-popup-content b,
+.leaflet-popup-content strong { color: var(--text-primary); }
 .leaflet-popup-tip { background: var(--bg-card); }
+.leaflet-popup-close-button { color: var(--text-secondary) !important; }
+.leaflet-popup-close-button:hover { color: var(--text-primary) !important; }
+
+/* Ensure dark mode popups work regardless of CSS variable cascade */
+.dark .leaflet-popup-content-wrapper {
+  background: #161f31 !important;
+  color: #e9eef6 !important;
+}
+.dark .leaflet-popup-content { color: #e9eef6 !important; }
+.dark .leaflet-popup-content b,
+.dark .leaflet-popup-content strong { color: #f1f5fb !important; }
+.dark .leaflet-popup-tip { background: #161f31 !important; }
+.dark .leaflet-popup-close-button { color: #99a6bb !important; }
+.dark .leaflet-popup-close-button:hover { color: #e9eef6 !important; }
 
 /* ─── MapView animations ─────────────────────────────────── */
 @keyframes pulse-ring {
@@ -1104,4 +1126,41 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 @keyframes pt-skel {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* ─── Leaflet control z-index — debajo del nav sticky ─────── */
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 900 !important;
+}
+
+/* ─── Leaflet zoom controls — posición y estilo ──────────── */
+.leaflet-control-zoom {
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+  margin-bottom: 36px !important;
+}
+.leaflet-control-zoom a {
+  width: 34px !important;
+  height: 34px !important;
+  line-height: 34px !important;
+  font-size: 16px !important;
+  font-weight: 600;
+  color: var(--text-secondary) !important;
+  background: var(--bg-card) !important;
+  border-bottom: 1px solid var(--border) !important;
+  transition: background 0.15s, color 0.15s;
+}
+.leaflet-control-zoom a:last-child {
+  border-bottom: none !important;
+}
+.leaflet-control-zoom a:hover {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+.leaflet-control-zoom a.leaflet-disabled {
+  color: var(--text-muted) !important;
+  cursor: default;
 }

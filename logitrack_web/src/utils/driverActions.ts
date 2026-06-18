@@ -1,4 +1,6 @@
 import type { Shipment, TimeWindow } from "../api/shipments";
+import { UserX, Ban, PackageX, Clock, ClipboardX, Pencil } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 export const TIME_WINDOW_LABEL: Record<string, string> = {
   morning: "Mañana",
@@ -25,11 +27,11 @@ export function timeWindowTone(tw?: TimeWindow): {
 } {
   switch (tw) {
     case "morning":
-      return { bg: "bg-sky-50", text: "text-sky-700", border: "border-sky-200" };
+      return { bg: "bg-sky-50 dark:bg-sky-500/15", text: "text-sky-700 dark:text-sky-300", border: "border-sky-200 dark:border-sky-500/30" };
     case "afternoon":
-      return { bg: "bg-violet-50", text: "text-violet-700", border: "border-violet-200" };
+      return { bg: "bg-violet-50 dark:bg-violet-500/15", text: "text-violet-700 dark:text-violet-300", border: "border-violet-200 dark:border-violet-500/30" };
     default:
-      return { bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-200" };
+      return { bg: "bg-slate-100 dark:bg-gray-700", text: "text-slate-600 dark:text-gray-300", border: "border-slate-200 dark:border-gray-600" };
   }
 }
 
@@ -133,11 +135,11 @@ export const FAILED_REASONS: { id: string; label: string }[] = [
 ];
 
 // Motivos predefinidos cuando el destinatario rechaza activamente el envío.
-export const REJECTED_REASONS: { id: string; label: string; emoji: string }[] = [
-  { id: "no_lo_pedi", label: "No lo pedí", emoji: "🤷" },
-  { id: "no_lo_quiero", label: "No lo quiero", emoji: "🚫" },
-  { id: "producto_danado", label: "Producto dañado", emoji: "📦" },
-  { id: "llego_tarde", label: "Llegó demasiado tarde", emoji: "⏰" },
-  { id: "no_coincide_pedido", label: "No coincide con el pedido", emoji: "📋" },
-  { id: "otro", label: "Otro", emoji: "✏️" },
+export const REJECTED_REASONS: { id: string; label: string; icon: LucideIcon }[] = [
+  { id: "no_lo_pedi", label: "No lo pedí", icon: UserX },
+  { id: "no_lo_quiero", label: "No lo quiero", icon: Ban },
+  { id: "producto_danado", label: "Producto dañado", icon: PackageX },
+  { id: "llego_tarde", label: "Llegó demasiado tarde", icon: Clock },
+  { id: "no_coincide_pedido", label: "No coincide con el pedido", icon: ClipboardX },
+  { id: "otro", label: "Otro", icon: Pencil },
 ];

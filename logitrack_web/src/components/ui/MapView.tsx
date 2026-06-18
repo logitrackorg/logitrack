@@ -2,12 +2,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
+  AlertTriangle,
   MapPin,
   Navigation,
   Clock,
-  CheckCircle2,
-  Package,
-  AlertTriangle,
   Pause,
   Play,
   RotateCcw,
@@ -60,6 +58,7 @@ interface MapViewProps {
     onFastForwardTime?: () => void;
   };
   zones?: Zone[];
+  dangerZones?: Zone[];
   onRouteInfoChange?: (info: { distance: number; duration: number } | null) => void;
   onWaypointClick: (trackingId: string) => void;
   driverId?: string;
@@ -94,6 +93,7 @@ export function MapView({
   simulationMode,
   simulationControls,
   zones = [],
+  dangerZones = [],
   onRouteInfoChange,
   onWaypointClick,
   driverId,
@@ -130,16 +130,38 @@ export function MapView({
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
 
+    const isDark = document.documentElement.classList.contains("dark");
+    const tileUrl = isDark
+      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+
     const map = L.map(mapRef.current, {
       center: [-34.6037, -58.3816],
       zoom: 12,
-      zoomControl: true,
+      zoomControl: false,
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors",
+    L.control.zoom({ position: "bottomleft" }).addTo(map);
+
+    const tileLayer = L.tileLayer(tileUrl, {
+      attribution: isDark
+        ? '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>'
+        : "© OpenStreetMap contributors",
       maxZoom: 19,
     }).addTo(map);
+
+    // Watch for theme changes to swap tiles
+    const observer = new MutationObserver(() => {
+      const dark = document.documentElement.classList.contains("dark");
+      const newUrl = dark
+        ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+      tileLayer.setUrl(newUrl);
+      tileLayer.options.attribution = dark
+        ? '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>'
+        : "© OpenStreetMap contributors";
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
     map.on("dragstart", () => {
       if (!programmaticPanRef.current) {
@@ -153,6 +175,7 @@ export function MapView({
     userMarkerLayer.current = L.layerGroup().addTo(map);
 
     return () => {
+      observer.disconnect();
       if (mapInstance.current) {
         mapInstance.current.remove();
         mapInstance.current = null;
@@ -176,8 +199,8 @@ export function MapView({
       });
       poly.bindPopup(`
         <div style="font-family:system-ui;min-width:140px">
-          <p style="font-weight:700;font-size:13px;margin:0 0 3px">${ALERT_TRIANGLE_SVG} ${z.name}</p>
-          ${z.description ? `<p style="font-size:11px;color:#64748b;margin:0">${z.description}</p>` : ""}
+          <p style="font-weight:700;font-size:13px;margin:0 0 3px;color:var(--text-primary)">${ALERT_TRIANGLE_SVG} ${z.name}</p>
+          ${z.description ? `<p style="font-size:11px;color:var(--text-secondary);margin:0">${z.description}</p>` : ""}
         </div>
       `);
       poly.addTo(layer!);
@@ -195,19 +218,19 @@ export function MapView({
     // Origin branch marker
     if (origin) {
       const depotIcon = L.divIcon({
-        html: `<div class="w-10 h-10 rounded-full bg-[#1e3a5f] border-[3px] border-white shadow-[0_2px_10px_rgba(0,0,0,0.3)] flex items-center justify-center cursor-pointer"><div class="text-lg leading-none">${FACTORY_SVG}</div></div>`,
+        html: `<div class="w-10 h-10 rounded-full border-[3px] border-white shadow-[0_2px_10px_rgba(0,0,0,0.3)] flex items-center justify-center cursor-pointer" style="background-color:var(--sidebar-bg)"><div class="text-lg leading-none">${FACTORY_SVG}</div></div>`,
         className: "",
         iconSize: [40, 40],
         iconAnchor: [20, 40],
       });
       const dm = L.marker([origin.latitude, origin.longitude], { icon: depotIcon });
       dm.bindPopup(`
-        <div class="font-[system-ui,-apple-system,sans-serif] min-w-[200px]">
-          <div class="flex items-center justify-between mb-2 gap-2">
-            <strong class="text-[var(--text-heading)] text-[13px]">Sucursal</strong>
+        <div style="font-family:system-ui,-apple-system,sans-serif;min-width:200px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px">
+            <strong style="color:var(--text-heading);font-size:13px">Sucursal</strong>
           </div>
-          <h4 class="text-[15px] font-bold text-[var(--text-primary)] m-0 mb-1.5">${origin.name}</h4>
-          <p class="text-xs text-[#6b7280] m-0">Punto de partida</p>
+          <h4 style="font-size:15px;font-weight:700;color:var(--text-primary);margin:0 0 6px 0">${origin.name}</h4>
+          <p style="font-size:12px;color:var(--text-secondary);margin:0">Punto de partida</p>
         </div>
       `);
       dm.addTo(markersLayer.current!);
@@ -298,23 +321,23 @@ export function MapView({
     const marker = L.marker([wp.latitude, wp.longitude], { icon });
 
     const badge = isDelivered
-      ? `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-[var(--ok-bg)] text-[var(--ok-text)]">${CHECK_SVG} Entregado</span>`
+      ? `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:9999px;white-space:nowrap;background:var(--ok-bg);color:var(--ok-text)">${CHECK_SVG} Entregado</span>`
       : isFailed
-      ? `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-[var(--danger-bg)] text-[var(--danger-text)]">${X_SVG} No entregado</span>`
-      : `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-[var(--warn-bg)] text-[var(--warn-text)]">Pendiente</span>`;
+      ? `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:9999px;white-space:nowrap;background:var(--danger-bg);color:var(--danger-text)">${X_SVG} No entregado</span>`
+      : `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:9999px;white-space:nowrap;background:var(--warn-bg);color:var(--warn-text)">Pendiente</span>`;
 
     marker.bindPopup(`
-      <div class="font-[system-ui,-apple-system,sans-serif] min-w-[200px]">
-        <div class="flex items-center justify-between mb-2 gap-2">
-          <strong class="text-[var(--text-heading)] text-[13px]">#${wp.sequence}</strong>
+      <div style="font-family:system-ui,-apple-system,sans-serif;min-width:200px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px">
+          <strong style="color:var(--text-heading);font-size:13px">#${wp.sequence}</strong>
           ${badge}
         </div>
-        <h4 class="text-[15px] font-bold text-[var(--text-primary)] m-0 mb-1.5">${wp.name}</h4>
-        <p class="text-xs text-[var(--text-secondary)] m-0 mb-3 flex items-start gap-1.5 leading-[1.4]">
+        <h4 style="font-size:15px;font-weight:700;color:var(--text-primary);margin:0 0 6px 0">${wp.name}</h4>
+        <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px 0;display:flex;align-items:flex-start;gap:6px;line-height:1.4">
           ${MAP_PIN_SVG}
           ${wp.address}
         </p>
-        <button class="w-full px-3 py-2 bg-[#1e3a5f] text-white border-none rounded-lg text-xs font-semibold cursor-pointer transition-colors duration-200 hover:bg-[#2d5a8f]" onclick="window.dispatchEvent(new CustomEvent('waypoint-click',{detail:'${wp.tracking_id}'}))">
+        <button style="width:100%;padding:8px 12px;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:var(--sidebar-bg);transition:filter 200ms" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter=''" onclick="window.dispatchEvent(new CustomEvent('waypoint-click',{detail:'${wp.tracking_id}'}))">
           Ver detalle →
         </button>
       </div>
@@ -362,12 +385,12 @@ export function MapView({
 
     if (splitIdx > 0) {
       doneRouteLayer.current = L.polyline(full.slice(0, splitIdx + 1), {
-        color: "#94a3b8", weight: 4, opacity: 0.6, dashArray: "8, 6",
+        color: "var(--text-muted)", weight: 4, opacity: 0.6, dashArray: "8, 6",
       }).addTo(mapInstance.current!);
     }
     if (splitIdx < full.length - 1) {
       pendingRouteLayer.current = L.polyline(full.slice(splitIdx), {
-        color: "#f97316", weight: 4, opacity: 0.8,
+        color: "var(--warn)", weight: 4, opacity: 0.8,
       }).addTo(mapInstance.current!);
     }
   };
@@ -461,16 +484,16 @@ export function MapView({
       } else {
         if (doneResult) {
           doneRouteLayer.current = L.polyline(doneResult.coords, {
-            color: "#94a3b8", weight: 4, opacity: 0.6, dashArray: "8, 6",
+            color: "var(--text-muted)", weight: 4, opacity: 0.6, dashArray: "8, 6",
           }).addTo(mapInstance.current!);
         }
         if (pendingResult) {
           pendingRouteLayer.current = L.polyline(pendingResult.coords, {
-            color: "#f97316", weight: 4, opacity: 0.8,
+            color: "var(--warn)", weight: 4, opacity: 0.8,
           }).addTo(mapInstance.current!);
         } else {
           pendingRouteLayer.current = L.polyline(fullResult.coords, {
-            color: "#f97316", weight: 4, opacity: 0.8,
+            color: "var(--warn)", weight: 4, opacity: 0.8,
           }).addTo(mapInstance.current!);
         }
       }
@@ -508,62 +531,72 @@ export function MapView({
     );
   }
 
-  const pendingCount = waypoints.filter((w) => w.status === "out_for_delivery").length;
-  const completedCount = waypoints.filter(
-    (w) => w.status === "delivered" || w.status === "delivery_failed"
-  ).length;
-
   const isSimulating = simulationMode && simulationMode !== "real";
 
   return (
     <div className="relative h-[calc(100vh-200px)] w-full rounded-xl overflow-hidden">
       <div ref={mapRef} className="h-full w-full" />
 
-      {/* Simulation banner */}
-      {isSimulating && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1100] flex items-center gap-2 bg-[rgba(15,23,42,0.85)] backdrop-blur-[8px] text-white px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shadow-[0_2px_12px_rgba(0,0,0,0.2)]">
-          <span className="inline-flex items-center gap-1.5 opacity-90">
-            <Film className="w-3.5 h-3.5" /> Modo simulación
-          </span>
-          {simulationMode === "simulate" && simulationControls && (
-            <div className="flex gap-1 ml-1">
-              <button
-                onClick={simulationControls.isPaused ? simulationControls.play : simulationControls.pause}
-                className="inline-flex items-center gap-1 p-[3px_8px] rounded-full border border-[rgba(255,255,255,0.25)] bg-[rgba(255,255,255,0.12)] text-white text-[11px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[rgba(255,255,255,0.22)]"
-              >
-                {simulationControls.isPaused ? (
-                  <><Play className="w-3 h-3" /> Reanudar</>
-                ) : (
-                  <><Pause className="w-3 h-3" /> Pausar</>
-                )}
-              </button>
-              <button onClick={simulationControls.reset} className="inline-flex items-center gap-1 p-[3px_8px] rounded-full border border-[rgba(255,255,255,0.25)] bg-[rgba(255,255,255,0.12)] text-white text-[11px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[rgba(255,255,255,0.22)]">
-                <RotateCcw className="w-3 h-3" /> Reiniciar
-              </button>
-              {simulationControls.onCycleSpeed && (
-                <button onClick={simulationControls.onCycleSpeed} className="inline-flex items-center gap-1 p-[3px_8px] rounded-full border border-[rgba(255,255,255,0.25)] bg-[rgba(255,255,255,0.12)] text-white text-[11px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[rgba(255,255,255,0.22)]" title="Cambiar velocidad de simulación">
-                  <Zap className="w-3 h-3" /> x{simulationControls.speedMultiplier ?? 1}
-                </button>
-              )}
-              {simulationControls.onFastForwardTime && (
-                <button onClick={simulationControls.onFastForwardTime} className="inline-flex items-center gap-1 p-[3px_8px] rounded-full border border-[rgba(255,255,255,0.25)] bg-[rgba(255,255,255,0.12)] text-white text-[11px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[rgba(255,255,255,0.22)]" title="Simular paso de 2 horas (test de fatiga)">
-                  ⏩ +2h
-                </button>
-              )}
-              {simulationControls.onExit && (
-                <button onClick={simulationControls.onExit} className="inline-flex items-center gap-1 p-[3px_8px] rounded-full border border-[rgba(239,68,68,0.5)] bg-[rgba(255,255,255,0.12)] text-[#fca5a5] text-[11px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[rgba(239,68,68,0.2)]">
-                  <X className="w-3 h-3" /> Salir
-                </button>
-              )}
+      {/* Simulation bar — icon-only buttons */}
+      {isSimulating && simulationControls && (
+        <div className="absolute top-2 left-2 right-2 z-[900] h-10 bg-[var(--bg-card)] rounded-lg shadow-sm border border-amber-200 dark:border-amber-500/20 px-2 flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0 mr-1">
+            <div className="w-5 h-5 rounded bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Film className="w-3 h-3" />
             </div>
+            <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">Sim</span>
+          </div>
+
+          <button
+            onClick={simulationControls.isPaused ? simulationControls.play : simulationControls.pause}
+            title={simulationControls.isPaused ? "Reanudar" : "Pausar"}
+            className="h-7 w-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center shrink-0 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+          >
+            {simulationControls.isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+          </button>
+          <button
+            onClick={simulationControls.reset}
+            title="Reiniciar"
+            className="h-7 w-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center shrink-0 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+          >
+            <RotateCcw className="w-3 h-3" />
+          </button>
+
+          <div className="flex-1" />
+
+          {simulationControls.onCycleSpeed && (
+            <button
+              onClick={simulationControls.onCycleSpeed}
+              title="Cambiar velocidad"
+              className="h-7 px-1.5 rounded-md cursor-pointer border transition-colors flex items-center gap-0.5 shrink-0 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+            >
+              <Zap className="w-3 h-3" />
+              <span className="text-[10px] font-semibold">x{simulationControls.speedMultiplier ?? 1}</span>
+            </button>
           )}
+          {simulationControls.onFastForwardTime && (
+            <button
+              onClick={simulationControls.onFastForwardTime}
+              title="Adelantar 2 horas"
+              className="h-7 w-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center shrink-0 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+            >
+              <Clock className="w-3 h-3" />
+            </button>
+          )}
+          <button
+            onClick={simulationControls.onExit}
+            title="Salir de simulación"
+            className="h-7 w-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center shrink-0 bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20"
+          >
+            <X className="w-3 h-3" />
+          </button>
         </div>
       )}
 
       {/* Recenter / follow button */}
       {userLocation && (
         <button
-          className={`absolute right-4 bottom-[200px] z-[1000] w-10 h-10 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 ${
+          className={`absolute right-3 bottom-10 z-[900] w-10 h-10 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 ${
             followMode
               ? "bg-[var(--brand)] text-white shadow-[0_2px_12px_rgba(37,99,235,0.4)] hover:bg-[var(--brand)]"
               : "bg-[var(--bg-card)] text-[var(--text-heading)] shadow-[0_2px_12px_rgba(0,0,0,0.15)] hover:bg-[var(--bg-inset)]"
@@ -583,56 +616,55 @@ export function MapView({
         </button>
       )}
 
-      {/* Info panel */}
-      <div className="absolute top-4 right-4 flex flex-col gap-2 z-[1000] max-w-[180px] max-[640px]:max-w-[160px]">
-        <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
-          <Package className="w-4 h-4 text-slate-600 dark:text-[var(--text-secondary)]" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Paradas</p>
-            <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{waypoints.length}</p>
-          </div>
-        </div>
-
-        {routeInfo && (
+      {/* Info bar — single compact row */}
+      <div className={`absolute ${isSimulating ? 'top-14' : 'top-2'} left-2 right-2 z-[900] h-8 bg-[var(--bg-card)] rounded-lg shadow-sm border border-[var(--border)] px-3 flex items-center justify-center gap-3 text-xs`}>
+        <span className="flex items-center gap-1 text-[var(--text-secondary)] whitespace-nowrap">
+          <MapPin className="w-3 h-3 shrink-0" />
+          <span className="font-semibold text-[var(--text-primary)]">{waypoints.length}</span>
+          <span className="hidden sm:inline">paradas</span>
+        </span>
+        <span className="text-[var(--border)] select-none">·</span>
+        {routeInfo ? (
           <>
-            <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
-              <Navigation className="w-4 h-4 text-slate-600 dark:text-[var(--text-secondary)]" />
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Distancia</p>
-                <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{(routeInfo.distance / 1000).toFixed(1)} km</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
-              <Clock className="w-4 h-4 text-slate-600 dark:text-[var(--text-secondary)]" />
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Tiempo est.</p>
-                <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{Math.round(routeInfo.duration / 60)} min</p>
-              </div>
-            </div>
+            <span className="flex items-center gap-1 text-[var(--text-secondary)] whitespace-nowrap">
+              <Navigation className="w-3 h-3 shrink-0" />
+              <span className="font-semibold text-[var(--text-primary)]">{(routeInfo.distance / 1000).toFixed(1)} km</span>
+            </span>
+            <span className="text-[var(--border)] select-none">·</span>
+            <span className="flex items-center gap-1 text-[var(--text-secondary)] whitespace-nowrap">
+              <Clock className="w-3 h-3 shrink-0" />
+              <span className="font-semibold text-[var(--text-primary)]">{Math.round(routeInfo.duration / 60)} min</span>
+            </span>
+            <span className="text-[var(--border)] select-none">·</span>
+          </>
+        ) : (
+          <>
+            <span className="flex items-center gap-1 text-[var(--text-muted)] whitespace-nowrap">
+              <Navigation className="w-3 h-3 shrink-0" />
+              <span className="text-[var(--text-muted)]">-- km</span>
+            </span>
+            <span className="text-[var(--border)] select-none">·</span>
+            <span className="flex items-center gap-1 text-[var(--text-muted)] whitespace-nowrap">
+              <Clock className="w-3 h-3 shrink-0" />
+              <span className="text-[var(--text-muted)]">-- min</span>
+            </span>
           </>
         )}
-
-        <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Completadas</p>
-            <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{completedCount}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
-          <AlertTriangle className="w-4 h-4 text-amber-600" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Pendientes</p>
-            <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{pendingCount}</p>
-          </div>
-        </div>
       </div>
+
+      {dangerZones.length > 0 && (
+        <div className="absolute left-2 right-2 z-[899] bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-lg px-3 py-1.5 flex items-center gap-2" style={{ top: isSimulating ? '3.5rem' : '2.5rem' }}>
+          <AlertTriangle className="w-4 h-4 text-[var(--danger-c)] shrink-0" />
+          <span className="text-xs font-semibold text-[var(--danger-text)] truncate flex-1">
+            {dangerZones[0].name}
+          </span>
+        </div>
+      )}
 
       {loading && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[var(--bg-card)] px-8 py-5 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col items-center z-[2000]">
           <div className="w-6 h-6 border-[3px] border-[var(--border)] border-t-[var(--warn)] rounded-full animate-spin" />
-          <p className="text-xs text-slate-600 dark:text-[var(--text-secondary)] mt-2">Calculando ruta...</p>
+          <p className="text-xs text-[var(--text-secondary)] mt-2">Calculando ruta...</p>
         </div>
       )}
     </div>

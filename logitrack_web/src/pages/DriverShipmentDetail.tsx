@@ -1,42 +1,27 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  AlertCircle,
-  AlertTriangle,
-  ArrowLeft,
-  Ban,
-  Camera,
-  CheckCircle2,
-  Clock,
-  MapPin,
-  Package,
-  User,
-  XCircle,
+  AlertCircle, AlertTriangle, Ban, CheckCircle2, ChevronLeft,
+  Clock, MapPin, MessageCircle, Phone, XCircle,
 } from "lucide-react";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { driverApi, type DriverRoute as DriverRouteType } from "../api/driver";
-import { Card } from "../components/ui/card";
-import { BottomSheet } from "../components/ui/bottom-sheet";
+import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
+import { StatusBadge } from "../components/StatusBadge";
+import { Button } from "../components/ui/button";
+
+import { DeliveryActionSheet } from "../components/driver/DeliveryActionSheet";
 import { CameraCapture } from "../components/ui/CameraCapture";
-import { WhatsAppQuickButton } from "../components/ui/WhatsAppQuickButton";
+import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
+import { useGeolocation } from "../hooks/useGeolocation";
+import { waHref } from "../utils/driverActions";
 import {
-  FAILED_REASONS,
-  REJECTED_REASONS,
-  TIME_WINDOW_HOURS,
-  TIME_WINDOW_LABEL,
-  recipientView,
-  timeWindowTone,
+  FAILED_REASONS, REJECTED_REASONS,
+  TIME_WINDOW_HOURS, TIME_WINDOW_LABEL,
+  recipientView, timeWindowTone,
 } from "../utils/driverActions";
 
-const PACKAGE_LABELS: Record<string, string> = {
-  envelope: "Sobre",
-  box: "Caja",
-};
-
-const DELIVERY_METHOD_LABEL: Record<string, string> = {
-  ultima_milla: "Última milla",
-  retiro_sucursal: "Retiro en sucursal",
-};
+const PACKAGE_LABELS: Record<string, string> = { envelope: "Sobre", box: "Caja" };
 
 export function DriverShipmentDetail() {
   const { trackingId } = useParams<{ trackingId: string }>();
@@ -50,6 +35,8 @@ export function DriverShipmentDetail() {
   const [failedOpen, setFailedOpen] = useState(false);
   const [rejectedOpen, setRejectedOpen] = useState(false);
   const [recipientDni, setRecipientDni] = useState("");
+  const [deliveryKeyword, setDeliveryKeyword] = useState("");
+  const [useContingency, setUseContingency] = useState(false);
   const [failedReason, setFailedReason] = useState("");
   const [failedNotes, setFailedNotes] = useState("");
   const [rejectedReason, setRejectedReason] = useState("");
@@ -59,54 +46,41 @@ export function DriverShipmentDetail() {
   const [deliveryPhoto, setDeliveryPhoto] = useState<Blob | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
 
+  const { speedKmh: gpsSpeedKmh, locationReady, requestLocation } = useCurrentSpeed();
+  const [simActive] = useState(false);
+  const routePoints = useMemo(() => [], []);
+  const { mode: simulationMode } = useGeolocation(routePoints, simActive ? "simulate" : undefined);
+  const simulationActive = simulationMode === "simulate";
+  const effectiveSpeed = simulationActive ? 0 : gpsSpeedKmh;
+  const speedSource: "simulation" | "real_gps" = simulationActive ? "simulation" : "real_gps";
+  const movingTooFast = effectiveSpeed > 5;
+  const locationMissing = !simulationActive && !locationReady;
+  const deliveryBlocked = movingTooFast || locationMissing;
+  const blockMessage = movingTooFast
+    ? "Detenga el vehículo para entregar"
+    : locationMissing ? "Ubicación requerida. Active el GPS y deténgase para entregar" : "";
+
   const reload = (id: string) =>
     Promise.all([
       shipmentApi.get(id).then(setShipment),
       driverApi.getRoute().then((d) => setRoute(d.route)).catch(() => setRoute(null)),
     ]);
 
-  useEffect(() => {
-    if (!trackingId) return;
-    setLoading(true);
-    reload(trackingId)
-      .catch(() => setError("Envío no encontrado."))
-      .finally(() => setLoading(false));
-  }, [trackingId]);
+  useEffect(() => { if (trackingId) { setLoading(true); reload(trackingId).catch(() => setError("Envío no encontrado.")).finally(() => setLoading(false)); } }, [trackingId]);
 
   const handleDeliver = async () => {
     if (!shipment || !recipientDni.trim()) return;
     const isLastMile = shipment.delivery_method === "ultima_milla";
-    if (isLastMile && !deliveryPhoto) return;
-    setSubmitting(true);
-    setActionError("");
+    if (isLastMile) { const locked = (shipment.keyword_attempts ?? 0) >= 3; if (useContingency) { if (!recipientDni.trim()) return; } else { if (locked || !deliveryKeyword.trim()) return; } if (!deliveryPhoto) return; }
+    setSubmitting(true); setActionError("");
     try {
-      if (isLastMile && deliveryPhoto) {
-        // Última milla: encode photo as base64 and send through updateStatus
-        const arrayBuffer = await deliveryPhoto.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-        await shipmentApi.updateStatus(shipment.tracking_id, {
-          status: "delivered",
-          location: "",
-          recipient_dni: recipientDni.trim(),
-          delivery_photo_base64: base64,
-        });
-      } else {
-        await shipmentApi.updateStatus(shipment.tracking_id, {
-          status: "delivered",
-          location: "",
-          recipient_dni: recipientDni.trim(),
-        });
+      if (isLastMile) {
+        await shipmentApi.deliver(shipment.tracking_id, { keyword: useContingency ? undefined : deliveryKeyword.trim(), recipient_dni: useContingency ? recipientDni.trim() : undefined, contingency: useContingency, current_speed: effectiveSpeed, speed_source: speedSource, photo: deliveryPhoto! });
       }
-      setDeliverOpen(false);
-      setRecipientDni("");
-      setDeliveryPhoto(null);
+      else await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivered", location: "", recipient_dni: recipientDni.trim(), current_speed: effectiveSpeed, speed_source: speedSource });
+      setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); setDeliveryPhoto(null);
       await reload(shipment.tracking_id);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setActionError(msg ?? "No se pudo registrar la entrega.");
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err: unknown) { const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error; if (msg?.includes("intento") || msg?.includes("bloqueado")) { setDeliveryKeyword(""); const u = await shipmentApi.get(shipment.tracking_id).catch(() => null); if (u) setShipment(u); } setActionError(msg ?? "No se pudo registrar la entrega."); } finally { setSubmitting(false); }
   };
 
   const handleFailed = async () => {
@@ -114,74 +88,50 @@ export function DriverShipmentDetail() {
     const reasonLabel = FAILED_REASONS.find((r) => r.id === failedReason)?.label ?? "";
     const note = [reasonLabel, failedNotes.trim()].filter(Boolean).join(" — ");
     if (!note) return;
-    setSubmitting(true);
-    setActionError("");
-    try {
-      await shipmentApi.updateStatus(shipment.tracking_id, {
-        status: "delivery_failed",
-        location: "",
-        notes: note,
-      });
-      setFailedOpen(false);
-      setFailedReason("");
-      setFailedNotes("");
-      await reload(shipment.tracking_id);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setActionError(msg ?? "No se pudo registrar el intento fallido.");
-    } finally {
-      setSubmitting(false);
-    }
+    setSubmitting(true); setActionError("");
+    try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivery_failed", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource }); setFailedOpen(false); setFailedReason(""); setFailedNotes(""); await reload(shipment.tracking_id); }
+    catch (err: unknown) { setActionError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo registrar el intento fallido."); } finally { setSubmitting(false); }
   };
 
   const handleRejected = async () => {
     if (!shipment) return;
-    const r = REJECTED_REASONS.find((x) => x.id === rejectedReason);
-    if (!r) return;
+    const r = REJECTED_REASONS.find((x) => x.id === rejectedReason); if (!r) return;
     if (r.id === "otro" && !rejectedNotes.trim()) return;
-    const note = r.id === "otro"
-      ? `${r.emoji} ${rejectedNotes.trim()}`
-      : `${r.emoji} ${r.label}${rejectedNotes.trim() ? ` — ${rejectedNotes.trim()}` : ""}`;
-    setSubmitting(true);
-    setActionError("");
-    try {
-      await shipmentApi.updateStatus(shipment.tracking_id, {
-        status: "rechazado",
-        location: "",
-        notes: note,
-      });
-      setRejectedOpen(false);
-      setRejectedReason("");
-      setRejectedNotes("");
-      await reload(shipment.tracking_id);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setActionError(msg ?? "No se pudo registrar el rechazo.");
-    } finally {
-      setSubmitting(false);
-    }
+    const note = r.id === "otro" ? rejectedNotes.trim() : `${r.label}${rejectedNotes.trim() ? ` — ${rejectedNotes.trim()}` : ""}`;
+    setSubmitting(true); setActionError("");
+    try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "rechazado", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource }); setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); await reload(shipment.tracking_id); }
+    catch (err: unknown) { setActionError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo registrar el rechazo."); } finally { setSubmitting(false); }
   };
 
-  if (loading) return <DetailSkeleton />;
-  if (error || !shipment) {
+  if (loading) {
     return (
-      <div className="p-6 max-w-lg mx-auto">
-        <button
-          onClick={() => navigate("/driver/route")}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--sidebar-bg)] mb-5 cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Mi ruta
-        </button>
-        <Card className="p-8 text-center text-sm text-rose-600">
-          {error || "No encontrado."}
-        </Card>
+      <div className="px-4 pt-2 pb-[200px] space-y-3">
+        <div className="h-8 w-24 rounded bg-[var(--bg-muted)] animate-pulse mx-auto" />
+        <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4 space-y-3">
+          <div className="h-7 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+          <div className="h-5 w-4/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+          <div className="h-5 w-32 rounded bg-[var(--bg-muted)] animate-pulse" />
+          <div className="flex gap-2"><div className="h-6 w-16 rounded-full bg-[var(--bg-muted)] animate-pulse" /><div className="h-6 w-20 rounded-full bg-[var(--bg-muted)] animate-pulse" /></div>
+        </div>
+        <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-3">
+          <div className="h-4 w-48 rounded bg-[var(--bg-muted)] animate-pulse" />
+        </div>
       </div>
     );
   }
 
-  const { name, phone, street, city, province, postal, specialInstructions } =
-    recipientView(shipment);
+  if (error || !shipment) {
+    return (
+      <div className="px-4 pt-2">
+        <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-2 min-h-[44px] px-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+          <ChevronLeft className="w-5 h-5" /> Mi ruta
+        </Button>
+        <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] p-6 text-center text-sm text-[var(--danger-text)] mt-2">{error || "No encontrado."}</div>
+      </div>
+    );
+  }
+
+  const { name, phone, fullAddress, specialInstructions } = recipientView(shipment);
   const cor = shipment.corrections ?? {};
   const tw = (cor.time_window ?? shipment.time_window) as typeof shipment.time_window;
   const twTone = timeWindowTone(tw);
@@ -190,224 +140,107 @@ export function DriverShipmentDetail() {
   const isOutForDelivery = shipment.status === "out_for_delivery";
   const routeStarted = route?.status === "en_curso";
   const canAct = isOutForDelivery && routeStarted;
-  const isDelivered = shipment.status === "delivered";
-  const isFailed = shipment.status === "delivery_failed";
-  const isRejected = shipment.status === "rechazado";
-
   const packageType = cor.package_type ?? shipment.package_type;
   const weightKg = cor.weight_kg ?? String(shipment.weight_kg);
   const senderName = cor.sender_name ?? shipment.sender.name;
   const senderPhone = cor.sender_phone ?? shipment.sender.phone;
+  const statusOverride = shipmentStatusLabelOverride(shipment);
+
+  const fmtPhone = (raw: string) => {
+    const d = raw.replace(/\D/g, "");
+    if (d.length === 10) return `${d.slice(0,4)}-${d.slice(4)}`;
+    if (d.length >= 11) return `${d.slice(0,2)} ${d.slice(2,6)}-${d.slice(6)}`;
+    return raw;
+  };
 
   return (
-    <div className="pb-32">
-      {/* Top bar */}
-      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b dark:border-gray-700 border-slate-200">
-        <div className="px-4 sm:px-6 max-w-2xl mx-auto py-3 flex items-center gap-3">
-          <button
-            onClick={() => navigate("/driver/route")}
-            className="-ml-1 w-9 h-9 rounded-full dark:hover:bg-gray-700 hover:bg-slate-100 flex items-center justify-center dark:text-gray-300 text-slate-700 cursor-pointer"
-            aria-label="Volver a mi ruta"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-mono dark:text-gray-500 text-slate-400 leading-tight">{shipment.tracking_id}</p>
-            <p className="text-sm font-bold dark:text-gray-100 text-slate-900 truncate leading-tight">Detalle del envío</p>
-          </div>
-          {isDelivered && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-full">
-              <CheckCircle2 className="w-3 h-3" />
-              Entregado
-            </span>
-          )}
-          {isFailed && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-100 px-2.5 py-1 rounded-full">
-              <XCircle className="w-3 h-3" />
-              Sin entregar
-            </span>
-          )}
-          {isRejected && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full">
-              <Ban className="w-3 h-3" />
-              Rechazado
-            </span>
-          )}
-          {isOutForDelivery && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full">
-              Para entregar
-            </span>
-          )}
+    <>
+    <div className="px-4 py-4 space-y-3 pb-[190px]">
+      {/* Back + status row */}
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-1.5 min-h-[44px] px-2 -ml-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+          <ChevronLeft className="w-5 h-5" /> Mi ruta
+        </Button>
+        <StatusBadge status={shipment.status} label={statusOverride} />
+      </div>
+
+      {/* Tracking ID */}
+      <p className="text-[11px] text-[var(--text-muted)] text-center font-mono tracking-tight">{shipment.tracking_id}</p>
+
+      {/* Error */}
+      {actionError && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span className="flex-1">{actionError}</span>
+          <Button variant="ghost" size="sm" onClick={() => setActionError("")} className="shrink-0 opacity-80 hover:opacity-100">Cerrar</Button>
         </div>
-      </header>
+      )}
 
-      <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-4">
-        {actionError && (
-          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span className="flex-1">{actionError}</span>
-            <button
-              onClick={() => setActionError("")}
-              className="text-xs font-semibold text-rose-700 hover:text-rose-900 cursor-pointer"
-            >
-              Cerrar
-            </button>
+      {/* Recipient card */}
+      <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden">
+        <div className="p-3">
+          <h2 className="text-lg font-bold text-[var(--text-primary)]">{name}</h2>
+          <div className="flex items-start gap-1.5 mt-1.5">
+            <MapPin className="w-4 h-4 text-[var(--text-secondary)] shrink-0 mt-0.5" />
+            <p className="text-[13px] text-[var(--text-secondary)]">{fullAddress}</p>
           </div>
-        )}
-
-        {/* Hero: nombre + dirección */}
-        <Card className="p-5 mb-3">
-          <p className="text-[11px] font-bold uppercase tracking-wider dark:text-gray-400 text-slate-500 mb-2">
-            Destinatario
-          </p>
-          <h2 className="text-xl font-bold dark:text-gray-100 text-slate-900 leading-tight">{name}</h2>
-          <div className="mt-3 flex items-start gap-2 dark:text-gray-300 text-slate-700">
-            <MapPin className="w-4 h-4 dark:text-gray-500 text-slate-400 shrink-0 mt-1" />
-            <div className="flex-1">
-              <p className="text-base font-semibold leading-snug">{street}</p>
-              <p className="text-sm dark:text-gray-400 text-slate-500 leading-snug">
-                {[city, province, postal].filter(Boolean).join(", ")}
-              </p>
-            </div>
-          </div>
-
-          {/* chips */}
-          <div className="mt-4 flex flex-wrap items-center gap-1.5">
-            {tw && (
-              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
-                <Clock className="w-3 h-3" />
-                {TIME_WINDOW_LABEL[tw] ?? tw}
-                {TIME_WINDOW_HOURS[tw] && ` · ${TIME_WINDOW_HOURS[tw]}`}
-              </span>
-            )}
-            {fragile && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
-                <AlertTriangle className="w-3 h-3" />
-                Frágil
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border dark:bg-gray-800/50 bg-slate-50 dark:text-gray-300 text-slate-700 dark:border-gray-700 border-slate-200">
-              <Package className="w-3 h-3" />
-              {weightKg} kg · {PACKAGE_LABELS[packageType] ?? packageType}
+          <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
+              {weightKg} kg
             </span>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
+              {PACKAGE_LABELS[packageType] ?? packageType}
+            </span>
+            {fragile && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40">
+                <AlertTriangle className="w-3.5 h-3.5" />Frágil
+              </span>
+            )}
+            {tw && (
+              <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
+                <Clock className="w-3.5 h-3.5" />{TIME_WINDOW_LABEL[tw] ?? tw}{TIME_WINDOW_HOURS[tw] && ` · ${TIME_WINDOW_HOURS[tw]}`}
+              </span>
+            )}
             {attempts > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/40">
                 Reintento {attempts + 1}
               </span>
             )}
           </div>
-
-          {/* Quick actions */}
-          <div className="mt-4">
-            <WhatsAppQuickButton
-              phone={phone}
-              recipientName={name}
-              trackingId={shipment.tracking_id}
-            />
-          </div>
-
-          <p className="mt-3 text-sm dark:text-gray-300 text-slate-700 font-medium">{phone}</p>
-        </Card>
-
-        {/* Special instructions: prominente */}
-        {specialInstructions && (
-          <div className="mb-3 p-4 rounded-xl border-2 border-amber-300 bg-amber-50 flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
-                Instrucciones especiales
-              </p>
-              <p className="text-sm text-amber-900 leading-relaxed">{specialInstructions}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Paquete */}
-        <Card className="p-4 mb-3">
-          <p className="text-[11px] font-bold uppercase tracking-wider dark:text-gray-400 text-slate-500 mb-3">
-            Paquete
+        </div>
+        <div className="border-t border-[var(--border)] px-3 py-2 flex items-center gap-1.5">
+          <p className="text-[11px] text-[var(--text-muted)] truncate">
+            Remitente: {senderName}{senderPhone ? ` · ${fmtPhone(senderPhone)}` : ""}
           </p>
-          <div className="grid gap-2 text-sm">
-            <Row label="Tipo" value={PACKAGE_LABELS[packageType] ?? packageType} />
-            <Row label="Peso" value={`${weightKg} kg`} />
-            <Row
-              label="Entrega"
-              value={DELIVERY_METHOD_LABEL[shipment.delivery_method ?? "ultima_milla"] ?? "Última milla"}
-            />
-            {fragile && <Row label="Frágil" value="Sí" highlight />}
-          </div>
-        </Card>
-
-        {/* Remitente — colapsado por defecto, contenido secundario */}
-        <Card className="p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <User className="w-4 h-4 dark:text-gray-500 text-slate-400" />
-            <p className="text-[11px] font-bold uppercase tracking-wider dark:text-gray-400 text-slate-500">
-              Remitente
-            </p>
-          </div>
-          <p className="text-sm font-semibold dark:text-gray-100 text-slate-900">{senderName}</p>
-          {senderPhone && (
-            <p className="text-xs dark:text-gray-400 text-slate-500 mt-0.5">{senderPhone}</p>
-          )}
-        </Card>
-
-        {!routeStarted && isOutForDelivery && (
-          <p className="mt-4 text-xs text-center dark:text-gray-400 text-slate-500 leading-relaxed">
-            Iniciá tu ruta desde "Mi ruta" para habilitar las acciones de entrega.
-          </p>
-        )}
+        </div>
+        <div className="border-t border-[var(--border)] flex divide-x divide-[var(--border)]">
+          <a href={`tel:${phone}`} className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-all no-underline cursor-pointer">
+            <Phone size={15} />Llamar
+          </a>
+          <a href={waHref(phone)} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-all no-underline cursor-pointer">
+            <MessageCircle size={15} className="text-emerald-500 dark:text-emerald-400" />WhatsApp
+          </a>
+        </div>
       </div>
 
-      {/* Sticky CTAs cuando se puede actuar */}
-      {canAct && (
-        <div className="fixed bottom-0 inset-x-0 z-20 bg-white/95 backdrop-blur border-t dark:border-gray-700 border-slate-200 px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
-          <div className="max-w-2xl mx-auto flex flex-col gap-2">
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setFailedOpen(true)}
-                className="h-12 rounded-xl border-2 border-rose-300 dark:bg-gray-800 bg-white hover:bg-rose-50 text-rose-700 text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5"
-              >
-                <XCircle className="w-4 h-4" />
-                No entregado
-              </button>
-              <button
-                onClick={() => {
-                  if (shipment.delivery_method === "ultima_milla") {
-                    setCameraOpen(true);
-                  } else {
-                    setDeliverOpen(true);
-                  }
-                }}
-                className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-sm"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                Entregar
-              </button>
-            </div>
-            <button
-              onClick={() => setRejectedOpen(true)}
-              className="h-11 rounded-xl border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-700 text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5"
-            >
-              <Ban className="w-4 h-4" />
-              Rechazado por destinatario
-            </button>
-          </div>
+      {/* Route not started */}
+      {!routeStarted && isOutForDelivery && (
+        <div className="rounded-xl border border-[var(--warn-border)] bg-[var(--warn-bg)] p-2.5 text-xs text-center text-[var(--warn-text)]">
+          Iniciá tu ruta para habilitar las acciones de entrega.
         </div>
       )}
 
-      <DeliverSheet
-        open={deliverOpen}
-        onClose={() => { setDeliverOpen(false); setRecipientDni(""); setDeliveryPhoto(null); }}
-        recipientName={name}
-        dni={recipientDni}
-        onDniChange={setRecipientDni}
-        submitting={submitting}
-        onConfirm={handleDeliver}
-        photo={deliveryPhoto}
-        isLastMile={shipment.delivery_method === "ultima_milla"}
-        onRetakePhoto={() => { setDeliverOpen(false); setCameraOpen(true); }}
-      />
+      {/* Special instructions */}
+      {specialInstructions && (
+        <div className="rounded-xl border border-[var(--warn-border)] bg-[var(--warn-bg)] p-3 flex items-start gap-2.5">
+          <AlertTriangle className="w-5 h-5 text-[var(--warn)] shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--warn-text)] mb-1">Instrucciones especiales</p>
+            <p className="text-[13px] text-[var(--warn-text)]">{specialInstructions}</p>
+          </div>
+        </div>
+      )}
+    </div>
 
       {cameraOpen && (
         <CameraCapture
@@ -419,336 +252,29 @@ export function DriverShipmentDetail() {
           onClose={() => setCameraOpen(false)}
         />
       )}
-      <FailedSheet
-        open={failedOpen}
-        onClose={() => { setFailedOpen(false); setFailedReason(""); setFailedNotes(""); }}
-        recipientName={name}
-        reason={failedReason}
-        onReasonChange={setFailedReason}
-        notes={failedNotes}
-        onNotesChange={setFailedNotes}
-        submitting={submitting}
-        onConfirm={handleFailed}
-      />
-      <RejectedSheet
-        open={rejectedOpen}
-        onClose={() => { setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); }}
-        recipientName={name}
-        reason={rejectedReason}
-        onReasonChange={setRejectedReason}
-        notes={rejectedNotes}
-        onNotesChange={setRejectedNotes}
-        submitting={submitting}
-        onConfirm={handleRejected}
-      />
-    </div>
-  );
-}
 
-function Row({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className="flex gap-3 items-start">
-      <span className="dark:text-gray-400 text-slate-500 min-w-[90px]">{label}</span>
-      <span className={highlight ? "font-semibold text-amber-700" : "font-medium dark:text-gray-100 text-slate-900"}>{value}</span>
-    </div>
-  );
-}
-
-function DeliverSheet({
-  open,
-  onClose,
-  recipientName,
-  dni,
-  onDniChange,
-  submitting,
-  onConfirm,
-  photo,
-  isLastMile,
-  onRetakePhoto,
-}: {
-  open: boolean;
-  onClose: () => void;
-  recipientName: string;
-  dni: string;
-  onDniChange: (s: string) => void;
-  submitting: boolean;
-  onConfirm: () => void;
-  photo: Blob | null;
-  isLastMile: boolean;
-  onRetakePhoto: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      const t = setTimeout(() => inputRef.current?.focus(), 80);
-      return () => clearTimeout(t);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!photo) {
-      setPhotoPreview(null);
-      return;
-    }
-    const url = URL.createObjectURL(photo);
-    setPhotoPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [photo]);
-
-  const canConfirm = !!dni.trim() && (!isLastMile || !!photo) && !submitting;
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title="Confirmar entrega"
-      description={`Entrega a ${recipientName}`}
-    >
-      {/* Photo section — only for última milla */}
-      {isLastMile && (
-        <div className="mb-4">
-          {photo && photoPreview ? (
-            <div className="relative rounded-xl overflow-hidden">
-              <img src={photoPreview} alt="Foto de entrega" className="w-full h-40 object-cover" />
-              <button
-                onClick={onRetakePhoto}
-                className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-black/70 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full cursor-pointer"
-              >
-                <Camera className="w-3.5 h-3.5" />
-                Sacar de nuevo
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={onRetakePhoto}
-              className="w-full rounded-xl border-2 border-dashed border-emerald-400 dark:border-emerald-600 p-4 flex flex-col items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
-            >
-              <Camera className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Tomar foto de entrega</span>
-              <span className="text-[11px] text-emerald-600/70 dark:text-emerald-500">Obligatoria para confirmar</span>
-            </button>
-          )}
-        </div>
-      )}
-
-      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
-        DNI del destinatario
-      </label>
-      <input
-        ref={inputRef}
-        value={dni}
-        onChange={(e) => onDniChange(e.target.value.replace(/\D/g, ""))}
-        inputMode="numeric"
-        autoComplete="off"
-        placeholder="Ej: 30123456"
-        className="w-full h-12 px-4 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white text-base placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500"
-      />
-      <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">
-        Solo dígitos. Debe coincidir con el DNI registrado al crear el envío.
-      </p>
-
-      <div className="grid grid-cols-2 gap-2 mt-5">
-        <button
-          onClick={onClose}
-          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={onConfirm}
-          disabled={!canConfirm}
-          className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
-        >
-          {submitting ? "Guardando…" : "Confirmar entrega"}
-        </button>
-      </div>
-    </BottomSheet>
-  );
-}
-
-function FailedSheet({
-  open,
-  onClose,
-  recipientName,
-  reason,
-  onReasonChange,
-  notes,
-  onNotesChange,
-  submitting,
-  onConfirm,
-}: {
-  open: boolean;
-  onClose: () => void;
-  recipientName: string;
-  reason: string;
-  onReasonChange: (s: string) => void;
-  notes: string;
-  onNotesChange: (s: string) => void;
-  submitting: boolean;
-  onConfirm: () => void;
-}) {
-  const requiresNotes = reason === "otro";
-  const canSubmit = !!reason && !(requiresNotes && !notes.trim());
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title="Marcar como no entregado"
-      description={`No entrega a ${recipientName}`}
-    >
-      <p className="text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-2">
-        ¿Qué pasó?
-      </p>
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        {FAILED_REASONS.map((r) => {
-          const active = reason === r.id;
-          return (
-            <button
-              key={r.id}
-              onClick={() => onReasonChange(r.id)}
-              className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${
-                active
-                  ? "border-rose-500 bg-rose-50 text-rose-800"
-                  : "dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700 hover:bg-slate-50"
-              }`}
-            >
-              {r.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
-        Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
-      </label>
-      <textarea
-        value={notes}
-        onChange={(e) => onNotesChange(e.target.value)}
-        placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
-        rows={3}
-        className="w-full px-4 py-3 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-rose-500/20 focus:border-rose-500 resize-y"
-      />
-
-      <div className="grid grid-cols-2 gap-2 mt-5">
-        <button
-          onClick={onClose}
-          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={onConfirm}
-          disabled={!canSubmit || submitting}
-          className="h-12 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
-        >
-          {submitting ? "Guardando…" : "Confirmar"}
-        </button>
-      </div>
-    </BottomSheet>
-  );
-}
-
-function RejectedSheet({
-  open,
-  onClose,
-  recipientName,
-  reason,
-  onReasonChange,
-  notes,
-  onNotesChange,
-  submitting,
-  onConfirm,
-}: {
-  open: boolean;
-  onClose: () => void;
-  recipientName: string;
-  reason: string;
-  onReasonChange: (s: string) => void;
-  notes: string;
-  onNotesChange: (s: string) => void;
-  submitting: boolean;
-  onConfirm: () => void;
-}) {
-  const requiresNotes = reason === "otro";
-  const canSubmit = !!reason && !(requiresNotes && !notes.trim());
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title="Rechazado por destinatario"
-      description={`${recipientName} rechazó el envío`}
-    >
-      <p className="text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-2">
-        Motivo del rechazo
-      </p>
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        {REJECTED_REASONS.map((r) => {
-          const active = reason === r.id;
-          return (
-            <button
-              key={r.id}
-              onClick={() => onReasonChange(r.id)}
-              className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${
-                active
-                  ? "border-amber-500 bg-amber-50 text-amber-800"
-                  : "dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700 hover:bg-slate-50"
-              }`}
-            >
-              {r.emoji} {r.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
-        Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
-      </label>
-      <textarea
-        value={notes}
-        onChange={(e) => onNotesChange(e.target.value)}
-        placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional"}
-        rows={3}
-        className="w-full px-4 py-3 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-y"
-      />
-
-      <div className="grid grid-cols-2 gap-2 mt-5">
-        <button
-          onClick={onClose}
-          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={onConfirm}
-          disabled={!canSubmit || submitting}
-          className="h-12 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
-        >
-          {submitting ? "Guardando…" : "Confirmar rechazo"}
-        </button>
-      </div>
-    </BottomSheet>
-  );
-}
-
-function DetailSkeleton() {
-  return (
-    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
-      <div className="h-6 w-24 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse mb-5" />
-      <div className="rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-5 mb-3">
-        <div className="h-3 w-20 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse mb-3" />
-        <div className="h-6 w-3/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse mb-3" />
-        <div className="h-4 w-4/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
-        <div className="grid grid-cols-3 gap-2 mt-5">
-          <div className="h-16 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
-          <div className="h-16 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
-          <div className="h-16 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+    {/* Sticky CTAs */}
+    {canAct && (
+      <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
+        <div className="flex flex-col gap-2 max-w-2xl mx-auto">
+          <Button onClick={() => { if (shipment.delivery_method === "ultima_milla") { setCameraOpen(true); } else { setDeliverOpen(true); } }} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
+            <CheckCircle2 className="w-5 h-5" />Entregar
+          </Button>
+          <div className="flex gap-2">
+          <Button onClick={() => setFailedOpen(true)} className="flex-1 h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold gap-1.5">
+            <XCircle className="w-4 h-4" />No entregado
+          </Button>
+          <Button onClick={() => setRejectedOpen(true)} className="flex-1 h-11 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold gap-1.5">
+              <Ban className="w-4 h-4" />Rechazado
+            </Button>
+          </div>
         </div>
       </div>
-      <div className="rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-4 h-24 animate-pulse" />
-    </div>
+    )}
+
+    <DeliveryActionSheet mode="deliver" open={deliverOpen} onClose={() => { setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); }} shipment={shipment} keyword={deliveryKeyword} onKeywordChange={setDeliveryKeyword} useContingency={useContingency} onUseContingency={setUseContingency} dni={recipientDni} onDniChange={setRecipientDni} submitting={submitting} onConfirm={handleDeliver} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
+    <DeliveryActionSheet mode="failed" open={failedOpen} onClose={() => { setFailedOpen(false); setFailedReason(""); setFailedNotes(""); }} shipment={shipment} reason={failedReason} onReasonChange={setFailedReason} notes={failedNotes} onNotesChange={setFailedNotes} submitting={submitting} onConfirm={handleFailed} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
+    <DeliveryActionSheet mode="rejected" open={rejectedOpen} onClose={() => { setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); }} shipment={shipment} reason={rejectedReason} onReasonChange={setRejectedReason} notes={rejectedNotes} onNotesChange={setRejectedNotes} submitting={submitting} onConfirm={handleRejected} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
+    </>
   );
 }

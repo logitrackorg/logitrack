@@ -7,9 +7,10 @@ import { ThemeToggle } from "./ThemeToggle";
 
 interface DriverNavProps {
   title: string;
+  subtitle?: string;
 }
 
-export function DriverNav({ title }: DriverNavProps) {
+export function DriverNav({ title, subtitle }: DriverNavProps) {
   const { user, logout } = useAuth();
   const { config: org } = useOrganizationTheme();
   const orgName = org?.name?.trim() || "LogiTrack";
@@ -39,20 +40,25 @@ export function DriverNav({ title }: DriverNavProps) {
   const roleLabel = user.driver_type === "intersucursal" ? "Chofer Intersucursal" : "Chofer";
 
   return (
-    <header className="sticky top-0 z-50 h-14 bg-[var(--sidebar-bg)] flex items-center px-4 gap-3">
+    <header className="sticky top-0 z-[1000] h-14 bg-[var(--sidebar-bg)] flex items-center px-4 gap-3 pt-[env(safe-area-inset-top,0px)]">
       {/* Left: org logo */}
       {logoUrl ? (
         <img src={logoUrl} alt={orgName} className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white/10" />
       ) : (
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-extrabold text-sm shrink-0">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--brand)] to-[var(--sidebar-bg)] flex items-center justify-center text-white font-extrabold text-sm shrink-0">
           {orgName.slice(0, 2).toUpperCase()}
         </div>
       )}
 
       {/* Center: page title */}
-      <h1 className="flex-1 text-center text-[15px] font-bold text-white leading-tight truncate">
-        {title}
-      </h1>
+      <div className="flex-1 flex flex-col items-center justify-center min-w-0">
+        <h1 className="text-[15px] font-bold text-white leading-tight truncate max-w-full">
+          {title}
+        </h1>
+        {subtitle && (
+          <p className="text-[10px] text-white/60 leading-tight truncate max-w-full">{subtitle}</p>
+        )}
+      </div>
 
       {/* Right: avatar → dropdown */}
       <div className="relative shrink-0" ref={menuRef}>
@@ -82,7 +88,7 @@ export function DriverNav({ title }: DriverNavProps) {
             {/* Mi perfil */}
             <button
               onClick={() => { setMenuOpen(false); navigate("/profile"); }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-muted)] cursor-pointer border-0 bg-transparent text-left transition-colors"
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-muted)] cursor-pointer border-0 bg-transparent text-left transition-all"
             >
               <User size={16} className="text-[var(--text-secondary)]" />
               Mi perfil
@@ -92,7 +98,7 @@ export function DriverNav({ title }: DriverNavProps) {
             <div className="border-t border-[var(--border)]">
               <button
                 onClick={() => { setMenuOpen(false); logout(); }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--danger-text)] hover:bg-[var(--danger-bg)] cursor-pointer border-0 bg-transparent text-left transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--danger-text)] hover:bg-[var(--danger-bg)] cursor-pointer border-0 bg-transparent text-left transition-all"
               >
                 <LogOut size={16} />
                 Cerrar sesión
