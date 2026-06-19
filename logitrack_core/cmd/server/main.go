@@ -132,6 +132,12 @@ func main() {
 	sysConfigSvc := service.NewSystemConfigService(sysConfigRepo)
 	sysConfigHandler := handler.NewSystemConfigHandler(sysConfigSvc)
 
+	// Zonas geográficas del simulador de cobertura.
+	regionRepo := repository.NewPostgresRegionRepository(database)
+	regionSvc := service.NewRegionService(regionRepo)
+	regionHandler := handler.NewRegionHandler(regionSvc)
+	seed.LoadRegions(regionRepo)
+
 	// Detector de falta de sucursal: diagrama de cobertura (Voronoi) + gaps.
 	coverageSvc := service.NewCoverageService(branchRepo, sysConfigSvc)
 	coverageHandler := handler.NewCoverageHandler(coverageSvc)
@@ -641,9 +647,12 @@ func main() {
 	// sucursal óptima para una coordenada (form de nuevo envío).
 	protected.GET("/coverage/diagram", canViewStats, coverageHandler.GetDiagram)
 	protected.GET("/coverage/branch-for", shipmentWrite, coverageHandler.BranchForPoint)
-	protected.GET("/coverage/diagnose", canViewStats, coverageHandler.Diagnose)
+	protected.POST("/coverage/diagnose", canViewStats, coverageHandler.Diagnose)
 	protected.POST("/coverage/snap-to-city", canViewStats, coverageHandler.SnapToCity)
 	protected.POST("/coverage/project", canViewStats, coverageHandler.Project)
+	protected.GET("/regions", canViewStats, regionHandler.List)
+	protected.POST("/regions", canViewStats, regionHandler.Create)
+	protected.PUT("/regions/:id", canViewStats, regionHandler.Update)
 	protected.POST("/admin/fleet-ml/retrain", adminOnly, slaMetricsHandler.RetrainFleetML)
 	protected.GET("/admin/sla-settings", adminOnly, slaSettingsHandler.Get)
 	protected.PUT("/admin/sla-settings", adminOnly, slaSettingsHandler.Update)

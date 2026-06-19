@@ -48,7 +48,11 @@ function InterBranchRouteMap({
     }).addTo(map);
     mapRef.current = map;
     layerRef.current = L.layerGroup().addTo(map);
+    // El modal puede no tener su tamaño final al montar; recalcular asegura que
+    // las tiles se carguen y no quede el mapa en gris/blanco.
+    const t = setTimeout(() => map.invalidateSize(), 0);
     return () => {
+      clearTimeout(t);
       map.remove();
       mapRef.current = null;
     };
@@ -59,6 +63,7 @@ function InterBranchRouteMap({
     const map = mapRef.current;
     const layer = layerRef.current;
     if (!map || !layer) return;
+    map.invalidateSize();
     layer.clearLayers();
 
     const points: [number, number][] = [];
@@ -335,7 +340,10 @@ export function ReviewInterBranchModal({
 
           {/* Columna izquierda: mapa + KPIs */}
           <div className="w-[42%] shrink-0 flex flex-col border-r dark:border-gray-700 border-slate-200">
-            <div className="flex-1 min-h-0 p-3 pb-2">
+            {/* Altura fija para el mapa: con rutas multi-parada el bloque de
+                KPIs/horarios crece y, si el mapa fuera flex-1, lo aplastaba a 0
+                dejándolo en blanco. Acá el mapa mantiene altura y los KPIs scrollean. */}
+            <div className="shrink-0 h-56 p-3 pb-2">
               <InterBranchRouteMap
                 originBranch={originBranch}
                 stops={mapStops}
@@ -344,7 +352,7 @@ export function ReviewInterBranchModal({
             </div>
 
             {/* KPIs */}
-            <div className="shrink-0 px-4 py-3 border-t dark:border-gray-700 border-slate-100 space-y-2">
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 border-t dark:border-gray-700 border-slate-100 space-y-2">
               {/* Badge de backhaul */}
               {a.backhaul && (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200">

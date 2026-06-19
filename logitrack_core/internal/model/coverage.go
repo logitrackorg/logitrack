@@ -85,15 +85,40 @@ type SuggestedLocation struct {
 	// cells intersect this suggestion's simulated coverage circle — the
 	// branches that would be relieved by a new branch at this location.
 	AffectedBranches []string `json:"affected_branches"`
+
+	// Phase 4 auto-snapping: the following fields are populated server-side
+	// for MathematicalSuggestions only. Per-cell SuggestedLocations leave
+	// these empty (client-side snap-to-city handles those via the "Aterrizar"
+	// button). When IsSnapped is false the coordinates are the raw
+	// mathematical Pole-of-Inaccessibility; when true they are the city's
+	// real lat/lng.
+	CityName   string `json:"city_name,omitempty"`
+	IsSnapped  bool   `json:"is_snapped,omitempty"`
+	Population int    `json:"population,omitempty"`
 }
 
 // SimulationResult is the response of CoverageService.Diagnose: the per-branch
 // diagnosis for a single simulated coverage area, plus any new-branch location
 // suggestions derived from "crítico" gaps.
 type SimulationResult struct {
-	SimulatedAreaKm2   float64              `json:"simulated_area_km2"`
+	SimulatedAreaKm2   float64               `json:"simulated_area_km2"`
 	Cells              []SimulationDiagnosis `json:"cells"`
 	SuggestedLocations []SuggestedLocation   `json:"suggested_locations"`
+
+	// MathematicalSuggestions are Pole-of-Inaccessibility points derived from
+	// the global uncovered void: (TierraFértil − ∪ coverage circles). Unlike
+	// SuggestedLocations (which are per-cell and per-fragment), these come from
+	// the single united uncovered area so they never cluster around cell
+	// boundaries and require no deduplication. Empty when no dangerous zones
+	// are active and all cells are within the simulated radius, or when no
+	// simulation area has been set.
+	MathematicalSuggestions []SuggestedLocation `json:"mathematical_suggestions,omitempty"`
+
+	// DiagramCells carries the Voronoi cells (with polygon geometry) that were
+	// used for this diagnosis run. The frontend uses these to redraw the map
+	// with the correct shapes after branches are excluded from the simulation.
+	// Omitted when no branches are excluded (client already has the diagram).
+	DiagramCells []CoverageCell `json:"diagram_cells,omitempty"`
 }
 
 // SnappedCity is the result of "Snap to City": resolving a geometric
@@ -104,8 +129,10 @@ type SimulationResult struct {
 // original geometric point in that case.
 type SnappedCity struct {
 	LatLng
-	CityName string `json:"city_name"`
-	Snapped  bool   `json:"is_snapped"`
+	CityName    string `json:"city_name"`
+	Snapped     bool   `json:"is_snapped"`
+	Population  int    `json:"population,omitempty"`  // effective population used for selection; 0 when Snapped=false
+	ErrorReason string `json:"error_reason,omitempty"` // "TIMEOUT" | "NO_RESULTS"; only when Snapped=false
 }
 
 // SnapToCityRequest is the body of POST /coverage/snap-to-city: the geometric
@@ -118,12 +145,69 @@ type SnapToCityRequest struct {
 	// the would-be branch's coverage area can be snapped to. <= 0 falls back
 	// to a default radius.
 	RadiusKm float64 `json:"radius_km"`
+
+	// MinPopulation is an optional lower bound on the population of the
+	// snapped city. Candidates whose population (from OSM tag, or a
+	// per-place-type fallback) is strictly below this value are discarded
+	// before scoring. 0 disables the filter (all candidates are considered).
+	MinPopulation int `json:"min_population"`
+
+	// BlacklistedCities is an optional list of city names to exclude from
+	// candidate selection — allows the frontend to retry a point with
+	// different results after the user discards a previously-returned city.
+	// Empty or nil disables the filter.
+	BlacklistedCities []string `json:"blacklisted_cities,omitempty"`
 }
 
 // SnapToCityResponse pairs each input point with its SnappedCity result,
 // preserving the request order so the frontend can merge by index.
 type SnapToCityResponse struct {
 	Results []SnappedCity `json:"results"`
+}
+
+// DiagnoseRequest is the body of POST /coverage/diagnose: parameters for the
+// coverage simulator's "Confirmar y Diagnosticar" action.
+type DiagnoseRequest struct {
+	// AreaKm2 is the simulated coverage radius expressed as an area in km²
+	// (the slider value from the frontend simulator panel).
+	AreaKm2 float64 `json:"area_km2"`
+
+	// ExcludedBranchIDs is an optional list of branch IDs to remove from the
+	// Voronoi computation before diagnosing — the "Simulador de cierre de
+	// sucursales" feature.
+	ExcludedBranchIDs []string `json:"excluded_branch_ids,omitempty"`
+
+	// CustomBoundingArea is an optional polygon (ordered lat/lng vertices,
+	// minimum 3) drawn by the user on the map or loaded from a saved region.
+	// When provided, Voronoi cells are clipped against this polygon instead of
+	// Argentina's national outline, so the diagnosis and new-branch suggestions
+	// are restricted to the selected region (e.g. AMBA, a specific province).
+	CustomBoundingArea []LatLng `json:"custom_bounding_area,omitempty"`
+
+	// DangerousZones is an optional list of polygons representing restricted or
+	// undesirable areas (e.g. flood zones, border strips, nature reserves) that
+	// should be excluded from branch placement. Each polygon must have at least
+	// 3 vertices. The zones are subtracted from CustomBoundingArea (or from
+	// Argentina's national outline when no boundary is set) via a DIFFERENCE
+	// operation before the Voronoi diagram is built — the resulting "Tierra
+	// Fértil" is used as the clipping canvas for both the Voronoi cells and the
+	// MathematicalSuggestions Pole-of-Inaccessibility search.
+	DangerousZones [][]LatLng `json:"dangerous_zones,omitempty"`
+
+	// IncludeInactive, when true, includes branches with status "inactivo" or
+	// "fuera_de_servicio" in the Voronoi computation — the "Incluir sucursales
+	// Inactivas/Fuera de servicio en la simulación" toggle in the frontend.
+	IncludeInactive bool `json:"include_inactive,omitempty"`
+
+	// MaxSuggestions caps the number of MathematicalSuggestions returned.
+	// 0 means no limit (natural bound from coverageSuggestionMaxPerFragment).
+	MaxSuggestions int `json:"max_suggestions,omitempty"`
+
+	// SnapToCities, when true, resolves MathematicalSuggestions to the nearest
+	// real populated place (Overpass API) before returning. Default false keeps
+	// the diagnosis fast; the frontend can snap client-side via POST
+	// /coverage/snap-to-city when the user explicitly requests it.
+	SnapToCities bool `json:"snap_to_cities,omitempty"`
 }
 
 // ProjectionRequest is the body of POST /coverage/project: the simulated
@@ -133,6 +217,17 @@ type SnapToCityResponse struct {
 type ProjectionRequest struct {
 	AreaKm2     float64  `json:"area_km2"`
 	Suggestions []LatLng `json:"suggestions"`
+
+	// CustomBoundingArea scopes the projection to a region (same semantics as
+	// DiagnoseRequest): both the current and projected Voronoi cells are clipped
+	// against this polygon instead of Argentina's national outline, so the
+	// coverage percentages reflect the selected zone (e.g. AMBA) rather than the
+	// national territory. Empty/nil = national scope.
+	CustomBoundingArea []LatLng `json:"custom_bounding_area,omitempty"`
+
+	// DangerousZones are exclusion polygons subtracted from the boundary before
+	// the Voronoi diagram is built (same semantics as DiagnoseRequest).
+	DangerousZones [][]LatLng `json:"dangerous_zones,omitempty"`
 }
 
 // BranchProjection compares an existing branch's current coverage percentage
