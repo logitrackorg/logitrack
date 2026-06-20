@@ -45,6 +45,7 @@ func (h *OrganizationHandler) GetPublic(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"name":          cfg.Name,
+		"font_family":   cfg.FontFamily,
 		"primary_color": cfg.PrimaryColor,
 		"accent_color":  cfg.AccentColor,
 		"sidebar_color": cfg.SidebarColor,
@@ -58,6 +59,7 @@ type updateOrgRequest struct {
 	Address      string `json:"address"`
 	Phone        string `json:"phone"`
 	Email        string `json:"email"`
+	FontFamily   string `json:"font_family"`
 	TrackURL     string `json:"track_url"`
 	PrimaryColor string `json:"primary_color"`
 	AccentColor  string `json:"accent_color"`
@@ -85,6 +87,7 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 		Address:      req.Address,
 		Phone:        req.Phone,
 		Email:        req.Email,
+		FontFamily:   req.FontFamily,
 		TrackURL:     req.TrackURL,
 		PrimaryColor: req.PrimaryColor,
 		AccentColor:  req.AccentColor,
