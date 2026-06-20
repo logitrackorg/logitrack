@@ -211,6 +211,11 @@ func (h *ChatbotHandler) Authenticate(c *gin.Context) {
 		}
 	}
 
+	go h.analytics.Track(req.RecipientDNI, "chatbot_authenticated", map[string]interface{}{
+		"tracking_id": req.TrackingID,
+		"user_type":   "recipient",
+	})
+
 	c.JSON(http.StatusOK, AuthResponse{
 		Success:          true,
 		RecipientName:    recipientName,
@@ -289,6 +294,10 @@ func (h *ChatbotHandler) RequestPickup(c *gin.Context) {
 	}
 
 	go h.notifSvc.NotifyChatbotPickupRequested(shipment)
+	go h.analytics.Track(req.RecipientDNI, "chatbot_option_selected", map[string]interface{}{
+		"action":      "pickup",
+		"tracking_id": req.TrackingID,
+	})
 
 	message := "Tu paquete está listo para retiro en sucursal"
 	if shipment.Status != model.StatusReadyForPickup {
@@ -486,6 +495,11 @@ func (h *ChatbotHandler) RescheduleDelivery(c *gin.Context) {
 	}
 
 	go h.notifSvc.NotifyChatbotDeliveryRescheduled(shipment)
+	go h.analytics.Track(req.RecipientDNI, "chatbot_option_selected", map[string]interface{}{
+		"action":      "reschedule",
+		"tracking_id": req.TrackingID,
+		"new_date":    req.NewDeliveryDate,
+	})
 
 	c.JSON(http.StatusOK, RescheduleResponse{
 		Success:         true,
@@ -534,6 +548,10 @@ func (h *ChatbotHandler) CancelShipment(c *gin.Context) {
 	}
 
 	go h.notifSvc.NotifyChatbotRejectedByRecipient(shipment)
+	go h.analytics.Track(req.RecipientDNI, "chatbot_option_selected", map[string]interface{}{
+		"action":      "cancel",
+		"tracking_id": req.TrackingID,
+	})
 
 	c.JSON(http.StatusOK, CancelResponse{
 		Success: true,
@@ -618,6 +636,11 @@ func (h *ChatbotHandler) AuthenticateSender(c *gin.Context) {
 		}
 	}
 
+	go h.analytics.Track(req.SenderDNI, "chatbot_authenticated", map[string]interface{}{
+		"tracking_id": req.TrackingID,
+		"user_type":   "sender",
+	})
+
 	c.JSON(http.StatusOK, SenderAuthResponse{
 		Success:          true,
 		SenderName:       shipment.Sender.Name,
@@ -644,6 +667,10 @@ func (h *ChatbotHandler) CancelBySender(c *gin.Context) {
 	}
 
 	go h.notifSvc.NotifyChatbotCancelledBySender(shipment)
+	go h.analytics.Track(req.SenderDNI, "chatbot_option_selected", map[string]interface{}{
+		"action":      "cancel",
+		"tracking_id": req.TrackingID,
+	})
 
 	c.JSON(http.StatusOK, CancelResponse{
 		Success: true,
@@ -688,7 +715,6 @@ func (h *ChatbotHandler) RespondToClaim(c *gin.Context) {
 		return
 	}
 
-	// Notificación interna al supervisor (usando la sucursal de origen del envío)
 	go func() {
 		branchID := ""
 		if shipment, err := h.shipmentRepo.GetByTrackingID(claim.TrackingID); err == nil {
@@ -696,6 +722,10 @@ func (h *ChatbotHandler) RespondToClaim(c *gin.Context) {
 		}
 		h.notifSvc.NotifyClaimCustomerResponded(claim, branchID)
 	}()
+	go h.analytics.Track(claimantDNI, "chatbot_option_selected", map[string]interface{}{
+		"action":   "respond_claim",
+		"claim_id": claimID,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":  true,
@@ -860,6 +890,16 @@ func (h *ChatbotHandler) FileClaim(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	go h.analytics.Track(claimantDNI, "chatbot_claim_submitted", map[string]interface{}{
+		"tracking_id": trackingID,
+		"claim_id":    claim.ID,
+		"claim_type":  claimType,
+	})
+	go h.analytics.Track(claimantDNI, "chatbot_claim_type_selected", map[string]interface{}{
+		"claim_type":  claimType,
+		"tracking_id": trackingID,
+	})
 
 	c.JSON(http.StatusOK, FileClaimResponse{
 		Success: true,

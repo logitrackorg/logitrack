@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   publicTrackingApi,
@@ -336,6 +336,24 @@ function describeEvent(
 // ────────────────────────────────────────────────────────────────
 
 export function PublicTracking() {
+  const umamiScriptRef = useRef<HTMLScriptElement | null>(null);
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://cloud.umami.is/script.js";
+    script.defer = true;
+    script.dataset.websiteId = "be594592-0d61-4d35-97ae-7edf5b40a000";
+    script.onload = () => console.info("[umami] script cargado");
+    script.onerror = () => console.warn("[umami] no se pudo cargar (¿adblocker?)");
+    document.head.appendChild(script);
+    umamiScriptRef.current = script;
+    return () => {
+      if (umamiScriptRef.current) {
+        document.head.removeChild(umamiScriptRef.current);
+        umamiScriptRef.current = null;
+      }
+    };
+  }, []);
+
   const { config: org } = useOrganizationTheme();
   const orgName = org?.name?.trim() || "LogiTrack";
   const logoUrl = org?.logo_url?.trim();
