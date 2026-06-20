@@ -1,0 +1,21 @@
+logitrack_web/src/pages/DriverScanVehicle.tsx
+  s_62a3971803cc89::t_213fede10e11b8 171-175
+logitrack_web/src/pages/DriverRoute.tsx
+  s_62a3971803cc89::t_0e5a92e616ddcc 725
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "f2eabdb3a69287b02e1a858677bda2b0e9058780",
+  "prompts": {},
+  "sessions": {
+    "s_62a3971803cc89": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd88ad19-3202-4605-8174-4deda8368e35",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
