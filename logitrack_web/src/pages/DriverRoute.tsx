@@ -722,8 +722,7 @@ function LastMileView() {
     ? ((data.route.status === "finalizada" || data.route.status === "en_curso") &&
         data.shipments.filter(
           (s) => s.status === "out_for_delivery" && !pendingSyncIds.has(s.tracking_id),
-        ).length === 0 &&
-        data.shipments.length > 0)
+        ).length === 0)
     : false;
 
   // Limpiar cache de jornada al finalizar la ruta. Debe estar antes de cualquier
