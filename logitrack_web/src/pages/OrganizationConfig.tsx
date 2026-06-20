@@ -6,6 +6,7 @@ import { fmtDateTime } from "../utils/date";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { ThemePreview } from "../components/ThemePreview";
 import { PALETTES } from "../data/palettes";
+import { ALLOWED_FONTS, getGoogleFontsUrl } from "../utils/fonts";
 
 const inputClass =
   "w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-500";
@@ -19,7 +20,7 @@ export function OrganizationConfig() {
   const [config, setConfig] = useState<OrganizationConfigType | null>(null);
   const [form, setForm] = useState({
     name: "", cuit: "", address: "", phone: "", email: "", track_url: "",
-    primary_color: "", accent_color: "", sidebar_color: "", logo_url: "",
+    primary_color: "", accent_color: "", sidebar_color: "", logo_url: "", font_family: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -41,6 +42,7 @@ export function OrganizationConfig() {
         accent_color: cfg.accent_color ?? "",
         sidebar_color: cfg.sidebar_color ?? "",
         logo_url: cfg.logo_url ?? "",
+        font_family: cfg.font_family || "",
       });
     }).catch(() => {
       setError("No se pudo cargar la configuración de la organización.");
@@ -283,6 +285,35 @@ export function OrganizationConfig() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <label htmlFor="font_family" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Familia tipográfica
+              </label>
+              <select
+                id="font_family"
+                value={form.font_family || "Inter"}
+                onChange={(e) => {
+                  const font = e.target.value;
+                  setForm({ ...form, font_family: font });
+                  const existing = document.getElementById("org-font-link");
+                  if (existing) existing.remove();
+                  const url = getGoogleFontsUrl(font as any);
+                  if (url) {
+                    const link = document.createElement("link");
+                    link.id = "org-font-link";
+                    link.rel = "stylesheet";
+                    link.href = url;
+                    document.head.appendChild(link);
+                  }
+                }}
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+              >
+                {ALLOWED_FONTS.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="grid gap-1.5">
               <label className={labelClass}>URL del logo</label>
               <input
@@ -298,8 +329,10 @@ export function OrganizationConfig() {
               <button
                 type="button"
                 onClick={() => {
-                  setForm({ ...form, primary_color: "", accent_color: "", sidebar_color: "" });
+                  setForm({ ...form, primary_color: "", accent_color: "", sidebar_color: "", font_family: "" });
                   resetTheme();
+                  const existingLink = document.getElementById("org-font-link");
+                  if (existingLink) existingLink.remove();
                   setSuccess("Colores restablecidos a los valores por defecto de LogiTrack.");
                   setTimeout(() => setSuccess(null), 3000);
                 }}
