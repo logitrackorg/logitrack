@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Info, Moon, Shield, ShieldAlert, SkipForward, Send, X, Loader2, MapPin, Mic } from "lucide-react";
 import { driverApi } from "../api/driver";
 import { checkDevicePermissions } from "../utils/devicePermissions";
