@@ -95,7 +95,8 @@ export function AnalyticsTab() {
         setError("");
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch("/api/v1/analytics/chatbot", {
+            const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8080/api/v1";
+            const res = await fetch(`${apiBase}/analytics/chatbot`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (!res.ok) throw new Error("error");

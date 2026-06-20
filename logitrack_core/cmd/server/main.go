@@ -846,8 +846,8 @@ func main() {
 	// Routing — operativo (operator + supervisor restringido por sucursal en handler); config admin-only.
 	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)
 	protected.PATCH("/routing/config", adminOnly, routingCfgHandler.Update)
-	protected.GET("/routing/plan/today", shipmentRead, routingHandler.GetTodayPlan)
-	protected.GET("/routing/plan/horizon", shipmentRead, routingHandler.GetHorizonPlans)
+	protected.GET("/routing/plan/today", mgmtNonDriver, routingHandler.GetTodayPlan)
+	protected.GET("/routing/plan/horizon", mgmtNonDriver, routingHandler.GetHorizonPlans)
 	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)          // operator+supervisor: su sucursal
 	protected.POST("/routing/regenerate/global", adminOnly, routingHandler.RegenerateGlobal) // admin: toda la red
 	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)

@@ -338,11 +338,19 @@ function describeEvent(
 export function PublicTracking() {
   const umamiScriptRef = useRef<HTMLScriptElement | null>(null);
   useEffect(() => {
+    // data-auto-track="false" prevents Umami from hooking into SPA history navigation,
+    // which would otherwise keep tracking internal dashboard pages after unmount.
+    // We fire a single manual pageview instead.
     const script = document.createElement("script");
     script.src = "https://cloud.umami.is/script.js";
     script.defer = true;
     script.dataset.websiteId = "be594592-0d61-4d35-97ae-7edf5b40a000";
-    script.onload = () => console.info("[umami] script cargado");
+    script.dataset.autoTrack = "false";
+    script.onload = () => {
+      console.info("[umami] script cargado");
+      (window as unknown as Record<string, unknown>).umami &&
+        ((window as unknown as { umami: { track: (event: string) => void } }).umami.track("pageview"));
+    };
     script.onerror = () => console.warn("[umami] no se pudo cargar (¿adblocker?)");
     document.head.appendChild(script);
     umamiScriptRef.current = script;
