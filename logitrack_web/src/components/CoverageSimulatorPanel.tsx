@@ -11,6 +11,9 @@ const MIN_POP_MAX = 500_000;
 const MIN_POP_STEP = 10_000;
 const MIN_POP_DEFAULT = 0;
 
+const MIN_DENSITY_MAX = 5_000;
+const MIN_DENSITY_STEP = 50;
+
 const MAX_SUGG_MAX = 20;
 const MAX_SUGG_STEP = 1;
 
@@ -48,6 +51,12 @@ interface CoverageSimulatorPanelProps {
   /** Diagnosis ranking mode: "area" (geographic gaps) or "density" (population density). */
   diagnosisMode?: DiagnosisMode;
   onDiagnosisModeChange?: (mode: DiagnosisMode) => void;
+  /** Density-mode ranking criterion. */
+  rankingMode?: "population" | "gap_area";
+  onRankingModeChange?: (mode: "population" | "gap_area") => void;
+  /** Minimum population density filter for density mode (hab./km²). */
+  minDensity?: number;
+  onMinDensityChange?: (v: number) => void;
   /** true mientras el backend está calculando el diagnóstico — bloquea el panel y cambia el texto del botón. */
   isDiagnosing?: boolean;
 }
@@ -73,10 +82,15 @@ export function CoverageSimulatorPanel({
   onEditRegion,
   diagnosisMode = "area",
   onDiagnosisModeChange,
+  rankingMode = "population",
+  onRankingModeChange,
+  minDensity = 0,
+  onMinDensityChange,
   isDiagnosing = false,
 }: CoverageSimulatorPanelProps) {
   const isDisabled = disabled || isDiagnosing;
   const [minPopulation, setMinPopulation] = useState(MIN_POP_DEFAULT);
+  const [densityInput, setDensityInput] = useState("0");
 
   // Draft strings for the number inputs — decoupled from the controlled slider
   // values so the user can type freely without React reverting partial input.
@@ -333,9 +347,93 @@ export function CoverageSimulatorPanel({
           </button>
         </div>
         {diagnosisMode === "density" && (
-          <p className="text-[10px] text-slate-400 dark:text-slate-500">
-            Prioriza zonas con más habitantes por km². Ideal para detectar demanda urbana no atendida (ej. AMBA).
-          </p>
+          <>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500">
+              Prioriza zonas con más habitantes por km². Ideal para detectar demanda urbana no atendida (ej. AMBA).
+            </p>
+
+            {/* Ranking criterion */}
+            <div className="mt-2">
+              <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-1">Priorizar por</p>
+              <div className="flex rounded-md border border-slate-200 dark:border-gray-600 overflow-hidden text-[11px]">
+                <button
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => onRankingModeChange?.("population")}
+                  className={`flex-1 px-2 py-1 transition-colors cursor-pointer disabled:cursor-not-allowed ${
+                    rankingMode === "population"
+                      ? "bg-violet-600 text-white font-medium"
+                      : "bg-white dark:bg-gray-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  Densidad pobl.
+                </button>
+                <button
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => onRankingModeChange?.("gap_area")}
+                  className={`flex-1 px-2 py-1 border-l border-slate-200 dark:border-gray-600 transition-colors cursor-pointer disabled:cursor-not-allowed ${
+                    rankingMode === "gap_area"
+                      ? "bg-violet-600 text-white font-medium"
+                      : "bg-white dark:bg-gray-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  Área libre
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                {rankingMode === "population"
+                  ? "Primero las zonas con mayor cantidad de habitantes sin cobertura."
+                  : "Primero los huecos geográficos más grandes sin cobertura."}
+              </p>
+            </div>
+
+            {/* Minimum density filter */}
+            <div className="mt-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                  Mín. hab./km² en zona sin cobertura
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={MIN_DENSITY_MAX}
+                  step={MIN_DENSITY_STEP}
+                  value={densityInput}
+                  onChange={(e) => {
+                    setDensityInput(e.target.value);
+                    const v = Math.max(0, Math.min(MIN_DENSITY_MAX, Number(e.target.value) || 0));
+                    onMinDensityChange?.(v);
+                  }}
+                  onBlur={() => {
+                    const v = Math.max(0, Math.min(MIN_DENSITY_MAX, Number(densityInput) || 0));
+                    setDensityInput(String(v));
+                    onMinDensityChange?.(v);
+                  }}
+                  disabled={isDisabled}
+                  className="w-20 text-right text-xs border border-slate-200 dark:border-gray-600 rounded px-1.5 py-0.5 bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 disabled:opacity-50"
+                />
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={MIN_DENSITY_MAX}
+                step={MIN_DENSITY_STEP}
+                value={minDensity}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setDensityInput(String(v));
+                  onMinDensityChange?.(v);
+                }}
+                disabled={isDisabled}
+                className="w-full h-1.5 accent-violet-600 disabled:opacity-50"
+              />
+              <div className="flex justify-between text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">
+                <span>Sin filtro</span>
+                <span>{MIN_DENSITY_MAX.toLocaleString("es-AR")} hab./km²</span>
+              </div>
+            </div>
+          </>
         )}
       </div>
 

@@ -178,7 +178,22 @@ export const coverageApi = {
    * excludedBranchIds: IDs de sucursales a excluir del cálculo (simulación de cierre).
    * customBoundingArea: polígono dibujado por el usuario — recorta el diagnóstico a esa zona.
    */
-  diagnose: (areaKm2: number, excludedBranchIds?: string[], customBoundingArea?: LatLng[], includeInactive?: boolean, maxSuggestions?: number, snapToCities?: boolean, mode?: "area" | "density", minPopulation?: number, excludedCities?: string[]) =>
+  diagnose: (
+    areaKm2: number,
+    excludedBranchIds?: string[],
+    customBoundingArea?: LatLng[],
+    includeInactive?: boolean,
+    maxSuggestions?: number,
+    snapToCities?: boolean,
+    mode?: "area" | "density",
+    density?: {
+      minPopulation?: number;
+      minDensity?: number;
+      rankingMode?: "population" | "gap_area";
+      excludedCities?: string[];
+      additionalSites?: LatLng[];
+    },
+  ) =>
     api
       .post<SimulationResult>("/coverage/diagnose", {
         area_km2: areaKm2,
@@ -188,8 +203,17 @@ export const coverageApi = {
         ...(maxSuggestions && maxSuggestions > 0 ? { max_suggestions: maxSuggestions } : {}),
         ...(snapToCities ? { snap_to_cities: true } : {}),
         ...(mode && mode !== "area" ? { mode } : {}),
-        ...(minPopulation && minPopulation > 0 ? { min_population: minPopulation } : {}),
-        ...(excludedCities?.length ? { excluded_cities: excludedCities } : {}),
+        ...(density && Object.keys(density).length > 0
+          ? {
+              density: {
+                ...(density.minPopulation && density.minPopulation > 0 ? { min_population: density.minPopulation } : {}),
+                ...(density.minDensity && density.minDensity > 0 ? { min_density: density.minDensity } : {}),
+                ...(density.rankingMode && density.rankingMode !== "population" ? { ranking_mode: density.rankingMode } : {}),
+                ...(density.excludedCities?.length ? { excluded_cities: density.excludedCities } : {}),
+                ...(density.additionalSites?.length ? { additional_sites: density.additionalSites } : {}),
+              },
+            }
+          : {}),
       })
       .then((r) => r.data),
 

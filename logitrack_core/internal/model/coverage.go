@@ -170,6 +170,36 @@ type SnapToCityResponse struct {
 	Results []SnappedCity `json:"results"`
 }
 
+// DensityOptions groups all density-mode–specific parameters for Diagnose and
+// related service functions, keeping function signatures manageable as new
+// density options are added.
+type DensityOptions struct {
+	// MinPopulation filters snap candidates: only cities with at least this
+	// many inhabitants are eligible. 0 = no filter.
+	MinPopulation int `json:"min_population,omitempty"`
+
+	// MinDensity filters candidates after snapping: only cities whose computed
+	// density (population / uncovered_fragment_area, hab./km²) meets this
+	// threshold are returned. 0 = no filter.
+	MinDensity float64 `json:"min_density,omitempty"`
+
+	// RankingMode controls the final sort of density-mode suggestions:
+	//   "population" (default) — sort by absolute population descending
+	//                            (most under-served urban areas first).
+	//   "gap_area"             — sort by uncovered fragment area descending
+	//                            (largest geographic voids first).
+	RankingMode string `json:"ranking_mode,omitempty"`
+
+	// ExcludedCities are city names from previous diagnoses that the snap
+	// step must skip, so "Buscar más" returns genuinely new locations.
+	ExcludedCities []string `json:"excluded_cities,omitempty"`
+
+	// AdditionalSites are coordinates of already-placed suggestions (from
+	// previous "Buscar más" rounds). Their coverage circles are subtracted
+	// from cell remainders before new candidates are computed.
+	AdditionalSites []LatLng `json:"additional_sites,omitempty"`
+}
+
 // DiagnoseRequest is the body of POST /coverage/diagnose: parameters for the
 // coverage simulator's "Confirmar y Diagnosticar" action.
 type DiagnoseRequest struct {
@@ -220,15 +250,9 @@ type DiagnoseRequest struct {
 	//             under-served urban areas surface above vast rural cells.
 	Mode string `json:"mode,omitempty"`
 
-	// MinPopulation, when > 0, filters city candidates during density-mode
-	// snapping: only cities with at least this many inhabitants are eligible.
-	// Ignored in "area" mode.
-	MinPopulation int `json:"min_population,omitempty"`
-
-	// ExcludedCities is an optional list of city names already suggested in a
-	// previous diagnosis. When set, the snap step will skip these cities so
-	// that "Buscar más sugerencias" returns genuinely new locations.
-	ExcludedCities []string `json:"excluded_cities,omitempty"`
+	// Density groups all density-mode–specific options. Fields are ignored
+	// when Mode != "density".
+	Density DensityOptions `json:"density,omitempty"`
 }
 
 // ProjectionRequest is the body of POST /coverage/project: the simulated

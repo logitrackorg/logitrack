@@ -1016,6 +1016,10 @@ export function CoberturaTab() {
   const [diagnosisMode, setDiagnosisMode] = useState<DiagnosisMode>("area");
   const diagnosisModeRef = useRef<DiagnosisMode>("area");
   const snapMinPopulationRef = useRef(0);
+  const [rankingMode, setRankingMode] = useState<"population" | "gap_area">("population");
+  const rankingModeRef = useRef<"population" | "gap_area">("population");
+  const [minDensity, setMinDensity] = useState(0);
+  const minDensityRef = useRef(0);
 
   const simResultRef = useRef<SimulationResult | null>(null);
   const visualAreaRef = useRef(SIM_AREA_DEFAULT);
@@ -1058,6 +1062,8 @@ export function CoberturaTab() {
   useEffect(() => { includeInactiveRef.current = includeInactive; }, [includeInactive]);
   useEffect(() => { closedBranchIdsRef.current = closedBranchIds; }, [closedBranchIds]);
   useEffect(() => { diagnosisModeRef.current = diagnosisMode; }, [diagnosisMode]);
+  useEffect(() => { rankingModeRef.current = rankingMode; }, [rankingMode]);
+  useEffect(() => { minDensityRef.current = minDensity; }, [minDensity]);
 
   // Fetch all branches (including inactive) for the simulation panel.
   useEffect(() => { branchApi.list().then(setAllBranches).catch(() => {}); }, []);
@@ -1237,7 +1243,13 @@ export function CoberturaTab() {
         maxSuggestionsRef.current > 0 ? maxSuggestionsRef.current : undefined,
         undefined,
         dMode !== "area" ? dMode : undefined,
-        dMode === "density" && minPop > 0 ? minPop : undefined,
+        dMode === "density"
+          ? {
+              minPopulation: minPop > 0 ? minPop : undefined,
+              minDensity: minDensityRef.current > 0 ? minDensityRef.current : undefined,
+              rankingMode: rankingModeRef.current !== "population" ? rankingModeRef.current : undefined,
+            }
+          : undefined,
       )
       .then((result) => {
         const mathSuggs = result.mathematical_suggestions ?? [];
@@ -1308,6 +1320,12 @@ export function CoberturaTab() {
       territoryMode === "custom" && boundary && boundary.length >= 3
         ? boundary.map(([lat, lng]) => ({ lat, lng }))
         : undefined;
+    // Pass current suggestion coordinates as additionalSites so the backend
+    // subtracts their coverage circles from fragments before searching — new
+    // candidates only land in genuinely uncovered territory.
+    const currentSuggestionSites = simResultRef.current?.suggested_locations.map(
+      (s) => ({ lat: s.lat, lng: s.lng }),
+    ) ?? [];
     coverageApi
       .diagnose(
         area,
@@ -1317,8 +1335,15 @@ export function CoberturaTab() {
         maxSuggestionsRef.current > 0 ? maxSuggestionsRef.current : undefined,
         undefined,
         dMode !== "area" ? dMode : undefined,
-        dMode === "density" && minPop > 0 ? minPop : undefined,
-        newExcluded.length > 0 ? newExcluded : undefined,
+        dMode === "density"
+          ? {
+              minPopulation: minPop > 0 ? minPop : undefined,
+              minDensity: minDensityRef.current > 0 ? minDensityRef.current : undefined,
+              rankingMode: rankingModeRef.current !== "population" ? rankingModeRef.current : undefined,
+              excludedCities: newExcluded.length > 0 ? newExcluded : undefined,
+              additionalSites: currentSuggestionSites.length > 0 ? currentSuggestionSites : undefined,
+            }
+          : undefined,
       )
       .then((result) => {
         const mathSuggs = result.mathematical_suggestions ?? [];
@@ -1742,6 +1767,10 @@ export function CoberturaTab() {
                 onEditRegion={handleStartEditRegion}
                 diagnosisMode={diagnosisMode}
                 onDiagnosisModeChange={setDiagnosisMode}
+                rankingMode={rankingMode}
+                onRankingModeChange={setRankingMode}
+                minDensity={minDensity}
+                onMinDensityChange={setMinDensity}
               />
               {simResult !== null && (
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
