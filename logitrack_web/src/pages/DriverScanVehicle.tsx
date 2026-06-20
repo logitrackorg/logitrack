@@ -8,6 +8,7 @@ import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { getPendingFatigueStep } from "../utils/fatigueWizardProgress";
+import { driverDebug } from "../utils/driverDebug";
 
 export function DriverScanVehicle() {
   const navigate = useNavigate();
@@ -38,15 +39,34 @@ export function DriverScanVehicle() {
     driverApi.getRoute().then((data) => {
       const hasPending = data.shipments.some((s) => s.status === "out_for_delivery");
       const hasFailed  = data.shipments.some((s) => s.status === "delivery_failed");
+      driverDebug("scan_mount_getroute_ok", {
+        driverId: user?.id,
+        driverType: user?.driver_type,
+        shipments: data.shipments?.length ?? 0,
+        hasPending,
+        hasFailed,
+        willRedirect: hasPending || hasFailed ? "/driver/route" : "none",
+      });
       if (hasPending || hasFailed) navigate("/driver/route", { replace: true });
-    }).catch(() => { /* sin ruta — chequear inter-sucursal */ });
+    }).catch((err) => {
+      driverDebug("scan_mount_getroute_err", { driverId: user?.id, status: err?.response?.status });
+    });
 
     interBranchTripsApi.getMyTrip().then((trip) => {
+      driverDebug("scan_mount_getmytrip_ok", {
+        driverId: user?.id,
+        driverType: user?.driver_type,
+        tripStatus: trip.status,
+        tripKind: trip.kind,
+        willRedirect: trip.status === "pendiente" || trip.status === "en_transito" ? "/driver/trip" : "none",
+      });
       if (trip.status === "pendiente" || trip.status === "en_transito") {
         navigate("/driver/trip", { replace: true });
       }
-    }).catch(() => { /* sin trip — quedarse acá */ });
-  }, [navigate]);
+    }).catch((err) => {
+      driverDebug("scan_mount_getmytrip_err", { driverId: user?.id, status: err?.response?.status });
+    });
+  }, [navigate, user]);
 
   // Router Guard anti-bypass por F5: si quedó un wizard de fatiga a mitad de
   // camino (persistido en sessionStorage), forzar el gate de inmediato sin
@@ -79,6 +99,12 @@ export function DriverScanVehicle() {
     try {
       const trip = await interBranchTripsApi.claimByVehicleQR(token);
       stopScanner();
+      driverDebug("claim_ok", {
+        driverId: user?.id,
+        driverType: user?.driver_type,
+        tripKind: trip.kind,
+        target: trip.kind === "last_mile" ? "/driver/route" : "/driver/trip",
+      });
       if (trip.kind === "last_mile") {
         driverApi.markRouteStarted().catch(() => {});
         goToRoute(`Vehículo ${trip.license_plate} asignado. Iniciando ruta…`);
@@ -87,20 +113,24 @@ export function DriverScanVehicle() {
       }
     } catch (err: unknown) {
       if (!mountedRef.current) return;
+      const status = (err as { response?: { status?: number } })?.response?.status;
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "";
+      driverDebug("claim_err", { driverId: user?.id, driverType: user?.driver_type, status, msg });
       if (msg.includes("no hay viaje activo")) {
         try {
           await driverApi.startRoute();
           if (!mountedRef.current) return;
           stopScanner();
           driverApi.markRouteStarted().catch(() => {});
+          driverDebug("claim_startroute_ok", { driverId: user?.id, target: "/driver/route" });
           goToRoute("Ruta iniciada.");
           return;
         } catch (routeErr: unknown) {
           if (!mountedRef.current) return;
           const routeMsg =
             (routeErr as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "";
+          driverDebug("claim_startroute_err", { driverId: user?.id, routeMsg });
           if (routeMsg.includes("no tenés una ruta")) {
             setError("No tenés envíos asignados para hoy. Consultá con el operador.");
             setLoading(false);
@@ -127,6 +157,12 @@ export function DriverScanVehicle() {
       if (user?.driver_type !== "intersucursal") {
         const gateStatus = await driverApi.getCheckinGateStatus();
         if (!mountedRef.current) return;
+        driverDebug("handletoken_gate_status", {
+          driverId: user?.id,
+          needsTest: gateStatus.needs_test,
+          needsCheckin: gateStatus.needs_checkin,
+          willShowGate: gateStatus.needs_test || gateStatus.needs_checkin,
+        });
         if (gateStatus.needs_test || gateStatus.needs_checkin) {
           stopScanner();
           setPendingToken(token);
@@ -192,6 +228,11 @@ export function DriverScanVehicle() {
         misfireCount={0}
         requiresSleepData={requiresSleepData}
         onDone={() => {
+          driverDebug("gate_done", {
+            driverId: user.id,
+            driverType: user.driver_type,
+            hasPendingToken: !!pendingToken,
+          });
           setShowGate(false);
           if (pendingToken) {
             void claimAndNavigate(pendingToken);

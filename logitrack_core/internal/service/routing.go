@@ -488,6 +488,7 @@ func (s *RoutingService) scheduleLastMileAssignments(
 			tidsWithCoords = append(tidsWithCoords, tid)
 		}
 		if len(nodes) == 0 {
+			log.Printf("[routing] vehiculo=%s sin_coords: todos los envíos (%d) carecen de coordenadas → polyline recta", a.VehicleID, len(a.Shipments))
 			continue
 		}
 
@@ -819,7 +820,11 @@ func (s *RoutingService) computeRoadPolyline(
 		log.Printf("[routing] OSRM Route falló (cayendo a líneas rectas en cliente): %v", err)
 		return nil
 	}
-	log.Printf("[routing] mode=%s engine=OSRM waypoints_enviados=%d puntos_polyline=%d", mode, len(coords), len(routeCoords))
+	if len(routeCoords) <= len(coords) {
+		log.Printf("[routing] mode=%s engine=OSRM waypoints_enviados=%d puntos_polyline=%d (DEGENERADA — OSRM devolvió <= N waypoints, posibles coords coincidentes)", mode, len(coords), len(routeCoords))
+	} else {
+		log.Printf("[routing] mode=%s engine=OSRM waypoints_enviados=%d puntos_polyline=%d", mode, len(coords), len(routeCoords))
+	}
 	out := make([]model.LatLng, len(routeCoords))
 	for i, c := range routeCoords {
 		out[i] = model.LatLng{Lat: c.Lat, Lng: c.Lon}

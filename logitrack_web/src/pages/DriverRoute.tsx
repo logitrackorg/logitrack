@@ -63,6 +63,7 @@ import { publicTrackingApi } from "../api/publicTracking";
 import type { Branch } from "../api/branches";
 import { haversineKm, cityAbbrev } from "../utils/geo";
 import { fmtDate, fmtDateTime } from "../utils/date";
+import { driverDebug } from "../utils/driverDebug";
 import {
   FAILED_REASONS,
   REJECTED_REASONS,
@@ -164,6 +165,12 @@ function LastMileView() {
     driverApi
       .getRoute()
       .then((d) => {
+        driverDebug("load_getroute_ok", {
+          driverId: user?.id,
+          shipments: d.shipments?.length ?? 0,
+          waypoints: d.waypoints?.length ?? 0,
+          routeStatus: d.route?.status,
+        });
         setData(d);
         setNoRoute(false);
         if (user) {
@@ -177,11 +184,21 @@ function LastMileView() {
         // 404 = no hay ruta asignada en el servidor → no usar cache (datos obsoletos).
         // Cualquier otro error (red caída, 5xx) → intentar cache offline.
         const status = err?.response?.status;
-        if (status === 404) { setNoRoute(true); return; }
+        if (status === 404) {
+          driverDebug("load_getroute_404_bounce", { driverId: user?.id, status });
+          setNoRoute(true);
+          return;
+        }
         if (user) {
           const cached = await getCachedRoute(user.id).catch(() => null);
-          if (cached) { setData(cached as typeof data); setNoRoute(false); return; }
+          if (cached) {
+            driverDebug("load_getroute_err_served_cache", { driverId: user?.id, status });
+            setData(cached as typeof data);
+            setNoRoute(false);
+            return;
+          }
         }
+        driverDebug("load_getroute_err_no_cache_bounce", { driverId: user?.id, status });
         setNoRoute(true);
       })
       .finally(() => setLoading(false));
@@ -196,6 +213,12 @@ function LastMileView() {
     driverApi
       .getRoute()
       .then((d) => {
+        driverDebug("loadretry_getroute_ok", {
+          driverId: user?.id,
+          shipments: d.shipments?.length ?? 0,
+          waypoints: d.waypoints?.length ?? 0,
+          routeStatus: d.route?.status,
+        });
         setData(d);
         setNoRoute(false);
         setLoading(false);
@@ -207,8 +230,15 @@ function LastMileView() {
         }
       })
       .catch((err) => {
+        const status = err?.response?.status;
         // 404 definitivo: no reintentar, mostrar pantalla sin ruta.
-        if (err?.response?.status === 404) { setNoRoute(true); setLoading(false); return; }
+        if (status === 404) {
+          driverDebug("loadretry_404_definitive_bounce", { driverId: user?.id, status });
+          setNoRoute(true);
+          setLoading(false);
+          return;
+        }
+        driverDebug("loadretry_transient_retry", { driverId: user?.id, status });
         setTimeout(() => { load(); }, 2000);
       });
   };
