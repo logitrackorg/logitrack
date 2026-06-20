@@ -59,6 +59,10 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
   // como "completo" en el backend — una recarga después de ese punto haría que
   // el gate no vuelva a aparecer, permitiendo saltear voz y PVT.
   const resumeStep = getPendingFatigueStep(driverId);
+  // Evita que el cleanup de history dispare go(-1) cuando el wizard ya completó
+  // (normal o skip): sin este ref, go(-1) se ejecuta DESPUÉS de que claimAndNavigate
+  // ya llamó navigate("/driver/route"), deshaciendo esa navegación.
+  const wizardDoneRef = useRef(false);
 
   // BUG-46: paso de permisos obligatorio ANTES de montar el test. Se ejecuta al
   // montar; solo avanza a "kss" cuando ubicación + micrófono están concedidos.
@@ -102,9 +106,10 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
     window.addEventListener("popstate", handlePopState);
     return () => {
       window.removeEventListener("popstate", handlePopState);
-      // Si la entrada que pusimos sigue siendo la actual (no fue reemplazada por
-      // navigate()), la removemos para no desfasar el historial de React Router.
-      if (window.history.state?.fatigueGate) {
+      // Solo limpiar la entrada de historia si el wizard NO terminó normalmente.
+      // Si ya terminó, claimAndNavigate ya hizo navigate() y go(-1) lo desharía
+      // (race condition: go(-1) es async y se ejecuta después del navigate).
+      if (!wizardDoneRef.current && window.history.state?.fatigueGate) {
         window.history.go(-1);
       }
     };
@@ -166,6 +171,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
   // El wizard "termina" (completo o salteado) — limpiar el progreso persistido
   // para que la próxima vez arranque desde cero.
   const finishWizard = useCallback(() => {
+    wizardDoneRef.current = true;
     clearPendingFatigueStep(driverId);
     onDone();
   }, [driverId, onDone]);
