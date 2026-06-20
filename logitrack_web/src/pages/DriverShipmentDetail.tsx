@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   AlertCircle, AlertTriangle, Ban, CheckCircle2, ChevronLeft,
-  Clock, MapPin, MessageCircle, Phone, WifiOff, XCircle,
+  Clock, MapPin, MessageCircle, WifiOff, XCircle,
 } from "lucide-react";
 import { compare as bcryptCompare } from "bcryptjs";
 import { shipmentApi, type Shipment } from "../api/shipments";
@@ -24,10 +24,10 @@ import { DeliveryActionSheet } from "../components/driver/DeliveryActionSheet";
 import { CameraCapture } from "../components/ui/CameraCapture";
 import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
 import { useGeolocation } from "../hooks/useGeolocation";
-import { waHref } from "../utils/driverActions";
 import {
   FAILED_REASONS, REJECTED_REASONS,
   TIME_WINDOW_HOURS, TIME_WINDOW_LABEL,
+  WA_QUICK_MESSAGES, waHrefWithText,
   recipientView, timeWindowTone,
 } from "../utils/driverActions";
 
@@ -61,6 +61,9 @@ export function DriverShipmentDetail() {
   const [geoWarning, setGeoWarning] = useState<{ distanceM: number; onConfirm: () => void } | null>(null);
   // Intentos fallidos de palabra clave validados localmente (offline).
   const [offlineKeywordAttempts, setOfflineKeywordAttempts] = useState(0);
+  // Popover de mensajes rápidos de WhatsApp.
+  const [waOpen, setWaOpen] = useState(false);
+  const waRef = useRef<HTMLDivElement>(null);
 
   const { speedKmh: gpsSpeedKmh, locationReady, requestLocation } = useCurrentSpeed();
   const [simActive] = useState(false);
@@ -108,6 +111,20 @@ export function DriverShipmentDetail() {
   };
 
   useEffect(() => { if (trackingId) { setLoading(true); reload(trackingId).catch(() => setError("Envío no encontrado.")).finally(() => setLoading(false)); } }, [trackingId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cierra el popover de WhatsApp al tocar fuera.
+  useEffect(() => {
+    if (!waOpen) return;
+    const onDocPointer = (e: MouseEvent | TouchEvent) => {
+      if (waRef.current && !waRef.current.contains(e.target as Node)) setWaOpen(false);
+    };
+    document.addEventListener("mousedown", onDocPointer);
+    document.addEventListener("touchstart", onDocPointer);
+    return () => {
+      document.removeEventListener("mousedown", onDocPointer);
+      document.removeEventListener("touchstart", onDocPointer);
+    };
+  }, [waOpen]);
 
   // Al abrir la hoja de entrega, sembrar los intentos offline persistidos.
   useEffect(() => {
@@ -377,13 +394,30 @@ export function DriverShipmentDetail() {
             Remitente: {senderName}{senderPhone ? ` · ${fmtPhone(senderPhone)}` : ""}
           </p>
         </div>
-        <div className="border-t border-[var(--border)] flex divide-x divide-[var(--border)]">
-          <a href={`tel:${phone}`} className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-all no-underline cursor-pointer">
-            <Phone size={15} />Llamar
-          </a>
-          <a href={waHref(phone)} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-all no-underline cursor-pointer">
+        <div className="border-t border-[var(--border)] relative" ref={waRef}>
+          <button
+            type="button"
+            onClick={() => setWaOpen((v) => !v)}
+            className="w-full flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-all cursor-pointer"
+          >
             <MessageCircle size={15} className="text-emerald-500 dark:text-emerald-400" />WhatsApp
-          </a>
+          </button>
+          {waOpen && (
+            <div className="absolute z-30 left-0 right-0 bottom-full mb-1 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-lg overflow-hidden">
+              {WA_QUICK_MESSAGES.map((m) => (
+                <a
+                  key={m.id}
+                  href={waHrefWithText(phone, m.build(name, shipment.tracking_id))}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setWaOpen(false)}
+                  className="block px-4 py-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] border-b border-[var(--border)] last:border-b-0 no-underline"
+                >
+                  {m.label}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
