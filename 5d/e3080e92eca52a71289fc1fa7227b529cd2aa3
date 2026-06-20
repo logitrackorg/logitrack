@@ -1,0 +1,42 @@
+logitrack_web/src/utils/driverDebug.ts
+  s_f3193ac3a7ca01::t_5bf92c0b6e1182 1-20
+logitrack_core/internal/service/routing.go
+  s_83b97053cec1ea::t_fecb6ff6f52e7f 823-827
+  s_83b97053cec1ea::t_7313fa9c401872 491
+logitrack_web/src/pages/DriverRoute.tsx
+  s_f3193ac3a7ca01::t_c5a0d8e25d5608 168-173,187-191,194-199,201
+  s_f3193ac3a7ca01::t_00027c29a0d6bb 216-221,233,235-241
+  s_f3193ac3a7ca01::t_a2d923956f91bf 66
+logitrack_web/src/pages/DriverScanVehicle.tsx
+  s_f3193ac3a7ca01::t_6d9643a7121d8a 42-49,51-53,56-62,66-68
+  s_f3193ac3a7ca01::t_6249c45331b8fd 116,119,126,133
+  s_f3193ac3a7ca01::t_29e3e0b2900514 11
+  s_f3193ac3a7ca01::t_409d7d281b89d2 160-165
+  s_f3193ac3a7ca01::t_bda01e22147e12 231-235
+  s_f3193ac3a7ca01::t_a7f7cef3aed343 69
+  s_f3193ac3a7ca01::t_e9733be89d6c4b 102-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "5de3080e92eca52a71289fc1fa7227b529cd2aa3",
+  "prompts": {},
+  "sessions": {
+    "s_83b97053cec1ea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3eb0b0f8-611a-4a78-911e-4f19f17e4573",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_f3193ac3a7ca01": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2ff7887d-8bba-47a7-a186-887d1979fc00",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
