@@ -122,13 +122,21 @@ type PendingClaimInfo struct {
 	SupervisorNotes string `json:"supervisor_notes"`
 }
 
+// OriginBranchInfo contiene los datos de contacto de la sucursal de origen para el chatbot
+type OriginBranchInfo struct {
+	Name    string `json:"name"`
+	Address string `json:"address"`
+	Hours   string `json:"hours,omitempty"`
+}
+
 // AuthResponse contiene los datos del envío después de autenticar
 type AuthResponse struct {
-	Success          bool             `json:"success"`
-	RecipientName    string           `json:"recipient_name"`
-	Shipment         model.Shipment   `json:"shipment"`
-	AvailableActions []string         `json:"available_actions"`
-	ActiveClaim      *ActiveClaimInfo `json:"active_claim,omitempty"`
+	Success          bool              `json:"success"`
+	RecipientName    string            `json:"recipient_name"`
+	Shipment         model.Shipment    `json:"shipment"`
+	AvailableActions []string          `json:"available_actions"`
+	ActiveClaim      *ActiveClaimInfo  `json:"active_claim,omitempty"`
+	OriginBranch     *OriginBranchInfo `json:"origin_branch,omitempty"`
 }
 
 // Authenticate valida el tracking ID y DNI del destinatario (US1)
@@ -192,12 +200,24 @@ func (h *ChatbotHandler) Authenticate(c *gin.Context) {
 		recipientName = *shipment.Corrections.RecipientName
 	}
 
+	var originBranch *OriginBranchInfo
+	if shipment.OriginBranchID != "" {
+		if branch, ok := h.branchRepo.GetByID(shipment.OriginBranchID); ok {
+			originBranch = &OriginBranchInfo{
+				Name:    branch.Name,
+				Address: formatAddress(branch.Address),
+				Hours:   branch.Hours,
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, AuthResponse{
 		Success:          true,
 		RecipientName:    recipientName,
 		Shipment:         shipment,
 		AvailableActions: actions,
 		ActiveClaim:      activeClaim,
+		OriginBranch:     originBranch,
 	})
 }
 
@@ -529,11 +549,12 @@ type SenderAuthRequest struct {
 
 // SenderAuthResponse contiene los datos del envío tras autenticar al remitente
 type SenderAuthResponse struct {
-	Success          bool             `json:"success"`
-	SenderName       string           `json:"sender_name"`
-	Shipment         model.Shipment   `json:"shipment"`
-	AvailableActions []string         `json:"available_actions"`
-	ActiveClaim      *ActiveClaimInfo `json:"active_claim,omitempty"`
+	Success          bool              `json:"success"`
+	SenderName       string            `json:"sender_name"`
+	Shipment         model.Shipment    `json:"shipment"`
+	AvailableActions []string          `json:"available_actions"`
+	ActiveClaim      *ActiveClaimInfo  `json:"active_claim,omitempty"`
+	OriginBranch     *OriginBranchInfo `json:"origin_branch,omitempty"`
 }
 
 // SenderCancelRequest es el payload para que el remitente cancele el envío
@@ -586,12 +607,24 @@ func (h *ChatbotHandler) AuthenticateSender(c *gin.Context) {
 		}
 	}
 
+	var originBranchSender *OriginBranchInfo
+	if shipment.OriginBranchID != "" {
+		if branch, ok := h.branchRepo.GetByID(shipment.OriginBranchID); ok {
+			originBranchSender = &OriginBranchInfo{
+				Name:    branch.Name,
+				Address: formatAddress(branch.Address),
+				Hours:   branch.Hours,
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, SenderAuthResponse{
 		Success:          true,
 		SenderName:       shipment.Sender.Name,
 		Shipment:         shipment,
 		AvailableActions: actions,
 		ActiveClaim:      activeClaim,
+		OriginBranch:     originBranchSender,
 	})
 }
 

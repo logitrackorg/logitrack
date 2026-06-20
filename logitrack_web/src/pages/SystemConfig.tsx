@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { AlertCircle, CheckCircle2, Minus, Plus, Clock, RotateCcw, ShieldCheck, Mail, Map as MapIcon } from "lucide-react";
+import { AlertCircle, CheckCircle2, Minus, Plus, Clock, RotateCcw, ShieldCheck, Mail, Map as MapIcon, ClipboardList } from "lucide-react";
 import { systemConfigApi, type SystemConfig as SystemConfigType } from "../api/systemConfig";
 import { clockApi, type ClockState } from "../api/clock";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
@@ -148,7 +148,10 @@ export function SystemConfig() {
       draft.max_reschedules !== config.max_reschedules ||
       draft.max_reschedule_days !== config.max_reschedule_days ||
       draft.two_fa_cooldown_minutes !== config.two_fa_cooldown_minutes ||
-      draft.max_coverage_area_km2 !== config.max_coverage_area_km2
+      draft.max_coverage_area_km2 !== config.max_coverage_area_km2 ||
+      draft.urgent_claims_cap_pct !== config.urgent_claims_cap_pct ||
+      draft.claims_high_priority_threshold !== config.claims_high_priority_threshold ||
+      draft.claims_medium_priority_threshold !== config.claims_medium_priority_threshold
     );
 
   return (
@@ -712,6 +715,110 @@ export function SystemConfig() {
                   pestaña <strong>Cobertura</strong> del dashboard.
                 </p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Prioridad automática de reclamos */}
+          <Card className="mt-4">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-slate-500" />
+                <CardTitle>Prioridad automática de reclamos</CardTitle>
+              </div>
+              <CardDescription>
+                Controla cómo se asigna automáticamente la prioridad al crear un ticket. Los umbrales ML se comparan contra el <strong>priority_score</strong> del envío vinculado al reclamo. El tope de urgentes evita la inflación de prioridades cuando una sucursal acumula demasiados tickets críticos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Tope de urgentes */}
+              <div className="flex items-start gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px] pt-2">
+                  Tope de urgentes por sucursal (%)
+                </label>
+                <div className="flex-1 flex flex-col gap-2">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      step={1}
+                      value={Math.round(draft.urgent_claims_cap_pct * 100)}
+                      onChange={(e) => {
+                        const pct = Math.max(1, Math.min(100, Number(e.target.value) || 0));
+                        setDraft((d) => d ? { ...d, urgent_claims_cap_pct: pct / 100 } : d);
+                      }}
+                      className="w-24 px-3 py-2 rounded-lg border border-slate-200 bg-white text-lg font-bold text-[var(--sidebar-bg)] tabular-nums outline-none"
+                    />
+                    <span className="text-sm text-slate-500">% de tickets abiertos</span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Si al crear un ticket la prioridad calculada es <strong>urgente</strong> y la sucursal ya supera este porcentaje, se baja a <strong>alta</strong> y se deja una nota. Rango: 1–100%.
+                  </p>
+                </div>
+              </div>
+
+              {/* Umbral alta */}
+              <div className="flex items-start gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px] pt-2">
+                  Umbral ML para prioridad alta
+                </label>
+                <div className="flex-1 flex flex-col gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="min-w-[60px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
+                      {draft.claims_high_priority_threshold.toFixed(2)}
+                    </span>
+                    <input
+                      type="range"
+                      min={0.01}
+                      max={1}
+                      step={0.01}
+                      value={draft.claims_high_priority_threshold}
+                      onChange={(e) =>
+                        setDraft((d) => d ? { ...d, claims_high_priority_threshold: Number(e.target.value) } : d)
+                      }
+                      className="flex-1 accent-[var(--sidebar-bg)]"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Si el envío vinculado al reclamo tiene priority_score ≥ <strong>{draft.claims_high_priority_threshold.toFixed(2)}</strong>, el ticket se marca como prioridad alta.
+                  </p>
+                </div>
+              </div>
+
+              {/* Umbral media */}
+              <div className="flex items-start gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px] pt-2">
+                  Umbral ML para prioridad media
+                </label>
+                <div className="flex-1 flex flex-col gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="min-w-[60px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
+                      {draft.claims_medium_priority_threshold.toFixed(2)}
+                    </span>
+                    <input
+                      type="range"
+                      min={0.01}
+                      max={1}
+                      step={0.01}
+                      value={draft.claims_medium_priority_threshold}
+                      onChange={(e) =>
+                        setDraft((d) => d ? { ...d, claims_medium_priority_threshold: Number(e.target.value) } : d)
+                      }
+                      className="flex-1 accent-[var(--sidebar-bg)]"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Si el priority_score está entre <strong>{draft.claims_medium_priority_threshold.toFixed(2)}</strong> y <strong>{draft.claims_high_priority_threshold.toFixed(2)}</strong>, el ticket se marca como prioridad media. Debajo del umbral, prioridad baja.
+                  </p>
+                </div>
+              </div>
+
+              {draft.claims_medium_priority_threshold >= draft.claims_high_priority_threshold && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  El umbral medio debe ser <strong>menor</strong> al umbral alto. Guardar con esta configuración fallará.
+                </div>
+              )}
             </CardContent>
           </Card>
 

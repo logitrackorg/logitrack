@@ -34,6 +34,7 @@ type ClaimService struct {
 	branchGraphSvc *BranchGraphService
 	branchRepo     repository.BranchRepository
 	tripRepo       repository.InterBranchTripRepository
+	sysConfigSvc   *SystemConfigService
 }
 
 // ClaimEmailSender sends customer-facing claim notifications by email.
@@ -78,6 +79,13 @@ func (s *ClaimService) SetClaimWAService(svc ClaimWASender) {
 // SetNotificationRepository wires the notification repository for supervisor in-app notifications.
 func (s *ClaimService) SetNotificationRepository(repo repository.NotificationRepository) {
 	s.notifRepo = repo
+}
+
+// SetSystemConfigService wires the system config service. Required for the
+// claim priority engine (umbrales ML + tope de urgentes). Si no se setea, los
+// reclamos se crean con prioridad "baja" por defecto.
+func (s *ClaimService) SetSystemConfigService(svc *SystemConfigService) {
+	s.sysConfigSvc = svc
 }
 
 // SetRouteServices wires the branch graph, the branch repository and the
@@ -244,6 +252,7 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 		}
 		evidenceUploadDate = &now
 	}
+	priority, priorityNote := s.computeClaimPriority(req.ClaimType, evidence != nil && len(evidence.Data) > 0, shipment, now)
 	claim := model.Claim{
 		ID:                 claimID,
 		TrackingID:         trackingID,
@@ -261,6 +270,8 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 		EvidenceFilePath:   evidenceFilePath,
 		EvidenceMimeType:   evidenceMimeType,
 		EvidenceUploadDate: evidenceUploadDate,
+		Priority:           priority,
+		PriorityNote:       priorityNote,
 	}
 	if err := s.claimRepo.Create(claim); err != nil {
 		if evidenceFilePath != "" {
@@ -687,6 +698,53 @@ func (s *ClaimService) AddComment(id, changedBy, branchID, comment string) (mode
 
 func (s *ClaimService) appendClaimEvent(event model.DomainEvent) error {
 	return s.claimEventRepo.Append(event)
+}
+
+// computeClaimPriority calcula la prioridad del nuevo reclamo aplicando el
+// motor puro y luego, si quedó "urgente", la degrada a "alta" cuando la
+// sucursal ya pasó el tope configurable de urgentes abiertos.
+//
+// Sucursal del reclamo = origin_branch_id del envío. Es la que va a gestionar
+// el ticket por defecto (puede transferirse después).
+func (s *ClaimService) computeClaimPriority(claimType model.ClaimType, hasEvidence bool, shipment model.Shipment, now time.Time) (model.ClaimPriority, string) {
+	cfg := model.DefaultSystemConfig()
+	if s.sysConfigSvc != nil {
+		cfg = s.sysConfigSvc.Get()
+	}
+	priority, note := CalculatePriority(
+		ClaimPriorityInput{Type: claimType, HasEvidence: hasEvidence},
+		ShipmentPriorityInfo{
+			Status:               shipment.Status,
+			PriorityScore:        shipment.PriorityScore,
+			SLAExpired:           isSLAExpired(shipment, now),
+			DeliveryAttemptCount: shipment.DeliveryAttempts,
+		},
+		cfg,
+	)
+	if priority != model.ClaimPriorityUrgente {
+		return priority, note
+	}
+	// Anti-inflación: si la sucursal ya tiene una proporción de urgentes mayor o
+	// igual al cap, degradamos a "alta" y dejamos nota. Si no podemos contar
+	// (sin sucursal de origen o error al consultar), permitimos urgente —
+	// preferimos un falso urgente a perder señal de un caso real.
+	branchID := strings.TrimSpace(shipment.OriginBranchID)
+	if branchID == "" {
+		return priority, note
+	}
+	totalOpen, urgentOpen, err := s.claimRepo.CountOpenAndUrgentByBranch(branchID)
+	if err != nil || totalOpen == 0 {
+		return priority, note
+	}
+	cap := cfg.UrgentClaimsCapPct
+	if cap <= 0 {
+		return priority, note
+	}
+	ratio := float64(urgentOpen) / float64(totalOpen)
+	if ratio >= cap {
+		return model.ClaimPriorityAlta, "El ticket fue clasificado como alta por tope de urgentes en sucursal."
+	}
+	return priority, note
 }
 
 func isTerminalOrTransferred(status model.ClaimStatus) bool {

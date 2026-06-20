@@ -17,6 +17,7 @@ export interface SenderChatbotAuthResponse {
   shipment: Shipment;
   available_actions: string[];
   active_claim?: ActiveClaimInfo;
+  origin_branch?: BranchInfo;
 }
 
 export interface FileClaimResponse {
@@ -36,6 +37,7 @@ export interface ChatbotAuthResponse {
   shipment: Shipment;
   available_actions: string[];
   active_claim?: ActiveClaimInfo;
+  origin_branch?: BranchInfo;
 }
 
 export interface Shipment {

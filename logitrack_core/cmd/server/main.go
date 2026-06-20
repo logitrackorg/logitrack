@@ -185,6 +185,7 @@ func main() {
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
 	claimEventRepo := repository.NewPostgresClaimEventRepository(database)
 	claimSvc := service.NewClaimService(claimRepo, claimEventRepo, shipmentRepo, eventStore)
+	claimSvc.SetSystemConfigService(sysConfigSvc)
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)

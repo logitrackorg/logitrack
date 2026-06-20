@@ -440,6 +440,12 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS claimant_dni VARCHAR(20);
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS assigned_branch_id TEXT;
 
+		-- Prioridad automática de reclamos: nivel + nota justificativa (degradación
+		-- por tope de urgentes en sucursal). El default 'baja' es seguro para filas
+		-- pre-existentes; las nuevas filas siempre traen prioridad calculada por el motor.
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS priority      TEXT NOT NULL DEFAULT 'baja';
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS priority_note TEXT;
+
 		-- Ensure branches table exists before branch_zones FK can reference it
 		CREATE TABLE IF NOT EXISTS branches (
 			id          VARCHAR(50) PRIMARY KEY,
@@ -737,6 +743,11 @@ func RunMigrations(db *sql.DB) error {
 		-- son del orden de cientos de miles a millones de km².
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_coverage_area_km2 DOUBLE PRECISION NOT NULL DEFAULT 1000000;
 		UPDATE system_config SET max_coverage_area_km2 = 1000000 WHERE id = 1 AND max_coverage_area_km2 IN (0, 1500);
+
+		-- Prioridad automática de reclamos
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS urgent_claims_cap_pct          NUMERIC NOT NULL DEFAULT 0.20;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claims_high_priority_threshold NUMERIC NOT NULL DEFAULT 0.65;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claims_medium_priority_threshold NUMERIC NOT NULL DEFAULT 0.35;
 
 		-- Permisos de pestañas del dashboard por rol (supervisor y manager).
 		-- El admin puede cambiar estos valores en tiempo real desde /admin/dashboard-config.
