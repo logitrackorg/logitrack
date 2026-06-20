@@ -265,7 +265,8 @@ func RunMigrations(db *sql.DB) error {
 			primary_color TEXT NOT NULL DEFAULT '',
 			accent_color  TEXT NOT NULL DEFAULT '',
 			sidebar_color TEXT NOT NULL DEFAULT '',
-			logo_url      TEXT NOT NULL DEFAULT ''
+			logo_url      TEXT NOT NULL DEFAULT '',
+			font_family   TEXT NOT NULL DEFAULT 'Inter'
 		);
 		INSERT INTO organization_config (id, name, cuit, address, phone, email, updated_by, track_url)
 		VALUES (1, 'Transportes del Sur S.A.', '30-71234567-8', 'Av. San Martín 1450, Buenos Aires', '+54 11 4567-8900', 'operaciones@transportesdelsur.com.ar', 'system', '')
@@ -275,6 +276,7 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS accent_color TEXT NOT NULL DEFAULT '';
 		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS sidebar_color TEXT NOT NULL DEFAULT '';
 		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS logo_url TEXT NOT NULL DEFAULT '';
+		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS font_family TEXT NOT NULL DEFAULT 'Inter';
 
 		CREATE TABLE IF NOT EXISTS access_logs (
 			id         TEXT PRIMARY KEY,
