@@ -491,7 +491,7 @@ func bestFallbackCandidate(originLat, originLng, radiusKm float64, minPopulation
 // Snapped entries get their coordinates updated to the city's real lat/lng and
 // have CityName / Population / IsSnapped set. Unsnapped entries keep their
 // original mathematical coordinates with IsSnapped=false.
-func (s *CoverageService) snapMathSuggestionsInPlace(suggestions []model.SuggestedLocation, radiusKm float64, minPopulation int, dangerousZones [][]model.LatLng) {
+func (s *CoverageService) snapMathSuggestionsInPlace(suggestions []model.SuggestedLocation, radiusKm float64, minPopulation int, dangerousZones [][]model.LatLng, blacklistedCities []string) {
 	if len(suggestions) == 0 || radiusKm <= 0 {
 		return
 	}
@@ -510,7 +510,7 @@ func (s *CoverageService) snapMathSuggestionsInPlace(suggestions []model.Suggest
 		}
 		// Pass radiusKm as fallback radius so patagoniaFallback can reach cities
 		// within the simulator area that are beyond the Overpass cap.
-		s.snapChunk(points[start:end], searchRadius, radiusKm, minPopulation, nil, dangerousZones, out[start:end])
+		s.snapChunk(points[start:end], searchRadius, radiusKm, minPopulation, blacklistedCities, dangerousZones, out[start:end])
 		if end < len(points) {
 			time.Sleep(snapToCityChunkDelay)
 		}

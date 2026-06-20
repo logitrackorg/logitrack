@@ -178,7 +178,7 @@ export const coverageApi = {
    * excludedBranchIds: IDs de sucursales a excluir del cálculo (simulación de cierre).
    * customBoundingArea: polígono dibujado por el usuario — recorta el diagnóstico a esa zona.
    */
-  diagnose: (areaKm2: number, excludedBranchIds?: string[], customBoundingArea?: LatLng[], includeInactive?: boolean, maxSuggestions?: number, snapToCities?: boolean, mode?: "area" | "density", minPopulation?: number) =>
+  diagnose: (areaKm2: number, excludedBranchIds?: string[], customBoundingArea?: LatLng[], includeInactive?: boolean, maxSuggestions?: number, snapToCities?: boolean, mode?: "area" | "density", minPopulation?: number, excludedCities?: string[]) =>
     api
       .post<SimulationResult>("/coverage/diagnose", {
         area_km2: areaKm2,
@@ -189,6 +189,7 @@ export const coverageApi = {
         ...(snapToCities ? { snap_to_cities: true } : {}),
         ...(mode && mode !== "area" ? { mode } : {}),
         ...(minPopulation && minPopulation > 0 ? { min_population: minPopulation } : {}),
+        ...(excludedCities?.length ? { excluded_cities: excludedCities } : {}),
       })
       .then((r) => r.data),
 

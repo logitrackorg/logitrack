@@ -48,6 +48,8 @@ interface CoverageSimulatorPanelProps {
   /** Diagnosis ranking mode: "area" (geographic gaps) or "density" (population density). */
   diagnosisMode?: DiagnosisMode;
   onDiagnosisModeChange?: (mode: DiagnosisMode) => void;
+  /** true mientras el backend está calculando el diagnóstico — bloquea el panel y cambia el texto del botón. */
+  isDiagnosing?: boolean;
 }
 
 export function CoverageSimulatorPanel({
@@ -71,7 +73,9 @@ export function CoverageSimulatorPanel({
   onEditRegion,
   diagnosisMode = "area",
   onDiagnosisModeChange,
+  isDiagnosing = false,
 }: CoverageSimulatorPanelProps) {
+  const isDisabled = disabled || isDiagnosing;
   const [minPopulation, setMinPopulation] = useState(MIN_POP_DEFAULT);
 
   // Draft strings for the number inputs — decoupled from the controlled slider
@@ -118,7 +122,7 @@ export function CoverageSimulatorPanel({
             <button
               type="button"
               onClick={onEditRegion}
-              disabled={isDrawingBoundary || disabled}
+              disabled={isDrawingBoundary || isDisabled}
               title="Editar nombre y forma de esta zona"
               className="shrink-0 flex items-center gap-1 px-2 py-1.5 text-xs rounded-md border border-slate-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-gray-700 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -128,7 +132,7 @@ export function CoverageSimulatorPanel({
           <button
             type="button"
             onClick={onStartDrawNewRegion}
-            disabled={isDrawingBoundary || disabled}
+            disabled={isDrawingBoundary || isDisabled}
             title="Dibujar nueva zona personalizada"
             className="shrink-0 flex items-center gap-1 px-2 py-1.5 text-xs rounded-md border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -187,7 +191,7 @@ export function CoverageSimulatorPanel({
               onAreaChange(v);
               setAreaInput(String(v));
             }}
-            disabled={disabled}
+            disabled={isDisabled}
             className="w-24 text-right text-xs font-mono font-semibold px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             aria-label="Área de cobertura simulada en kilómetros cuadrados"
           />
@@ -206,7 +210,7 @@ export function CoverageSimulatorPanel({
           onAreaChange(v);
           setAreaInput(String(v));
         }}
-        disabled={disabled}
+        disabled={isDisabled}
         className="w-full accent-orange-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         aria-label="Área de cobertura simulada en kilómetros cuadrados"
       />
@@ -228,7 +232,7 @@ export function CoverageSimulatorPanel({
               setPopInput(String(v));
               onMinPopulationChange?.(v);
             }}
-            disabled={disabled}
+            disabled={isDisabled}
             placeholder="0"
             className="w-24 text-right text-xs font-mono font-semibold px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             aria-label="Población mínima requerida para ciudades candidatas"
@@ -249,7 +253,7 @@ export function CoverageSimulatorPanel({
           setPopInput(String(v));
           onMinPopulationChange?.(v);
         }}
-        disabled={disabled}
+        disabled={isDisabled}
         className="w-full accent-slate-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         aria-label="Población mínima requerida para ciudades candidatas"
       />
@@ -270,7 +274,7 @@ export function CoverageSimulatorPanel({
               onMaxSuggestionsChange?.(v);
               setMaxSugInput(String(v));
             }}
-            disabled={disabled}
+            disabled={isDisabled}
             placeholder="0"
             className="w-16 text-right text-xs font-mono font-semibold px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             aria-label="Cantidad máxima de sucursales sugeridas (0 = sin límite)"
@@ -292,7 +296,7 @@ export function CoverageSimulatorPanel({
           onMaxSuggestionsChange?.(v);
           setMaxSugInput(String(v));
         }}
-        disabled={disabled}
+        disabled={isDisabled}
         className="w-full accent-indigo-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         aria-label="Cantidad máxima de sucursales sugeridas"
       />
@@ -306,7 +310,7 @@ export function CoverageSimulatorPanel({
           <button
             type="button"
             onClick={() => onDiagnosisModeChange?.("area")}
-            disabled={disabled}
+            disabled={isDisabled}
             className={`flex-1 px-3 py-1.5 transition-colors cursor-pointer disabled:cursor-not-allowed ${
               diagnosisMode === "area"
                 ? "bg-orange-500 text-white"
@@ -318,7 +322,7 @@ export function CoverageSimulatorPanel({
           <button
             type="button"
             onClick={() => onDiagnosisModeChange?.("density")}
-            disabled={disabled}
+            disabled={isDisabled}
             className={`flex-1 px-3 py-1.5 border-l border-slate-200 dark:border-gray-600 transition-colors cursor-pointer disabled:cursor-not-allowed ${
               diagnosisMode === "density"
                 ? "bg-violet-600 text-white"
@@ -349,10 +353,10 @@ export function CoverageSimulatorPanel({
 
       <button
         onClick={() => onConfirm(areaKm2, minPopulation)}
-        disabled={disabled || (territoryMode === "custom" && !hasBoundary)}
+        disabled={isDisabled || (territoryMode === "custom" && !hasBoundary)}
         className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md bg-orange-500 text-white hover:bg-orange-600 cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-orange-500"
       >
-        Confirmar y Diagnosticar
+        {isDiagnosing ? "Realizando diagnóstico…" : "Confirmar y Diagnosticar"}
       </button>
     </div>
   );

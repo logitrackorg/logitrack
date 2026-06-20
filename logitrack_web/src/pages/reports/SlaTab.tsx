@@ -990,6 +990,9 @@ export function CoberturaTab() {
   // ciudades reales"), para que el usuario no pueda disparar un nuevo
   // diagnóstico mientras eso está en curso.
   const [isFetchingCities, setIsFetchingCities] = useState(false);
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [isFindingMore, setIsFindingMore] = useState(false);
+  const [excludedCitiesForMore, setExcludedCitiesForMore] = useState<string[]>([]);
   const [snapError, setSnapError] = useState<string | null>(null);
   const [snapMinPopulation, setSnapMinPopulation] = useState(0);
 
@@ -1223,6 +1226,8 @@ export function CoberturaTab() {
     setSnappedCities(null);
     setSnapError(null);
     setBlacklistedCities([]);
+    setExcludedCitiesForMore([]);
+    setIsDiagnosing(true);
     coverageApi
       .diagnose(
         area,
@@ -1256,7 +1261,8 @@ export function CoberturaTab() {
         }
         setSimResult({ ...result, suggested_locations: merged });
       })
-      .catch(() => setSimError("No se pudo calcular el diagnóstico en este momento."));
+      .catch(() => setSimError("No se pudo calcular el diagnóstico en este momento."))
+      .finally(() => setIsDiagnosing(false));
   }, []); // intentionally empty deps — reads from refs only
 
   const load = useCallback(() => {
@@ -1277,6 +1283,64 @@ export function CoberturaTab() {
     setSnapMinPopulation(minPopulation);
     diagnoseCore(area, closedBranchIds);
   }, [diagnoseCore, closedBranchIds]);
+
+  // "Buscar más sugerencias": llama al backend con las ciudades ya mostradas
+  // como blacklist, y ACUMULA (en lugar de reemplazar) los resultados nuevos.
+  const handleFindMore = useCallback(() => {
+    if (!simResultRef.current || isFindingMore || isDiagnosing) return;
+    const currentCityNames = snappedCities
+      ?.filter((c) => c.is_snapped && c.city_name)
+      .map((c) => c.city_name) ?? [];
+    const newExcluded = [
+      ...excludedCitiesForMore,
+      ...currentCityNames.filter((n) => !excludedCitiesForMore.includes(n)),
+    ];
+    setExcludedCitiesForMore(newExcluded);
+    setIsFindingMore(true);
+    const area = visualAreaRef.current;
+    const boundary = customBoundaryRef.current;
+    const territoryMode = territoryModeRef.current;
+    const inactive = includeInactiveRef.current;
+    const dMode = diagnosisModeRef.current;
+    const minPop = snapMinPopulationRef.current;
+    const closed = closedBranchIdsRef.current;
+    const boundingArea =
+      territoryMode === "custom" && boundary && boundary.length >= 3
+        ? boundary.map(([lat, lng]) => ({ lat, lng }))
+        : undefined;
+    coverageApi
+      .diagnose(
+        area,
+        closed.length > 0 ? closed : undefined,
+        boundingArea,
+        inactive || undefined,
+        maxSuggestionsRef.current > 0 ? maxSuggestionsRef.current : undefined,
+        undefined,
+        dMode !== "area" ? dMode : undefined,
+        dMode === "density" && minPop > 0 ? minPop : undefined,
+        newExcluded.length > 0 ? newExcluded : undefined,
+      )
+      .then((result) => {
+        const mathSuggs = result.mathematical_suggestions ?? [];
+        const newSuggs = [...result.suggested_locations, ...mathSuggs];
+        if (newSuggs.length === 0) return;
+        setSimResult((prev) => {
+          if (!prev) return prev;
+          return { ...prev, suggested_locations: [...prev.suggested_locations, ...newSuggs] };
+        });
+        setSnappedCities((prev) => {
+          const existing = prev ?? [];
+          const newEntries = newSuggs.map((loc) =>
+            loc.is_snapped
+              ? { lat: loc.lat, lng: loc.lng, city_name: loc.city_name ?? "", is_snapped: true as const, population: loc.population }
+              : { lat: loc.lat, lng: loc.lng, city_name: "", is_snapped: false as const },
+          );
+          return [...existing, ...newEntries];
+        });
+      })
+      .catch(() => setSimError("No se pudo buscar más sugerencias en este momento."))
+      .finally(() => setIsFindingMore(false));
+  }, [isFindingMore, isDiagnosing, snappedCities, excludedCitiesForMore]);
 
   // Sugerencias que todavía no aterrizaron en una ciudad real: solo estas se
   // vuelven a enviar al backend en cada click (evita re-consultar Overpass
@@ -1664,7 +1728,8 @@ export function CoberturaTab() {
                 maxSuggestions={maxSuggestions}
                 onMaxSuggestionsChange={setMaxSuggestions}
                 scopeLabel={simScopeLabel}
-                disabled={isFetchingCities}
+                disabled={isFetchingCities || isDiagnosing}
+                isDiagnosing={isDiagnosing}
                 territoryMode={territoryMode}
                 customBoundaryPoints={customBoundary?.length ?? 0}
                 isDrawingBoundary={isDrawingBoundary}
@@ -1825,6 +1890,31 @@ export function CoberturaTab() {
                           </div>
                         );
                       })()}
+                      {snappedCount > 0 && diagnosisModeRef.current === "density" && (
+                        <button
+                          type="button"
+                          disabled={isFindingMore || isDiagnosing}
+                          onClick={handleFindMore}
+                          className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border border-slate-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {isFindingMore ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              Buscando más sugerencias…
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              Buscar más sugerencias
+                              {excludedCitiesForMore.length > 0 && (
+                                <span className="ml-1 text-slate-400">
+                                  (excluyendo {excludedCitiesForMore.length} {excludedCitiesForMore.length === 1 ? "ciudad" : "ciudades"})
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </button>
+                      )}
                     </>
                   )}
                   {((visibleProjection && visibleProjection.length > 0) || projectionLoading || projectionError) && (

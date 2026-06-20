@@ -224,6 +224,11 @@ type DiagnoseRequest struct {
 	// snapping: only cities with at least this many inhabitants are eligible.
 	// Ignored in "area" mode.
 	MinPopulation int `json:"min_population,omitempty"`
+
+	// ExcludedCities is an optional list of city names already suggested in a
+	// previous diagnosis. When set, the snap step will skip these cities so
+	// that "Buscar más sugerencias" returns genuinely new locations.
+	ExcludedCities []string `json:"excluded_cities,omitempty"`
 }
 
 // ProjectionRequest is the body of POST /coverage/project: the simulated

@@ -279,7 +279,7 @@ func TestCoverage_Diagnose_PercentageAndDeficit(t *testing.T) {
 	}
 	simArea := minArea / 4
 
-	res := svc.Diagnose(simArea, nil, nil, false, 0, false, "", 0)
+	res := svc.Diagnose(simArea, nil, nil, false, 0, false, "", 0, nil)
 	if res.SimulatedAreaKm2 != simArea {
 		t.Fatalf("SimulatedAreaKm2 = %v, esperado %v", res.SimulatedAreaKm2, simArea)
 	}
@@ -336,7 +336,7 @@ func TestCoverage_Diagnose_AdequateWhenSimulatedAreaCoversCell(t *testing.T) {
 		areaByBranch[c.BranchID] = c.AreaKm2
 	}
 
-	res := svc.Diagnose(simArea, nil, nil, false, 0, false, "", 0)
+	res := svc.Diagnose(simArea, nil, nil, false, 0, false, "", 0, nil)
 	for _, sc := range res.Cells {
 		// Bug 1: el porcentaje nunca puede superar el 100%, ni siquiera por
 		// errores de redondeo del recorte de polígonos.
@@ -380,7 +380,7 @@ func TestCoverage_Diagnose_SuggestedLocationsForCriticalGap(t *testing.T) {
 	}
 	simArea := minArea / 100
 
-	res := svc.Diagnose(simArea, nil, nil, false, 0, false, "", 0)
+	res := svc.Diagnose(simArea, nil, nil, false, 0, false, "", 0, nil)
 
 	criticalBranches := make(map[string]bool)
 	for _, sc := range res.Cells {
@@ -456,7 +456,7 @@ func TestCoverage_Diagnose_IterativeGreedyCoveringFillsLargeGap(t *testing.T) {
 	simArea := minArea / 100
 	radiusKm := math.Sqrt(simArea / math.Pi)
 
-	res := svc.Diagnose(simArea, nil, nil, false, 0, false, "", 0)
+	res := svc.Diagnose(simArea, nil, nil, false, 0, false, "", 0, nil)
 
 	byBranch := make(map[string][]model.SuggestedLocation)
 	for _, sug := range res.SuggestedLocations {
@@ -503,7 +503,7 @@ func TestCoverage_Diagnose_NoSuggestionsWhenAdequate(t *testing.T) {
 
 	const simArea = 1.25e8
 
-	res := svc.Diagnose(simArea, nil, nil, false, 0, false, "", 0)
+	res := svc.Diagnose(simArea, nil, nil, false, 0, false, "", 0, nil)
 	if len(res.SuggestedLocations) != 0 {
 		t.Fatalf("no se esperaban sugerencias con cobertura adecuada, dio %+v", res.SuggestedLocations)
 	}
@@ -544,7 +544,7 @@ func TestMathematicalSuggestions_SmallCustomZone(t *testing.T) {
 	// leaving a void of ~750 km² — well above the adaptive floor of 200 km².
 	const simArea = 10_000.0
 
-	res := svc.Diagnose(simArea, amba, nil, false, 0, false, "", 0)
+	res := svc.Diagnose(simArea, amba, nil, false, 0, false, "", 0, nil)
 
 	if len(res.MathematicalSuggestions) == 0 {
 		t.Fatal("se esperaba al menos una MathematicalSuggestion para la zona AMBA con cobertura parcial")
@@ -585,7 +585,7 @@ func TestMathematicalSuggestions_ZeroBranches(t *testing.T) {
 		{Lat: -35.20, Lng: -59.05},
 	}
 
-	res := svc.Diagnose(10_000.0, amba, nil, false, 0, false, "", 0)
+	res := svc.Diagnose(10_000.0, amba, nil, false, 0, false, "", 0, nil)
 
 	// With 0 branches the void = entire AMBA; the pole must be found.
 	if len(res.MathematicalSuggestions) == 0 {
@@ -615,7 +615,7 @@ func TestMathematicalSuggestions_DangerousZoneExcluded(t *testing.T) {
 		{Lat: -35.20, Lng: -59.05},
 	}
 
-	res := svc.Diagnose(10_000.0, amba, [][]model.LatLng{danger}, false, 0, false, "", 0)
+	res := svc.Diagnose(10_000.0, amba, [][]model.LatLng{danger}, false, 0, false, "", 0, nil)
 
 	// No suggestion should fall inside the dangerous zone.
 	dangerProj := newProjector(-34.955, -58.475)
