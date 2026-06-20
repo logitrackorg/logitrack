@@ -181,9 +181,19 @@ export function Claims() {
     if (isManager) void loadClaims();
   }, [isManager, selectedBranch, selectedStatus, loadClaims]);
 
-  const visibleClaims = isManager && selectedClaimId.trim()
+  const [activeTab, setActiveTab] = useState<"pendientes" | "resueltos">("pendientes");
+
+  const PRIORITY_ORDER: Record<string, number> = { urgente: 0, alta: 1, media: 2, baja: 3 };
+
+  const filteredById = isManager && selectedClaimId.trim()
     ? claims.filter((claim) => claim.id.toLowerCase().includes(selectedClaimId.trim().toLowerCase()))
     : claims;
+
+  const isResolved = (claim: Claim) => String(claim.status).startsWith("resolved_");
+
+  const visibleClaims = filteredById
+    .filter((c) => (activeTab === "resueltos" ? isResolved(c) : !isResolved(c)))
+    .sort((a, b) => (PRIORITY_ORDER[a.priority ?? "baja"] ?? 3) - (PRIORITY_ORDER[b.priority ?? "baja"] ?? 3));
 
   const now = new Date();
   const visibleMetrics = visibleClaims.reduce(
@@ -516,14 +526,47 @@ export function Claims() {
         </div>
       )}
 
+      {/* Pestañas Pendientes / Resueltos */}
+      <div className="flex gap-1 mb-4 border-b dark:border-gray-700 border-slate-200">
+        {(["pendientes", "resueltos"] as const).map((tab) => {
+          const count = filteredById.filter((c) => tab === "resueltos" ? isResolved(c) : !isResolved(c)).length;
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-5 py-2.5 text-sm font-semibold capitalize transition-colors border-b-2 -mb-px ${
+                activeTab === tab
+                  ? "border-[var(--brand)] text-[var(--brand)]"
+                  : "border-transparent dark:text-gray-400 text-slate-500 hover:text-slate-700 dark:hover:text-gray-200"
+              }`}
+            >
+              {tab === "pendientes" ? "Pendientes" : "Resueltos"}
+              <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                activeTab === tab
+                  ? "bg-[var(--brand)]/10 text-[var(--brand)]"
+                  : "dark:bg-gray-700 bg-slate-100 dark:text-gray-400 text-slate-500"
+              }`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {loading ? (
         <Card className="p-10 text-center">
           <p className="text-sm dark:text-gray-400 text-slate-500">Cargando…</p>
         </Card>
       ) : visibleClaims.length === 0 ? (
         <Card className="p-12 text-center">
-          <p className="text-base font-semibold dark:text-gray-300 text-slate-700">No hay reclamos registrados</p>
-          <p className="mt-1 text-sm dark:text-gray-400 text-slate-500">Los reclamos aparecerán cuando un cliente los genere desde tracking.</p>
+          <p className="text-base font-semibold dark:text-gray-300 text-slate-700">
+            {activeTab === "pendientes" ? "No hay reclamos pendientes" : "No hay reclamos resueltos"}
+          </p>
+          <p className="mt-1 text-sm dark:text-gray-400 text-slate-500">
+            {activeTab === "pendientes"
+              ? "Los reclamos aparecerán cuando un cliente los genere desde tracking."
+              : "Los reclamos resueltos aparecerán aquí."}
+          </p>
         </Card>
       ) : (
         <div className="flex flex-col gap-4">

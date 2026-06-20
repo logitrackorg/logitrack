@@ -177,7 +177,7 @@ export function ChatbotWidget() {
           `¡Hola, ${response.recipient_name}! ✅\n\n` +
           `Encontré tu envío: ${trackingId}\n` +
           `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
-          getNoActionsMessage(response.shipment.status),
+          getNoActionsMessage(response.shipment.status, response.origin_branch),
           [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' }]
         );
       }
@@ -267,7 +267,7 @@ export function ChatbotWidget() {
           `¡Hola, ${response.sender_name}! ✅\n\n` +
           `Encontré tu envío: ${trackingId}\n` +
           `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
-          getNoActionsMessage(response.shipment.status),
+          getNoActionsMessage(response.shipment.status, response.origin_branch),
           [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' }]
         );
       }
@@ -899,7 +899,12 @@ export function ChatbotWidget() {
       'rechazado', 'no_entregado', 'expired'].includes(status);
   };
 
-  const getNoActionsMessage = (status: string): string => {
+  const getNoActionsMessage = (status: string, originBranch?: { name: string; address: string; hours?: string } | null): string => {
+    const branchContact = originBranch
+      ? `\n\n📍 Sucursal de origen: ${originBranch.name}\n📫 Dirección: ${originBranch.address}` +
+        (originBranch.hours ? `\n🕐 Horarios: ${originBranch.hours}` : '')
+      : '\n\nComunicate con la sucursal de origen para más información.';
+
     switch (status) {
       case 'out_for_delivery':
         return '🚚 Tu paquete ya está en camino a tu domicilio. No es posible modificar el envío mientras está en reparto.\n\nSi no estás en casa al momento de la entrega, el repartidor dejará un aviso para coordinar un nuevo intento.';
@@ -911,8 +916,12 @@ export function ChatbotWidget() {
         return '❌ Este envío fue cancelado. Contactá al remitente para más información.';
       case 'returned':
         return '↩️ Este envío fue devuelto al remitente. Contactalo para coordinar la entrega.';
+      case 'lost':
+        return '🔍 Tu envío fue declarado extraviado. Estamos investigando su paradero.' + branchContact;
+      case 'destroyed':
+        return '⚠️ Tu envío sufrió daño total durante el transporte. Por favor contactá la sucursal de origen para gestionar el reclamo correspondiente.' + branchContact;
       default:
-        return 'No hay acciones disponibles para tu envío en este momento. Podés comunicarte con el remitente para más información.';
+        return 'No hay acciones disponibles para tu envío en este momento. Comunicate con la sucursal de origen para más información.' + branchContact;
     }
   };
 
@@ -926,6 +935,12 @@ export function ChatbotWidget() {
       'delivered': 'Entregado',
       'ready_for_pickup': 'Listo para retiro',
       'cancelled': 'Cancelado',
+      'returned': 'Devuelto',
+      'lost': 'Extraviado',
+      'destroyed': 'Daño total',
+      'rechazado': 'Rechazado',
+      'no_entregado': 'No entregado',
+      'expired': 'Expirado',
     };
     return statusMap[status] || status;
   };
