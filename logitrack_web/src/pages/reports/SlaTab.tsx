@@ -31,7 +31,7 @@ import {
 } from "../../api/coverage";
 import { regionsApi, type Region as CoverageRegion } from "../../api/regions";
 import { VoronoiCoverageMap, type VoronoiCoverageMapHandle } from "../../components/VoronoiCoverageMap";
-import { CoverageSimulatorPanel, SIM_AREA_DEFAULT } from "../../components/CoverageSimulatorPanel";
+import { CoverageSimulatorPanel, SIM_AREA_DEFAULT, type DiagnosisMode } from "../../components/CoverageSimulatorPanel";
 import { CollapsiblePanel } from "../../components/CollapsiblePanel";
 import { SkeletonCard } from "../../components/ui/skeleton";
 // ── Palette ──────────────────────────────────────────────────────────────────
@@ -1010,6 +1010,10 @@ export function CoberturaTab() {
   const [maxSuggestions, setMaxSuggestions] = useState(0);
   const maxSuggestionsRef = useRef(0);
 
+  const [diagnosisMode, setDiagnosisMode] = useState<DiagnosisMode>("area");
+  const diagnosisModeRef = useRef<DiagnosisMode>("area");
+  const snapMinPopulationRef = useRef(0);
+
   const simResultRef = useRef<SimulationResult | null>(null);
   const visualAreaRef = useRef(SIM_AREA_DEFAULT);
   const customBoundaryRef = useRef<[number, number][] | null>(null);
@@ -1050,6 +1054,7 @@ export function CoberturaTab() {
   useEffect(() => { territoryModeRef.current = territoryMode; }, [territoryMode]);
   useEffect(() => { includeInactiveRef.current = includeInactive; }, [includeInactive]);
   useEffect(() => { closedBranchIdsRef.current = closedBranchIds; }, [closedBranchIds]);
+  useEffect(() => { diagnosisModeRef.current = diagnosisMode; }, [diagnosisMode]);
 
   // Fetch all branches (including inactive) for the simulation panel.
   useEffect(() => { branchApi.list().then(setAllBranches).catch(() => {}); }, []);
@@ -1205,11 +1210,13 @@ export function CoberturaTab() {
   // updaters (e.g. toggleClosedBranch / handleToggleIncludeInactive) without
   // stale-closure issues. Declared before `load` so `load` can close over it.
   const diagnoseCore = useCallback((area: number, closed: string[]) => {
-    const mode = territoryModeRef.current;
+    const territoryMode = territoryModeRef.current;
     const boundary = customBoundaryRef.current;
     const inactive = includeInactiveRef.current;
+    const dMode = diagnosisModeRef.current;
+    const minPop = snapMinPopulationRef.current;
     const boundingArea =
-      mode === "custom" && boundary && boundary.length >= 3
+      territoryMode === "custom" && boundary && boundary.length >= 3
         ? boundary.map(([lat, lng]) => ({ lat, lng }))
         : undefined;
     setSimError(null);
@@ -1217,18 +1224,25 @@ export function CoberturaTab() {
     setSnapError(null);
     setBlacklistedCities([]);
     coverageApi
-      .diagnose(area, closed.length > 0 ? closed : undefined, boundingArea, inactive || undefined, maxSuggestionsRef.current > 0 ? maxSuggestionsRef.current : undefined)
+      .diagnose(
+        area,
+        closed.length > 0 ? closed : undefined,
+        boundingArea,
+        inactive || undefined,
+        maxSuggestionsRef.current > 0 ? maxSuggestionsRef.current : undefined,
+        undefined,
+        dMode !== "area" ? dMode : undefined,
+        dMode === "density" && minPop > 0 ? minPop : undefined,
+      )
       .then((result) => {
         const mathSuggs = result.mathematical_suggestions ?? [];
         const merged = [...result.suggested_locations, ...mathSuggs];
-        // Pre-populate snappedCities para sugerencias matemáticas que el
-        // servidor ya aterrizó server-side (Fase 4). Las sugerencias por celda
-        // quedan sin aterrizar hasta que el usuario pulsa "Aterrizar".
-        const baseLen = result.suggested_locations.length;
-        if (mathSuggs.some((s) => s.is_snapped)) {
+        // Pre-populate snappedCities para cualquier sugerencia que el servidor
+        // ya aterrizó (density mode: todas; area mode: solo las matemáticas).
+        if (merged.some((s) => s.is_snapped)) {
           setSnappedCities(
-            merged.map((loc, i) =>
-              i >= baseLen && loc.is_snapped
+            merged.map((loc) =>
+              loc.is_snapped
                 ? {
                     lat: loc.lat,
                     lng: loc.lng,
@@ -1259,6 +1273,7 @@ export function CoberturaTab() {
 
   // Diagnóstico: compara el área simulada contra el área Voronoi real (post-recorte) de cada sucursal.
   const handleConfirmSimulation = useCallback((area: number, minPopulation: number) => {
+    snapMinPopulationRef.current = minPopulation; // sync immediately so diagnoseCore reads it
     setSnapMinPopulation(minPopulation);
     diagnoseCore(area, closedBranchIds);
   }, [diagnoseCore, closedBranchIds]);
@@ -1660,6 +1675,8 @@ export function CoberturaTab() {
                 onStartDrawNewRegion={handleStartDrawNewRegion}
                 canEditSelectedRegion={regions.find((r) => r.id === selectedRegionId)?.type === "custom"}
                 onEditRegion={handleStartEditRegion}
+                diagnosisMode={diagnosisMode}
+                onDiagnosisModeChange={setDiagnosisMode}
               />
               {simResult !== null && (
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -1794,9 +1811,11 @@ export function CoberturaTab() {
                                       ID-{ui + 1}
                                     </button>
                                     <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300">
-                                      Aportará ~{formatKm2(loc.actual_added_km2)} de cobertura neta.
+                                      {(loc.actual_added_km2 ?? 0) > 0 && (
+                                        <>Aportará ~{formatKm2(loc.actual_added_km2)} de cobertura neta. </>
+                                      )}
                                       {loc.affected_branches.length > 0 && (
-                                        <> Descomprimirá las zonas de: {loc.affected_branches.join(", ")}.</>
+                                        <>Descomprimirá las zonas de: {loc.affected_branches.join(", ")}.</>
                                       )}
                                     </p>
                                   </li>
@@ -2173,11 +2192,18 @@ function SuggestionCard({
         <ExternalLink className="w-3 h-3" /> Ver en Google Maps
       </a>
       <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300">
-        Aportará ~{formatKm2(loc.actual_added_km2)} de cobertura neta.
+        {(loc.actual_added_km2 ?? 0) > 0 && (
+          <>Aportará ~{formatKm2(loc.actual_added_km2)} de cobertura neta. </>
+        )}
         {loc.affected_branches.length > 0 && (
-          <> Descomprimirá las zonas de: {loc.affected_branches.join(", ")}.</>
+          <>Descomprimirá las zonas de: {loc.affected_branches.join(", ")}.</>
         )}
       </p>
+      {(loc.density ?? 0) > 0 && (
+        <p className="mt-1 text-xs font-semibold text-violet-600 dark:text-violet-400">
+          {Math.round(loc.density!).toLocaleString("es-AR")} hab./km² en zona sin cobertura
+        </p>
+      )}
       {(city.population ?? 0) > 0 && (
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
           Población estimada: {city.population!.toLocaleString("es-AR")} habitantes.

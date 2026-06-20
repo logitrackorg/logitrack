@@ -96,6 +96,8 @@ export interface SuggestedLocation {
   is_snapped?: boolean;
   /** Población de la ciudad aterrizda; 0 cuando is_snapped=false. */
   population?: number;
+  /** Densidad poblacional (hab./km²) de la celda Voronoi — solo en modo "density". */
+  density?: number;
 }
 
 export interface SimulationResult {
@@ -176,7 +178,7 @@ export const coverageApi = {
    * excludedBranchIds: IDs de sucursales a excluir del cálculo (simulación de cierre).
    * customBoundingArea: polígono dibujado por el usuario — recorta el diagnóstico a esa zona.
    */
-  diagnose: (areaKm2: number, excludedBranchIds?: string[], customBoundingArea?: LatLng[], includeInactive?: boolean, maxSuggestions?: number, snapToCities?: boolean) =>
+  diagnose: (areaKm2: number, excludedBranchIds?: string[], customBoundingArea?: LatLng[], includeInactive?: boolean, maxSuggestions?: number, snapToCities?: boolean, mode?: "area" | "density", minPopulation?: number) =>
     api
       .post<SimulationResult>("/coverage/diagnose", {
         area_km2: areaKm2,
@@ -185,6 +187,8 @@ export const coverageApi = {
         ...(includeInactive ? { include_inactive: true } : {}),
         ...(maxSuggestions && maxSuggestions > 0 ? { max_suggestions: maxSuggestions } : {}),
         ...(snapToCities ? { snap_to_cities: true } : {}),
+        ...(mode && mode !== "area" ? { mode } : {}),
+        ...(minPopulation && minPopulation > 0 ? { min_population: minPopulation } : {}),
       })
       .then((r) => r.data),
 

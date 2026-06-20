@@ -95,6 +95,11 @@ type SuggestedLocation struct {
 	CityName   string `json:"city_name,omitempty"`
 	IsSnapped  bool   `json:"is_snapped,omitempty"`
 	Population int    `json:"population,omitempty"`
+
+	// Density is the population density of the snapped city expressed as
+	// inhabitants per km² of the Voronoi cell area. Only populated in
+	// "density" diagnostic mode.
+	Density float64 `json:"density,omitempty"`
 }
 
 // SimulationResult is the response of CoverageService.Diagnose: the per-branch
@@ -208,6 +213,17 @@ type DiagnoseRequest struct {
 	// the diagnosis fast; the frontend can snap client-side via POST
 	// /coverage/snap-to-city when the user explicitly requests it.
 	SnapToCities bool `json:"snap_to_cities,omitempty"`
+
+	// Mode controls the suggestion ranking strategy:
+	//   "area"    (default) ranks by Voronoi cell area — geographic gaps.
+	//   "density" ranks by population density (hab./km²) so that
+	//             under-served urban areas surface above vast rural cells.
+	Mode string `json:"mode,omitempty"`
+
+	// MinPopulation, when > 0, filters city candidates during density-mode
+	// snapping: only cities with at least this many inhabitants are eligible.
+	// Ignored in "area" mode.
+	MinPopulation int `json:"min_population,omitempty"`
 }
 
 // ProjectionRequest is the body of POST /coverage/project: the simulated

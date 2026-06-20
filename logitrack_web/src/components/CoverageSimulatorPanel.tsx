@@ -16,6 +16,8 @@ const MAX_SUGG_STEP = 1;
 
 export type TerritoryMode = "national" | "custom";
 
+export type DiagnosisMode = "area" | "density";
+
 interface CoverageSimulatorPanelProps {
   areaKm2: number;
   onAreaChange: (areaKm2: number) => void;
@@ -43,6 +45,9 @@ interface CoverageSimulatorPanelProps {
   canEditSelectedRegion?: boolean;
   /** Called when the user clicks "Editar" on a custom region. */
   onEditRegion?: () => void;
+  /** Diagnosis ranking mode: "area" (geographic gaps) or "density" (population density). */
+  diagnosisMode?: DiagnosisMode;
+  onDiagnosisModeChange?: (mode: DiagnosisMode) => void;
 }
 
 export function CoverageSimulatorPanel({
@@ -64,6 +69,8 @@ export function CoverageSimulatorPanel({
   onStartDrawNewRegion,
   canEditSelectedRegion = false,
   onEditRegion,
+  diagnosisMode = "area",
+  onDiagnosisModeChange,
 }: CoverageSimulatorPanelProps) {
   const [minPopulation, setMinPopulation] = useState(MIN_POP_DEFAULT);
 
@@ -289,6 +296,44 @@ export function CoverageSimulatorPanel({
         className="w-full accent-indigo-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         aria-label="Cantidad máxima de sucursales sugeridas"
       />
+
+      {/* Modo de diagnóstico */}
+      <div className="space-y-1.5 pt-1">
+        <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+          Modo de diagnóstico
+        </label>
+        <div className="flex rounded-md border border-slate-200 dark:border-gray-600 overflow-hidden text-xs font-medium">
+          <button
+            type="button"
+            onClick={() => onDiagnosisModeChange?.("area")}
+            disabled={disabled}
+            className={`flex-1 px-3 py-1.5 transition-colors cursor-pointer disabled:cursor-not-allowed ${
+              diagnosisMode === "area"
+                ? "bg-orange-500 text-white"
+                : "bg-white dark:bg-gray-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700"
+            }`}
+          >
+            Radio de prueba
+          </button>
+          <button
+            type="button"
+            onClick={() => onDiagnosisModeChange?.("density")}
+            disabled={disabled}
+            className={`flex-1 px-3 py-1.5 border-l border-slate-200 dark:border-gray-600 transition-colors cursor-pointer disabled:cursor-not-allowed ${
+              diagnosisMode === "density"
+                ? "bg-violet-600 text-white"
+                : "bg-white dark:bg-gray-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700"
+            }`}
+          >
+            Hab. por km²
+          </button>
+        </div>
+        {diagnosisMode === "density" && (
+          <p className="text-[10px] text-slate-400 dark:text-slate-500">
+            Prioriza zonas con más habitantes por km². Ideal para detectar demanda urbana no atendida (ej. AMBA).
+          </p>
+        )}
+      </div>
 
       <p className="text-xs text-slate-500 dark:text-slate-400">
         Previsualizando sobre: <strong>{scopeLabel}</strong>

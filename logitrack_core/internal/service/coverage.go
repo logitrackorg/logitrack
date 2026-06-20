@@ -404,7 +404,7 @@ func (s *CoverageService) listBranches(includeInactive bool) []model.Branch {
 // dangerousZones is an optional list of exclusion polygons subtracted from the
 // boundary before Voronoi construction (see computeTierraFertil). When
 // non-empty the cached diagram cannot be reused and the Voronoi is rebuilt.
-func (s *CoverageService) Diagnose(simulatedAreaKm2 float64, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, includeInactive bool, maxSuggestions int, snapToCities bool) model.SimulationResult {
+func (s *CoverageService) Diagnose(simulatedAreaKm2 float64, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, includeInactive bool, maxSuggestions int, snapToCities bool, mode string, minPopulation int) model.SimulationResult {
 	// Rebuild when inactive branches, a custom boundary, or dangerous zones are
 	// in play — the cached active-only national diagram cannot be reused.
 	if includeInactive || len(customBoundary) >= 3 || len(dangerousZones) > 0 {
@@ -422,18 +422,18 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64, customBoundary []mo
 				lng:        *b.Longitude,
 			})
 		}
-		return s.diagnoseWithCells(simulatedAreaKm2, s.buildVoronoiCells(sites, customBoundary, dangerousZones), customBoundary, dangerousZones, maxSuggestions, snapToCities)
+		return s.diagnoseWithCells(simulatedAreaKm2, s.buildVoronoiCells(sites, customBoundary, dangerousZones), customBoundary, dangerousZones, maxSuggestions, snapToCities, mode, minPopulation)
 	}
-	return s.diagnoseWithCells(simulatedAreaKm2, s.Diagram().Cells, nil, nil, maxSuggestions, snapToCities)
+	return s.diagnoseWithCells(simulatedAreaKm2, s.Diagram().Cells, nil, nil, maxSuggestions, snapToCities, mode, minPopulation)
 }
 
 // DiagnoseExcluding is like Diagnose but recomputes the Voronoi diagram after
 // removing the listed branch IDs — the "Simulador de cierre de sucursales"
 // feature. An empty slice is equivalent to calling Diagnose directly.
 // customBoundary and dangerousZones follow the same semantics as in Diagnose.
-func (s *CoverageService) DiagnoseExcluding(simulatedAreaKm2 float64, excludedBranchIDs []string, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, includeInactive bool, maxSuggestions int, snapToCities bool) model.SimulationResult {
+func (s *CoverageService) DiagnoseExcluding(simulatedAreaKm2 float64, excludedBranchIDs []string, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, includeInactive bool, maxSuggestions int, snapToCities bool, mode string, minPopulation int) model.SimulationResult {
 	if len(excludedBranchIDs) == 0 {
-		return s.Diagnose(simulatedAreaKm2, customBoundary, dangerousZones, includeInactive, maxSuggestions, snapToCities)
+		return s.Diagnose(simulatedAreaKm2, customBoundary, dangerousZones, includeInactive, maxSuggestions, snapToCities, mode, minPopulation)
 	}
 	excluded := make(map[string]bool, len(excludedBranchIDs))
 	for _, id := range excludedBranchIDs {
@@ -453,7 +453,7 @@ func (s *CoverageService) DiagnoseExcluding(simulatedAreaKm2 float64, excludedBr
 			lng:        *b.Longitude,
 		})
 	}
-	return s.diagnoseWithCells(simulatedAreaKm2, s.buildVoronoiCells(sites, customBoundary, dangerousZones), customBoundary, dangerousZones, maxSuggestions, snapToCities)
+	return s.diagnoseWithCells(simulatedAreaKm2, s.buildVoronoiCells(sites, customBoundary, dangerousZones), customBoundary, dangerousZones, maxSuggestions, snapToCities, mode, minPopulation)
 }
 
 // diagnoseWithCells is the core diagnosis logic shared by Diagnose and
@@ -461,7 +461,7 @@ func (s *CoverageService) DiagnoseExcluding(simulatedAreaKm2 float64, excludedBr
 // either the cached diagram (Diagnose) or a freshly-computed filtered set
 // (DiagnoseExcluding). customBoundary and dangerousZones are forwarded to
 // computeTierraFertil for per-cell clipping and for the global void search.
-func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCells []model.CoverageCell, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, maxSuggestions int, snapToCities bool) model.SimulationResult {
+func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCells []model.CoverageCell, customBoundary []model.LatLng, dangerousZones [][]model.LatLng, maxSuggestions int, snapToCities bool, mode string, minPopulation int) model.SimulationResult {
 	diagCells := make([]model.SimulationDiagnosis, 0, len(coverageCells))
 	suggestions := make([]model.SuggestedLocation, 0)
 
@@ -538,7 +538,7 @@ func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCe
 			IsGap:              isGap,
 			Severity:           severity,
 		})
-		if haveGeometry && severity == model.GapSeverityCritico {
+		if mode != "density" && haveGeometry && severity == model.GapSeverityCritico {
 			for _, cand := range suggestLocationsFromDifference(c, proj, cellPoly, circle, radiusKm, branchSites, countryLocal, otherCellsLocal) {
 				if !tooCloseToExisting(cand, suggestions, minSeparationKm) {
 					suggestions = append(suggestions, cand)
@@ -546,6 +546,19 @@ func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCe
 			}
 		}
 	}
+
+	// Density mode: rank every cell by population density (hab./km²) instead
+	// of geometric gap area. Suggestions are snapped server-side and sorted
+	// by density descending so high-demand urban cells surface first.
+	if mode == "density" {
+		return model.SimulationResult{
+			SimulatedAreaKm2:   simulatedAreaKm2,
+			Cells:              diagCells,
+			SuggestedLocations: s.computeDensitySuggestions(coverageCells, customBoundary, simulatedAreaKm2, dangerousZones, maxSuggestions, minPopulation),
+			DiagramCells:       coverageCells,
+		}
+	}
+
 	// MathematicalSuggestions: Pole-of-Inaccessibility from the global uncovered
 	// void (Tierra Fértil − ∪ all coverage circles).
 	//
@@ -621,6 +634,128 @@ func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCe
 		MathematicalSuggestions: mathSuggestions,
 		DiagramCells:            coverageCells,
 	}
+}
+
+// densityModeMaxCandidates caps the number of fragment candidates sent to
+// the Overpass snap API in density mode. Candidates are pre-sorted by
+// uncovered-fragment area descending so the largest (most likely populated)
+// ones are evaluated first. Each batch of 5 costs ~1.5 s of Overpass
+// rate-limiting: 15 candidates ≈ 3 batches ≈ 4.5 s — acceptable for an
+// interactive request.
+const densityModeMaxCandidates = 15
+
+// densityModeMinFragAreaKm2 is the minimum uncovered-fragment area (km²)
+// considered in density mode. Smaller than coverageSuggestionMinFragmentAreaKm2
+// so that dense urban uncovered zones (e.g. outer AMBA ring) are not filtered.
+const densityModeMinFragAreaKm2 = 50.0
+
+// computeDensitySuggestions implements the "density" diagnostic mode.
+//
+// Unlike area mode (which ranks suggestions by Voronoi gap area), density mode
+// answers "where are the most people that the current network does NOT reach?"
+// by reusing the same DIFFERENCE geometry (cell − coverage circle) as area
+// mode but ranking results by the absolute population of the nearest city
+// found inside each uncovered fragment.
+//
+// Steps:
+//  1. For every Voronoi cell with polygon geometry, compute the uncovered zone
+//     (cell − simulated coverage circle) — identical to area-mode "crítico"
+//     suggestions but applied to ALL cells, not just crítico ones.
+//  2. Place one candidate per uncovered fragment at its Pole of Inaccessibility:
+//     guaranteed to lie on Argentine land and outside existing coverage circles.
+//  3. Pre-sort by fragment area descending, cap at densityModeMaxCandidates to
+//     bound Overpass API calls.
+//  4. Snap each candidate to the nearest real city using a LOCAL search radius
+//     (proportional to the simulation radius, not the national 150 km default)
+//     so the snap finds cities INSIDE the uncovered zone rather than pulling in
+//     distant megacities that already have branches.
+//  5. Rank by Population descending and set Density = population / fragment_area
+//     (hab./km² of uncovered zone) — a meaningful logistics metric.
+func (s *CoverageService) computeDensitySuggestions(coverageCells []model.CoverageCell, customBoundary []model.LatLng, simulatedAreaKm2 float64, dangerousZones [][]model.LatLng, maxSuggestions, minPopulation int) []model.SuggestedLocation {
+	if simulatedAreaKm2 <= 0 || len(coverageCells) == 0 {
+		return nil
+	}
+
+	radiusKm := math.Sqrt(simulatedAreaKm2 / math.Pi)
+	circle := toPolyclip(circlePolygon(radiusKm, coverageSuggestionCircleVertices))
+
+	minSepKm := radiusKm
+	if minSepKm < coverageSuggestionMinSeparationKm {
+		minSepKm = coverageSuggestionMinSeparationKm
+	}
+
+	branchSites := make([]model.LatLng, len(coverageCells))
+	for i, c := range coverageCells {
+		branchSites[i] = c.Site
+	}
+
+	var candidates []model.SuggestedLocation
+
+	for _, c := range coverageCells {
+		if len(c.Polygon) == 0 {
+			continue
+		}
+		proj := newProjector(c.Site.Lat, c.Site.Lng)
+		cellPoly := projectRings(c.Polygon, proj)
+		countryLocal := computeTierraFertil(customBoundary, dangerousZones, proj)
+		otherCellsLocal := projectCellsLocal(coverageCells, proj)
+
+		sites := make([]geometry.Point, len(branchSites))
+		for i, site := range branchSites {
+			sites[i] = proj.project(site.Lat, site.Lng)
+		}
+
+		remainder := fromPolyclip(cellPoly.Construct(polyclip.DIFFERENCE, circle))
+		for _, frag := range remainder {
+			if frag.Area() < densityModeMinFragAreaKm2 {
+				continue
+			}
+			frags := fillFragmentIteratively(c, proj, frag, radiusKm, &sites, countryLocal, otherCellsLocal, densityModeMinFragAreaKm2)
+			if len(frags) == 0 {
+				continue
+			}
+			// One candidate per fragment: the Pole of Inaccessibility (best interior point).
+			if !tooCloseToExisting(frags[0], candidates, minSepKm) {
+				candidates = append(candidates, frags[0])
+			}
+		}
+	}
+
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	// Pre-sort by uncovered fragment area descending: larger fragments are more
+	// likely to contain real cities, so they get priority if we must cap.
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].GapAreaKm2 > candidates[j].GapAreaKm2
+	})
+	if len(candidates) > densityModeMaxCandidates {
+		candidates = candidates[:densityModeMaxCandidates]
+	}
+
+	// Local snap radius: keeps the Overpass query within the fragment's
+	// neighbourhood so we find the best city INSIDE the uncovered zone,
+	// not a distant megacity that may already have a branch.
+	// snapMathSuggestionsInPlace uses min(passedKm/2, 150) as actual radius.
+	desiredSearchKm := math.Min(math.Max(radiusKm*0.5, 20.0), 60.0)
+	s.snapMathSuggestionsInPlace(candidates, desiredSearchKm*2, minPopulation, dangerousZones)
+
+	// Density = population / uncovered-fragment area.
+	// Sort by population descending so the most-in-demand uncovered area is first.
+	for i := range candidates {
+		if candidates[i].IsSnapped && candidates[i].GapAreaKm2 > 0 {
+			candidates[i].Density = float64(candidates[i].Population) / candidates[i].GapAreaKm2
+		}
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].Population > candidates[j].Population
+	})
+
+	if maxSuggestions > 0 && len(candidates) > maxSuggestions {
+		candidates = candidates[:maxSuggestions]
+	}
+	return candidates
 }
 
 // voronoiSite is a generic Voronoi seed for buildVoronoiCells: either an
@@ -757,7 +892,7 @@ func (s *CoverageService) ProjectScenario(simulatedAreaKm2 float64, suggestions 
 		radiusKm = math.Sqrt(simulatedAreaKm2 / math.Pi)
 	}
 
-	current := s.Diagnose(simulatedAreaKm2, customBoundary, dangerousZones, false, 0, false)
+	current := s.Diagnose(simulatedAreaKm2, customBoundary, dangerousZones, false, 0, false, "", 0)
 	currentByID := make(map[string]float64, len(current.Cells))
 	for _, c := range current.Cells {
 		currentByID[c.BranchID] = c.CoveragePercentage
