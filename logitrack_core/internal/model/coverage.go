@@ -113,6 +113,17 @@ type SuggestedLocation struct {
 	TerrainType string `json:"terrain_type,omitempty"`
 }
 
+// RejectedLocation is a candidate city evaluated during density-mode diagnosis
+// that was excluded from SuggestedLocations because it failed at least one
+// filter. RejectReason is a human-readable explanation for the manager
+// (e.g. "Densidad insuficiente: 45 hab./km² (mínimo: 100 hab./km²)").
+type RejectedLocation struct {
+	CityName     string  `json:"city_name"`
+	Lat          float64 `json:"lat"`
+	Lng          float64 `json:"lng"`
+	RejectReason string  `json:"reject_reason"`
+}
+
 // SimulationResult is the response of CoverageService.Diagnose: the per-branch
 // diagnosis for a single simulated coverage area, plus any new-branch location
 // suggestions derived from "crítico" gaps.
@@ -129,6 +140,11 @@ type SimulationResult struct {
 	// are active and all cells are within the simulated radius, or when no
 	// simulation area has been set.
 	MathematicalSuggestions []SuggestedLocation `json:"mathematical_suggestions,omitempty"`
+
+	// RejectedLocations lists city candidates evaluated in density mode that did
+	// not pass at least one filter (population, density, proximity, etc.). Each
+	// entry carries the human-readable reason for exclusion. Empty in area mode.
+	RejectedLocations []RejectedLocation `json:"rejected_locations,omitempty"`
 
 	// DiagramCells carries the Voronoi cells (with polygon geometry) that were
 	// used for this diagnosis run. The frontend uses these to redraw the map

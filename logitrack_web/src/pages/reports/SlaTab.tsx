@@ -27,6 +27,7 @@ import {
   type SnappedCity,
   type SuggestedLocation,
   type BranchProjection,
+  type RejectedLocation,
   GAP_STYLE,
 } from "../../api/coverage";
 import { regionsApi, type Region as CoverageRegion } from "../../api/regions";
@@ -1045,6 +1046,7 @@ export function CoberturaTab() {
   const [isDrawingBoundary, setIsDrawingBoundary] = useState(false);
   const [isEditingBoundary, setIsEditingBoundary] = useState(false);
   const [showIndustrialHeatmap, setShowIndustrialHeatmap] = useState(false);
+  const [rejectedLocations, setRejectedLocations] = useState<RejectedLocation[]>([]);
 
   // Zonas guardadas (predefinidas + zonas del usuario).
   const [regions, setRegions] = useState<CoverageRegion[]>([]);
@@ -1091,6 +1093,7 @@ export function CoberturaTab() {
     setSnapError(null);
     setSimError(null);
     setBlacklistedCities([]);
+    setRejectedLocations([]);
   }, []);
 
   const handleRegionChange = useCallback((id: string) => {
@@ -1297,6 +1300,7 @@ export function CoberturaTab() {
             ),
           );
         }
+        setRejectedLocations(result.rejected_locations ?? []);
         setSimResult({ ...result, suggested_locations: merged });
       })
       .catch(() => setSimError("No se pudo calcular el diagnóstico en este momento."))
@@ -1379,6 +1383,7 @@ export function CoberturaTab() {
         const mathSuggs = result.mathematical_suggestions ?? [];
         const newSuggs = [...result.suggested_locations, ...mathSuggs];
         setFindMoreSummary({ found: newSuggs.length, error: false });
+        setRejectedLocations((prev) => [...prev, ...(result.rejected_locations ?? [])]);
         if (newSuggs.length === 0) return;
         setSimResult((prev) => {
           if (!prev) return prev;
@@ -1784,6 +1789,7 @@ export function CoberturaTab() {
               onBoundaryEdited={handleBoundaryEdited}
               onBoundaryEditCancel={handleBoundaryEditCancel}
               showIndustrialHeatmap={showIndustrialHeatmap}
+              rejectedLocations={rejectedLocations.length > 0 ? rejectedLocations : undefined}
             />
           </div>
         </Card>
@@ -2022,6 +2028,23 @@ export function CoberturaTab() {
                         </p>
                       )}
                     </>
+                  )}
+                  {simResult !== null && rejectedLocations.length > 0 && (
+                    <details className="mt-3 group">
+                      <summary className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+                        <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />
+                        Ciudades descartadas ({rejectedLocations.length})
+                        <span className="normal-case font-normal tracking-normal text-slate-400 ml-1">· No viables</span>
+                      </summary>
+                      <ul className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {rejectedLocations.map((r, i) => (
+                          <li key={i} className="flex flex-col gap-0.5 p-2 rounded-lg bg-slate-100/70 dark:bg-gray-700/40 border border-slate-200 dark:border-gray-600">
+                            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">{r.city_name}</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug">{r.reject_reason}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
                   )}
                   {((visibleProjection && visibleProjection.length > 0) || projectionLoading || projectionError) && (
                     <div className="mt-3 pt-3 border-t border-slate-200 dark:border-gray-700">

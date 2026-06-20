@@ -104,6 +104,14 @@ export interface SuggestedLocation {
   terrain_type?: string;
 }
 
+/** Ciudad candidata que no pasó algún filtro de densidad, población o proximidad. */
+export interface RejectedLocation {
+  city_name: string;
+  lat: number;
+  lng: number;
+  reject_reason: string;
+}
+
 export interface SimulationResult {
   simulated_area_km2: number;
   cells: SimulationDiagnosis[];
@@ -116,6 +124,8 @@ export interface SimulationResult {
   /** Voronoi cells with polygon geometry from this diagnosis run. Only present
    *  when branches were excluded — the client uses them to update map shapes. */
   diagram_cells?: CoverageCell[];
+  /** Ciudades evaluadas en modo density que no pasaron al menos un filtro. Solo en modo density. */
+  rejected_locations?: RejectedLocation[];
 }
 
 /**

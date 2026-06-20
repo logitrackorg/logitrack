@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/paulmach/orb"
@@ -85,6 +86,39 @@ type overpassElement struct {
 
 type overpassResponse struct {
 	Elements []overpassElement `json:"elements"`
+}
+
+// cachedCityResult holds the outcome of a previous city-snap lookup for a
+// geographic area. found=false means Overpass found no viable city (cache
+// negative). The cache prevents repeated Overpass calls for the same areas
+// across "Buscar más" rounds and provides city names for rejection reasons.
+type cachedCityResult struct {
+	found      bool
+	Name       string
+	Lat, Lng   float64
+	Population int
+}
+
+// cityCacheKey maps a geometric PoI to a ~55 km grid cell (0.5° rounded) so
+// that nearby PoIs within the same area share a cache entry.
+func cityCacheKey(lat, lng float64) string {
+	r := func(v float64) float64 { return math.Round(v*2) / 2 }
+	return fmt.Sprintf("%.1f,%.1f", r(lat), r(lng))
+}
+
+var (
+	cityCacheMu  sync.RWMutex
+	cityCachePts = make(map[string]cachedCityResult)
+)
+
+// isBlacklisted reports whether name appears in the given list (exact match).
+func isBlacklisted(name string, list []string) bool {
+	for _, b := range list {
+		if b == name {
+			return true
+		}
+	}
+	return false
 }
 
 // snapPopulationFallback is the assumed population for an OSM element that
@@ -576,16 +610,24 @@ func (s *CoverageService) detectIndustrialZones(candidates []model.SuggestedLoca
 }
 
 // snapMathSuggestionsInPlace auto-snaps each MathematicalSuggestion to the
-// nearest real populated place (Overpass → patagoniaFallback) within
+// nearest real populated place (cache → Overpass → patagoniaFallback) within
 // math.Min(radiusKm/2, snapToCityMaxRadiusKm). Cities inside any dangerous
 // zone are excluded by bestSnapCandidate / bestFallbackCandidate.
+//
+// Cache-first: results from previous calls are stored in cityCachePts keyed by
+// the rounded geographic PoI coordinates. Cache hits skip the Overpass call
+// entirely, reducing latency on "Buscar más" rounds that re-examine nearby areas.
 //
 // Snapped entries get their coordinates updated to the city's real lat/lng and
 // have CityName / Population / IsSnapped set. Unsnapped entries keep their
 // original mathematical coordinates with IsSnapped=false.
-func (s *CoverageService) snapMathSuggestionsInPlace(suggestions []model.SuggestedLocation, radiusKm float64, minPopulation int, dangerousZones [][]model.LatLng, blacklistedCities []string) {
+//
+// The returned slice mirrors suggestions in order and carries the raw SnappedCity
+// result for each entry, allowing callers to inspect ErrorReason.
+func (s *CoverageService) snapMathSuggestionsInPlace(suggestions []model.SuggestedLocation, radiusKm float64, minPopulation int, dangerousZones [][]model.LatLng, blacklistedCities []string) []model.SnappedCity {
+	out := make([]model.SnappedCity, len(suggestions))
 	if len(suggestions) == 0 || radiusKm <= 0 {
-		return
+		return out
 	}
 	searchRadius := math.Min(radiusKm/2, snapToCityMaxRadiusKm)
 
@@ -594,20 +636,77 @@ func (s *CoverageService) snapMathSuggestionsInPlace(suggestions []model.Suggest
 		points[i] = suggestions[i].LatLng
 	}
 
-	out := make([]model.SnappedCity, len(points))
-	for start := 0; start < len(points); start += snapToCityChunkSize {
-		end := start + snapToCityChunkSize
-		if end > len(points) {
-			end = len(points)
+	// Cache-hit pass: resolve what we can without hitting Overpass.
+	var uncachedIdxs []int
+	cityCacheMu.RLock()
+	for i, p := range points {
+		key := cityCacheKey(p.Lat, p.Lng)
+		entry, ok := cityCachePts[key]
+		if !ok {
+			uncachedIdxs = append(uncachedIdxs, i)
+			continue
 		}
-		// Pass radiusKm as fallback radius so patagoniaFallback can reach cities
-		// within the simulator area that are beyond the Overpass cap.
-		s.snapChunk(points[start:end], searchRadius, radiusKm, minPopulation, blacklistedCities, dangerousZones, out[start:end])
-		if end < len(points) {
-			time.Sleep(snapToCityChunkDelay)
+		if !entry.found {
+			out[i] = model.SnappedCity{ErrorReason: "NO_RESULTS"}
+			continue
 		}
+		// Blacklisted city in cache → re-query so the snap can find an alternative.
+		if isBlacklisted(entry.Name, blacklistedCities) {
+			uncachedIdxs = append(uncachedIdxs, i)
+			continue
+		}
+		if minPopulation > 0 && entry.Population < minPopulation {
+			out[i] = model.SnappedCity{ErrorReason: "NO_RESULTS"}
+			continue
+		}
+		out[i] = model.SnappedCity{
+			LatLng:     model.LatLng{Lat: entry.Lat, Lng: entry.Lng},
+			CityName:   entry.Name,
+			Snapped:    true,
+			Population: entry.Population,
+		}
+		log.Printf("[MathSugg] cache hit[%d]: %s (%.4f, %.4f)", i, entry.Name, entry.Lat, entry.Lng)
+	}
+	cityCacheMu.RUnlock()
+
+	// Overpass for uncached points, chunked to avoid rate-limiting.
+	if len(uncachedIdxs) > 0 {
+		uncachedPts := make([]model.LatLng, len(uncachedIdxs))
+		for j, i := range uncachedIdxs {
+			uncachedPts[j] = points[i]
+		}
+		uncachedOut := make([]model.SnappedCity, len(uncachedPts))
+		for start := 0; start < len(uncachedPts); start += snapToCityChunkSize {
+			end := start + snapToCityChunkSize
+			if end > len(uncachedPts) {
+				end = len(uncachedPts)
+			}
+			s.snapChunk(uncachedPts[start:end], searchRadius, radiusKm, minPopulation, blacklistedCities, dangerousZones, uncachedOut[start:end])
+			if end < len(uncachedPts) {
+				time.Sleep(snapToCityChunkDelay)
+			}
+		}
+		// Map results back and populate the cache for next time.
+		cityCacheMu.Lock()
+		for j, i := range uncachedIdxs {
+			out[i] = uncachedOut[j]
+			key := cityCacheKey(points[i].Lat, points[i].Lng)
+			if uncachedOut[j].Snapped {
+				cityCachePts[key] = cachedCityResult{
+					found:      true,
+					Name:       uncachedOut[j].CityName,
+					Lat:        uncachedOut[j].Lat,
+					Lng:        uncachedOut[j].Lng,
+					Population: uncachedOut[j].Population,
+				}
+			} else {
+				cityCachePts[key] = cachedCityResult{found: false}
+			}
+		}
+		cityCacheMu.Unlock()
 	}
 
+	// Apply snap results to suggestions in-place and log.
 	for i := range suggestions {
 		if out[i].Snapped {
 			suggestions[i].LatLng = out[i].LatLng
@@ -621,4 +720,5 @@ func (s *CoverageService) snapMathSuggestionsInPlace(suggestions []model.Suggest
 				i, points[i].Lat, points[i].Lng, out[i].ErrorReason)
 		}
 	}
+	return out
 }

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -580,10 +581,12 @@ func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCe
 	// of geometric gap area. Suggestions are snapped server-side and sorted
 	// by density descending so high-demand urban cells surface first.
 	if mode == "density" {
+		suggs, rejected := s.computeDensitySuggestions(coverageCells, customBoundary, simulatedAreaKm2, dangerousZones, maxSuggestions, density)
 		return model.SimulationResult{
 			SimulatedAreaKm2:   simulatedAreaKm2,
 			Cells:              diagCells,
-			SuggestedLocations: s.computeDensitySuggestions(coverageCells, customBoundary, simulatedAreaKm2, dangerousZones, maxSuggestions, density),
+			SuggestedLocations: suggs,
+			RejectedLocations:  rejected,
 			DiagramCells:       coverageCells,
 		}
 	}
@@ -700,10 +703,12 @@ const densityModeMinFragAreaKm2 = 50.0
 //     distant megacities that already have branches.
 //  5. Rank by Population descending and set Density = population / fragment_area
 //     (hab./km² of uncovered zone) — a meaningful logistics metric.
-func (s *CoverageService) computeDensitySuggestions(coverageCells []model.CoverageCell, customBoundary []model.LatLng, simulatedAreaKm2 float64, dangerousZones [][]model.LatLng, maxSuggestions int, density model.DensityOptions) []model.SuggestedLocation {
+func (s *CoverageService) computeDensitySuggestions(coverageCells []model.CoverageCell, customBoundary []model.LatLng, simulatedAreaKm2 float64, dangerousZones [][]model.LatLng, maxSuggestions int, density model.DensityOptions) ([]model.SuggestedLocation, []model.RejectedLocation) {
 	if simulatedAreaKm2 <= 0 || len(coverageCells) == 0 {
-		return nil
+		return nil, nil
 	}
+
+	var rejected []model.RejectedLocation
 
 	radiusKm := math.Sqrt(simulatedAreaKm2 / math.Pi)
 	circle := toPolyclip(circlePolygon(radiusKm, coverageSuggestionCircleVertices))
@@ -769,7 +774,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 	}
 
 	if len(candidates) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Pre-sort by uncovered fragment area descending: larger fragments are more
@@ -804,6 +809,13 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		if !seenCity[key] {
 			seenCity[key] = true
 			deduped = append(deduped, c)
+		} else {
+			rejected = append(rejected, model.RejectedLocation{
+				CityName:     c.CityName,
+				Lat:          c.Lat,
+				Lng:          c.Lng,
+				RejectReason: c.CityName + " ya fue seleccionada como candidata (ciudad duplicada)",
+			})
 		}
 	}
 	candidates = deduped
@@ -815,6 +827,13 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		for _, c := range candidates {
 			if !c.IsSnapped || latLngInPolygon(c.Lat, c.Lng, customBoundary) {
 				inBounds = append(inBounds, c)
+			} else {
+				rejected = append(rejected, model.RejectedLocation{
+					CityName:     c.CityName,
+					Lat:          c.Lat,
+					Lng:          c.Lng,
+					RejectReason: "Ciudad fuera de la zona de análisis seleccionada",
+				})
 			}
 		}
 		candidates = inBounds
@@ -835,6 +854,13 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		for _, c := range candidates {
 			if !tooCloseToExisting(c, branchLocs, minSepKm) {
 				notNearBranch = append(notNearBranch, c)
+			} else {
+				rejected = append(rejected, model.RejectedLocation{
+					CityName:     c.CityName,
+					Lat:          c.Lat,
+					Lng:          c.Lng,
+					RejectReason: fmt.Sprintf("Demasiado cerca de una sucursal existente (< %.0f km)", minSepKm),
+				})
 			}
 		}
 		candidates = notNearBranch
@@ -849,6 +875,13 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 	for _, c := range candidates {
 		if !tooCloseToExisting(c, geoDeduped, minSepKm) {
 			geoDeduped = append(geoDeduped, c)
+		} else {
+			rejected = append(rejected, model.RejectedLocation{
+				CityName:     c.CityName,
+				Lat:          c.Lat,
+				Lng:          c.Lng,
+				RejectReason: fmt.Sprintf("Demasiado cerca de otra sugerencia seleccionada (< %.0f km)", minSepKm),
+			})
 		}
 	}
 	candidates = geoDeduped
@@ -863,6 +896,17 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		for _, c := range candidates {
 			if c.IsSnapped {
 				snapped = append(snapped, c)
+			} else {
+				reason := "Sin ciudad en el radio de búsqueda"
+				if density.MinPopulation > 0 {
+					reason = fmt.Sprintf("Sin ciudad con ≥ %d hab. en el radio de búsqueda", density.MinPopulation)
+				}
+				rejected = append(rejected, model.RejectedLocation{
+					CityName:     fmt.Sprintf("(%.3f°, %.3f°)", c.Lat, c.Lng),
+					Lat:          c.Lat,
+					Lng:          c.Lng,
+					RejectReason: reason,
+				})
 			}
 		}
 		candidates = snapped
@@ -925,6 +969,13 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		for _, c := range candidates {
 			if c.ActualAddedKm2 >= minUsefulKm2 {
 				useful = append(useful, c)
+			} else {
+				rejected = append(rejected, model.RejectedLocation{
+					CityName:     c.CityName,
+					Lat:          c.Lat,
+					Lng:          c.Lng,
+					RejectReason: fmt.Sprintf("Cobertura neta insuficiente: %.0f km² (mínimo: %.0f km²)", c.ActualAddedKm2, minUsefulKm2),
+				})
 			}
 		}
 		candidates = useful
@@ -943,6 +994,13 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		for _, c := range candidates {
 			if c.Density >= density.MinDensity {
 				filtered = append(filtered, c)
+			} else {
+				rejected = append(rejected, model.RejectedLocation{
+					CityName:     c.CityName,
+					Lat:          c.Lat,
+					Lng:          c.Lng,
+					RejectReason: fmt.Sprintf("Densidad insuficiente: %.0f hab./km² (mínimo: %.0f hab./km²)", c.Density, density.MinDensity),
+				})
 			}
 		}
 		candidates = filtered
@@ -995,7 +1053,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 	if maxSuggestions > 0 && len(candidates) > maxSuggestions {
 		candidates = candidates[:maxSuggestions]
 	}
-	return candidates
+	return candidates, rejected
 }
 
 // voronoiSite is a generic Voronoi seed for buildVoronoiCells: either an

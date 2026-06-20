@@ -7,6 +7,7 @@ import {
   type CoverageCell,
   type SuggestedLocation,
   type SnappedCity,
+  type RejectedLocation,
   GAP_STYLE,
   COVERED_STYLE,
 } from "../api/coverage";
@@ -84,6 +85,8 @@ interface VoronoiCoverageMapProps {
    * Solo activo a partir del zoom 7 (vista regional); se borra al deshabilitar.
    */
   showIndustrialHeatmap?: boolean;
+  /** Ciudades descartadas por el filtro de densidad: se dibujan como círculos grises semitransparentes. */
+  rejectedLocations?: RejectedLocation[];
 }
 
 const FACTORY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg>`;
@@ -132,6 +135,7 @@ function VoronoiCoverageMap({
   onBoundaryEdited,
   onBoundaryEditCancel,
   showIndustrialHeatmap = false,
+  rejectedLocations,
 }: VoronoiCoverageMapProps, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -155,6 +159,7 @@ function VoronoiCoverageMap({
   const drawLayer = useRef<L.LayerGroup | null>(null);
   const editLayer = useRef<L.LayerGroup | null>(null);
   const heatmapLayerRef = useRef<L.HeatLayer | null>(null);
+  const rejectedLayer = useRef<L.LayerGroup | null>(null);
 
   // Refs para manejar el estado de dibujo sin stale closures en los event handlers.
   const isDrawingRef = useRef(isDrawingBoundary);
@@ -213,6 +218,7 @@ function VoronoiCoverageMap({
     referenceLayer.current = L.layerGroup().addTo(map);
     drawLayer.current = L.layerGroup().addTo(map);
     editLayer.current = L.layerGroup().addTo(map);
+    rejectedLayer.current = L.layerGroup().addTo(map);
 
     const ro = new ResizeObserver(() => map.invalidateSize());
     ro.observe(containerRef.current);
@@ -658,6 +664,29 @@ function VoronoiCoverageMap({
       heat.setLatLngs([]);
     };
   }, [showIndustrialHeatmap]);
+
+  // Rejected locations: grey semi-transparent circles with a tooltip showing the reject reason.
+  useEffect(() => {
+    const layer = rejectedLayer.current;
+    if (!layer) return;
+    layer.clearLayers();
+    if (!rejectedLocations?.length) return;
+    for (const r of rejectedLocations) {
+      L.circleMarker([r.lat, r.lng], {
+        radius: 8,
+        color: "#6b7280",
+        weight: 1.5,
+        fillColor: "#9ca3af",
+        fillOpacity: 0.35,
+        dashArray: "4 3",
+      })
+        .bindTooltip(`<strong>${r.city_name}</strong><br/><span style="font-size:11px">${r.reject_reason}</span>`, {
+          direction: "top",
+          offset: [0, -6],
+        })
+        .addTo(layer);
+    }
+  }, [rejectedLocations]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 });
