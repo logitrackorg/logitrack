@@ -316,3 +316,35 @@ func (h *StatsExtendedHandler) SuccessRateByBranch(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, result)
 }
+
+func (h *StatsExtendedHandler) ClaimStats(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	var dateFrom, dateTo *time.Time
+	if raw := c.Query("date_from"); raw != "" {
+		t, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_from, usá AAAA-MM-DD"})
+			return
+		}
+		dateFrom = &t
+	}
+	if raw := c.Query("date_to"); raw != "" {
+		t, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_to, usá AAAA-MM-DD"})
+			return
+		}
+		endOfDay := t.Add(24*time.Hour - time.Nanosecond)
+		dateTo = &endOfDay
+	}
+	branchID := c.Query("branch_id")
+	if user.Role == model.RoleSupervisor && user.BranchID != "" {
+		branchID = user.BranchID
+	}
+	result, err := h.svc.ClaimStats(dateFrom, dateTo, branchID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}

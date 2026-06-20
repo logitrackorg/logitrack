@@ -142,6 +142,35 @@ export interface SuccessRateByBranchResponse {
   branches: SuccessRateByBranchItem[];
 }
 
+export interface ClaimBranchStat {
+  branch_id: string;
+  branch_name: string;
+  total: number;
+  open: number;
+  resolved: number;
+}
+
+export interface ClaimTrendPoint {
+  date: string;
+  created: number;
+  resolved: number;
+}
+
+export interface ClaimStatsResponse {
+  total: number;
+  open: number;
+  resolved: number;
+  escalated: number;
+  by_status: Record<string, number>;
+  by_priority: Record<string, number>;
+  by_type: Record<string, number>;
+  by_category: Record<string, number>;
+  by_resolution: Record<string, number>;
+  avg_resolution_hours: number | null;
+  by_branch: ClaimBranchStat[];
+  trend: ClaimTrendPoint[];
+}
+
 export interface ReportsQueryParams {
   date_from?: string;
   date_to?: string;
@@ -167,4 +196,6 @@ export const reportsApi = {
     api.get<ReturnMetricsResponse>("/stats/return-metrics", { params }).then((r) => r.data),
   successRateByBranch: (params?: ReportsQueryParams) =>
     api.get<SuccessRateByBranchResponse>("/stats/success-rate-by-branch", { params }).then((r) => r.data),
+  claimStats: (params?: ReportsQueryParams) =>
+    api.get<ClaimStatsResponse>("/stats/claims", { params }).then((r) => r.data),
 };

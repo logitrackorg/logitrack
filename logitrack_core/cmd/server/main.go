@@ -90,6 +90,7 @@ func main() {
 	commentRepo := repository.NewPostgresCommentRepository(database)
 	incidentRepo := repository.NewPostgresIncidentRepository(database)
 	claimRepo := repository.NewPostgresClaimRepository(database)
+	seed.LoadClaims(claimRepo)
 	accessLogRepo := repository.NewPostgresAccessLogRepository(database)
 
 	// Event-sourced shipment repository
@@ -660,6 +661,7 @@ func main() {
 	protected.GET("/stats/volume-by-delivery-method", canViewStats, statsExtendedHandler.VolumeByDeliveryMethod)
 	protected.GET("/stats/return-metrics", canViewStats, statsExtendedHandler.ReturnMetrics)
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
+	protected.GET("/stats/claims", canViewStats, statsExtendedHandler.ClaimStats)
 	protected.GET("/supervisor/priority-logs", canViewStats, priorityLogHandler.List)
 	protected.GET("/stats/sla-metrics", canViewStats, slaMetricsHandler.Get)
 	// Detector de falta de sucursal: diagrama de cobertura (dashboard) +

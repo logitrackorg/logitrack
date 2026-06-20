@@ -164,3 +164,32 @@ type SuccessRateByBranchItem struct {
 type SuccessRateByBranchResponse struct {
 	Branches []SuccessRateByBranchItem `json:"branches"`
 }
+
+type ClaimBranchStat struct {
+	BranchID   string `json:"branch_id"`
+	BranchName string `json:"branch_name"`
+	Total      int    `json:"total"`
+	Open       int    `json:"open"`
+	Resolved   int    `json:"resolved"`
+}
+
+type ClaimTrendPoint struct {
+	Date     string `json:"date"`
+	Created  int    `json:"created"`
+	Resolved int    `json:"resolved"`
+}
+
+type ClaimStatsResponse struct {
+	Total              int            `json:"total"`
+	Open               int            `json:"open"`
+	Resolved           int            `json:"resolved"`
+	Escalated          int            `json:"escalated"`
+	ByStatus           map[string]int `json:"by_status"`
+	ByPriority         map[string]int `json:"by_priority"`
+	ByType             map[string]int `json:"by_type"`
+	ByCategory         map[string]int `json:"by_category"`
+	ByResolution       map[string]int `json:"by_resolution"`
+	AvgResolutionHours *float64       `json:"avg_resolution_hours"`
+	ByBranch           []ClaimBranchStat `json:"by_branch"`
+	Trend              []ClaimTrendPoint `json:"trend"`
+}
