@@ -9,6 +9,7 @@ type OrganizationConfig struct {
 	Address      string    `json:"address"`
 	Phone        string    `json:"phone"`
 	Email        string    `json:"email"`
+	FontFamily   string    `json:"font_family"`
 	TrackURL     string    `json:"track_url"`
 	PrimaryColor string    `json:"primary_color"`
 	AccentColor  string    `json:"accent_color"`

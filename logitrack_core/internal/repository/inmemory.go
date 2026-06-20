@@ -858,3 +858,32 @@ func (r *inMemoryClaimEventRepository) LoadStream(claimID string) ([]model.Domai
 	sort.Slice(out, func(i, j int) bool { return out[i].Version < out[j].Version })
 	return out, nil
 }
+
+// ── InMemory OrganizationRepository ───────────────────────────────────────────
+
+type inMemoryOrganizationRepository struct {
+	mu     sync.RWMutex
+	config *model.OrganizationConfig
+}
+
+func NewInMemoryOrganizationRepository() OrganizationRepository {
+	return &inMemoryOrganizationRepository{}
+}
+
+func (r *inMemoryOrganizationRepository) Get() (*model.OrganizationConfig, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.config == nil {
+		return nil, fmt.Errorf("organization config not found")
+	}
+	cfg := *r.config
+	return &cfg, nil
+}
+
+func (r *inMemoryOrganizationRepository) Upsert(config model.OrganizationConfig) (*model.OrganizationConfig, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c := config
+	r.config = &c
+	return &c, nil
+}
