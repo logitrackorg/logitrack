@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Truck, QrCode, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { interBranchTripsApi } from "../api/interBranchTrips";
-import { driverApi } from "../api/driver";
+import { driverApi, type DriverRouteResponse } from "../api/driver";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,11 @@ export function DriverScanVehicle() {
         hasFailed,
         willRedirect: hasPending || hasFailed ? "/driver/route" : "none",
       });
-      if (hasPending || hasFailed) navigate("/driver/route", { replace: true });
+      // Ya tenemos la ruta en mano: la pasamos por navigation state para que
+      // DriverRoute renderice al instante, sin segundo fetch ni skeleton.
+      if (hasPending || hasFailed) {
+        navigate("/driver/route", { replace: true, state: { fromClaim: true, route: data } });
+      }
     }).catch((err) => {
       driverDebug("scan_mount_getroute_err", { driverId: user?.id, status: err?.response?.status });
     });
@@ -89,9 +93,23 @@ export function DriverScanVehicle() {
       .finally(() => setShowGate(true));
   }, [user]);
 
-  const goToRoute = (successMsg: string) => {
+  const goToRoute = async (successMsg: string) => {
     setSuccess(successMsg);
-    navigate("/driver/route", { replace: true });
+    // Pre-fetcheamos la ruta recién creada en esta misma pantalla (que ya muestra
+    // su propio spinner) y la pasamos por navigation state. Así DriverRoute
+    // renderiza al instante, sin pagar el skeleton ni arriesgar el read-after-write
+    // race de un segundo request. Si la ruta todavía no es visible (race), navegamos
+    // solo con el flag fromClaim y DriverRoute reintenta por su cuenta.
+    let route: DriverRouteResponse | null = null;
+    try {
+      route = await driverApi.getRoute();
+    } catch (err) {
+      driverDebug("gotoroute_prefetch_err", {
+        driverId: user?.id,
+        status: (err as { response?: { status?: number } })?.response?.status,
+      });
+    }
+    navigate("/driver/route", { replace: true, state: { fromClaim: true, route } });
   };
 
   // Realiza el claim del token (QR o patente) y navega a la pantalla
@@ -115,7 +133,7 @@ export function DriverScanVehicle() {
       });
       if (trip.kind === "last_mile") {
         driverApi.markRouteStarted().catch(() => {});
-        goToRoute(`Vehículo ${trip.license_plate} asignado. Iniciando ruta…`);
+        await goToRoute(`Vehículo ${trip.license_plate} asignado. Iniciando ruta…`);
       } else {
         navigate("/driver/trip", { replace: true });
       }
@@ -132,7 +150,7 @@ export function DriverScanVehicle() {
           stopScanner();
           driverApi.markRouteStarted().catch(() => {});
           driverDebug("claim_startroute_ok", { driverId: user?.id, target: "/driver/route" });
-          goToRoute("Ruta iniciada.");
+          await goToRoute("Ruta iniciada.");
           return;
         } catch (routeErr: unknown) {
           if (!mountedRef.current) return;
@@ -147,7 +165,7 @@ export function DriverScanVehicle() {
           if (routeMsg.includes("ya está iniciada")) {
             stopScanner();
             driverApi.markRouteStarted().catch(() => {});
-            goToRoute("Ruta en curso.");
+            await goToRoute("Ruta en curso.");
             return;
           }
         }

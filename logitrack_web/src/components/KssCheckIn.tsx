@@ -191,7 +191,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
       setTimeout(() => {
         setShowSkipToast(false);
         finishWizard();
-      }, 3000);
+      }, 2000);
     }
   };
 
