@@ -1,0 +1,36 @@
+logitrack_core/internal/service/shipment.go
+  s_7b6602fc329ae2::t_4936f4c9280d3e 364-369,372-392
+logitrack_web/src/pages/DriverRoute.tsx
+  s_5345834fcfebab::t_4e348a9a0ea9cd 970
+  s_5345834fcfebab::t_fb927ebc01ff8c 704-712
+  s_5345834fcfebab::t_6bce87eef85dbc 937
+logitrack_core/internal/handler/shipment.go
+  s_5345834fcfebab::t_97967e9512bee8 413,419-420
+logitrack_web/src/pages/DriverShipmentDetail.tsx
+  s_5345834fcfebab::t_24ceb7721a16e7 1
+  s_5345834fcfebab::t_b61457ac456d94 73-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "d4d6e3aeb59bd4d3a85e0ea431de6265d18557c1",
+  "prompts": {},
+  "sessions": {
+    "s_5345834fcfebab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2c2fedf-8c6c-42de-a7ad-4e0bd0fcbe3c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_7b6602fc329ae2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3c82975e-dc1c-4ec8-973a-0e98f85948e7",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
