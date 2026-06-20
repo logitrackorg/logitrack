@@ -28,4 +28,14 @@ type ClaimRepository interface {
 	// reclamo se considera tanto la `origin_branch_id` del envío como el
 	// `assigned_branch_id` (derivación).
 	CountOpenAndUrgentByBranch(branchID string) (totalOpen, urgentOpen int, err error)
+
+	// ListNonTerminal devuelve todos los reclamos cuyo status NO es terminal
+	// (no empiezan con "resolved_"). Lo consume el job de escalado automático
+	// para evaluar inactividad por reclamo.
+	ListNonTerminal() ([]model.Claim, error)
+
+	// UpdatePriority actualiza la prioridad y la nota de un reclamo,
+	// dejando intacto el resto del registro. Lo usa el job de escalado
+	// automático cuando sube de nivel un reclamo inactivo.
+	UpdatePriority(id string, priority model.ClaimPriority, note string, updatedAt time.Time) error
 }

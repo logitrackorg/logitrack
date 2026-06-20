@@ -33,6 +33,14 @@ export interface SystemConfig {
   claims_high_priority_threshold: number;
   /** Prioridad de reclamos: umbral del priority_score ML para clasificar media. (0,1] y < high. Default 0.35. */
   claims_medium_priority_threshold: number;
+  /** Escalado automático de prioridad: si está habilitado, un job sube de nivel los reclamos no terminales inactivos. Default true. */
+  claim_escalation_enabled: boolean;
+  /** Días de inactividad para escalar baja → media. Rango UI 1–5. Default 3. */
+  claim_escalation_baja_days: number;
+  /** Días de inactividad para escalar media → alta. Rango UI 1–5. Default 2. */
+  claim_escalation_media_days: number;
+  /** Días de inactividad para escalar alta → urgente. Rango UI 1–5. Default 1. */
+  claim_escalation_alta_days: number;
 }
 
 export const systemConfigApi = {

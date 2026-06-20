@@ -210,6 +210,53 @@ func (r *postgresClaimRepository) UpdateTransferStatus(id, assignedBranchID stri
 	return err
 }
 
+// ListNonTerminal devuelve todos los reclamos cuyo status NO es resuelto.
+// Es la lista que evalúa el job de escalado automático.
+func (r *postgresClaimRepository) ListNonTerminal() ([]model.Claim, error) {
+	rows, err := r.db.Query(
+		`SELECT ` + claimSelectColumns + `
+		 FROM shipment_claims
+		 WHERE status NOT LIKE 'resolved_%'
+		 ORDER BY updated_at ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []model.Claim
+	for rows.Next() {
+		claim, err := r.scanClaimRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, claim)
+	}
+	return result, nil
+}
+
+// UpdatePriority sobreescribe la prioridad y la nota de un reclamo. Lo invoca
+// el job de escalado automático cuando un nivel inactivo cruza el umbral.
+func (r *postgresClaimRepository) UpdatePriority(id string, priority model.ClaimPriority, note string, updatedAt time.Time) error {
+	res, err := r.db.Exec(
+		`UPDATE shipment_claims
+		 SET priority = $1, priority_note = $2, updated_at = $3
+		 WHERE id = $4`,
+		string(priority),
+		nullString(note),
+		updatedAt,
+		id,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err == nil && rows == 0 {
+		return ErrClaimNotFound
+	}
+	return err
+}
+
 func (r *postgresClaimRepository) ListByAssignedBranch(branchID string) ([]model.Claim, error) {
 	rows, err := r.db.Query(
 		`SELECT `+claimSelectColumns+` FROM shipment_claims WHERE assigned_branch_id = $1 ORDER BY created_at DESC`,

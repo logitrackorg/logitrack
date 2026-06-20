@@ -766,6 +766,37 @@ func (r *inMemoryClaimRepository) ListByAssignedBranch(branchID string) ([]model
 	return result, nil
 }
 
+// ListNonTerminal devuelve los reclamos cuyo status NO es resuelto. Lo consume
+// el job de escalado automático para evaluar inactividad.
+func (r *inMemoryClaimRepository) ListNonTerminal() ([]model.Claim, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var result []model.Claim
+	for _, c := range r.claims {
+		if strings.HasPrefix(string(c.Status), "resolved_") {
+			continue
+		}
+		result = append(result, c)
+	}
+	return result, nil
+}
+
+// UpdatePriority sobreescribe la prioridad y la nota de un reclamo, dejando
+// el resto del registro intacto. Lo usa el job de escalado automático.
+func (r *inMemoryClaimRepository) UpdatePriority(id string, priority model.ClaimPriority, note string, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range r.claims {
+		if r.claims[i].ID == id {
+			r.claims[i].Priority = priority
+			r.claims[i].PriorityNote = note
+			r.claims[i].UpdatedAt = updatedAt
+			return nil
+		}
+	}
+	return ErrClaimNotFound
+}
+
 // CountOpenAndUrgentByBranch en memoria considera solo el assigned_branch_id
 // del reclamo (no resuelve el origin_branch_id del envío); suficiente para
 // tests, que pueden setear ese campo directamente.

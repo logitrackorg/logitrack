@@ -51,6 +51,15 @@ type SystemConfig struct {
 	// prioridad media del reclamo. Debe ser estrictamente menor que el alto.
 	// Default: 0.35. Rango (0, 1].
 	ClaimsMediumPriorityThreshold float64 `json:"claims_medium_priority_threshold" db:"claims_medium_priority_threshold"`
+
+	// Escalado automático de prioridad de reclamos por inactividad. Cuando un
+	// reclamo no terminal pasa el umbral de días sin updates, el job de
+	// escalado sube su prioridad al siguiente nivel y deja una nota explicativa.
+	// Default: enabled, 3d baja→media, 2d media→alta, 1d alta→urgente.
+	ClaimEscalationEnabled   bool `json:"claim_escalation_enabled" db:"claim_escalation_enabled"`
+	ClaimEscalationBajaDays  int  `json:"claim_escalation_baja_days" db:"claim_escalation_baja_days"`
+	ClaimEscalationMediaDays int  `json:"claim_escalation_media_days" db:"claim_escalation_media_days"`
+	ClaimEscalationAltaDays  int  `json:"claim_escalation_alta_days" db:"claim_escalation_alta_days"`
 }
 
 func DefaultSystemConfig() SystemConfig {
@@ -68,5 +77,9 @@ func DefaultSystemConfig() SystemConfig {
 		UrgentClaimsCapPct:            0.20,
 		ClaimsHighPriorityThreshold:   0.65,
 		ClaimsMediumPriorityThreshold: 0.35,
+		ClaimEscalationEnabled:        true,
+		ClaimEscalationBajaDays:       3,
+		ClaimEscalationMediaDays:      2,
+		ClaimEscalationAltaDays:       1,
 	}
 }

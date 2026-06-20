@@ -151,7 +151,11 @@ export function SystemConfig() {
       draft.max_coverage_area_km2 !== config.max_coverage_area_km2 ||
       draft.urgent_claims_cap_pct !== config.urgent_claims_cap_pct ||
       draft.claims_high_priority_threshold !== config.claims_high_priority_threshold ||
-      draft.claims_medium_priority_threshold !== config.claims_medium_priority_threshold
+      draft.claims_medium_priority_threshold !== config.claims_medium_priority_threshold ||
+      draft.claim_escalation_enabled !== config.claim_escalation_enabled ||
+      draft.claim_escalation_baja_days !== config.claim_escalation_baja_days ||
+      draft.claim_escalation_media_days !== config.claim_escalation_media_days ||
+      draft.claim_escalation_alta_days !== config.claim_escalation_alta_days
     );
 
   return (
@@ -819,6 +823,135 @@ export function SystemConfig() {
                   El umbral medio debe ser <strong>menor</strong> al umbral alto. Guardar con esta configuración fallará.
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Escalado de reclamos x días */}
+          <Card className="mt-4">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-slate-500" />
+                <CardTitle>Escalado de reclamos x días</CardTitle>
+              </div>
+              <CardDescription>
+                Si un reclamo no recibe actividad durante los días configurados, un job periódico sube su prioridad un nivel y deja una nota explicativa. La ejecución se dispara cada 15 minutos. Los reclamos resueltos quedan fuera del escalado.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Toggle enabled */}
+              <label className="flex items-center gap-3 cursor-pointer select-none w-fit">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={draft.claim_escalation_enabled}
+                    onChange={(e) =>
+                      setDraft((d) => d ? { ...d, claim_escalation_enabled: e.target.checked } : d)
+                    }
+                  />
+                  <div
+                    className={`w-11 h-6 rounded-full transition-colors ${draft.claim_escalation_enabled ? "bg-[var(--sidebar-bg)]" : "bg-slate-200"}`}
+                  />
+                  <div
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform bg-white ${draft.claim_escalation_enabled ? "translate-x-5" : "translate-x-0"}`}
+                  />
+                </div>
+                <span className="text-sm font-semibold text-slate-700">Habilitar escalado automático</span>
+              </label>
+
+              {!draft.claim_escalation_enabled && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  Mientras esté deshabilitado, ningún reclamo va a subir de prioridad por inactividad.
+                </div>
+              )}
+
+              {/* Baja → Media */}
+              <div className="flex items-start gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px] pt-1">
+                  Baja → Media
+                </label>
+                <div className="flex-1 flex flex-col gap-1">
+                  <div className="flex items-center gap-3">
+                    <span className="min-w-[60px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
+                      {draft.claim_escalation_baja_days} {draft.claim_escalation_baja_days === 1 ? "día" : "días"}
+                    </span>
+                    <input
+                      type="range"
+                      min={1}
+                      max={5}
+                      step={1}
+                      value={draft.claim_escalation_baja_days}
+                      disabled={!draft.claim_escalation_enabled}
+                      onChange={(e) =>
+                        setDraft((d) => d ? { ...d, claim_escalation_baja_days: Number(e.target.value) } : d)
+                      }
+                      className="flex-1 accent-[var(--sidebar-bg)] disabled:opacity-50"
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400 pl-[68px] tabular-nums">
+                    <span>mín</span><span>máx</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Media → Alta */}
+              <div className="flex items-start gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px] pt-1">
+                  Media → Alta
+                </label>
+                <div className="flex-1 flex flex-col gap-1">
+                  <div className="flex items-center gap-3">
+                    <span className="min-w-[60px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
+                      {draft.claim_escalation_media_days} {draft.claim_escalation_media_days === 1 ? "día" : "días"}
+                    </span>
+                    <input
+                      type="range"
+                      min={1}
+                      max={5}
+                      step={1}
+                      value={draft.claim_escalation_media_days}
+                      disabled={!draft.claim_escalation_enabled}
+                      onChange={(e) =>
+                        setDraft((d) => d ? { ...d, claim_escalation_media_days: Number(e.target.value) } : d)
+                      }
+                      className="flex-1 accent-[var(--sidebar-bg)] disabled:opacity-50"
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400 pl-[68px] tabular-nums">
+                    <span>mín</span><span>máx</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Alta → Urgente */}
+              <div className="flex items-start gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px] pt-1">
+                  Alta → Urgente
+                </label>
+                <div className="flex-1 flex flex-col gap-1">
+                  <div className="flex items-center gap-3">
+                    <span className="min-w-[60px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
+                      {draft.claim_escalation_alta_days} {draft.claim_escalation_alta_days === 1 ? "día" : "días"}
+                    </span>
+                    <input
+                      type="range"
+                      min={1}
+                      max={5}
+                      step={1}
+                      value={draft.claim_escalation_alta_days}
+                      disabled={!draft.claim_escalation_enabled}
+                      onChange={(e) =>
+                        setDraft((d) => d ? { ...d, claim_escalation_alta_days: Number(e.target.value) } : d)
+                      }
+                      className="flex-1 accent-[var(--sidebar-bg)] disabled:opacity-50"
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400 pl-[68px] tabular-nums">
+                    <span>mín</span><span>máx</span>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
