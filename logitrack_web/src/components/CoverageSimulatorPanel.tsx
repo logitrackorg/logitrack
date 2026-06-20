@@ -35,6 +35,8 @@ interface CoverageSimulatorPanelProps {
   territoryMode?: TerritoryMode;
   customBoundaryPoints?: number;
   isDrawingBoundary?: boolean;
+  isEditingBoundary?: boolean;
+  onStartEditBoundary?: () => void;
   onClearBoundary?: () => void;
   /** List of available regions from the backend. */
   regions?: Region[];
@@ -59,6 +61,12 @@ interface CoverageSimulatorPanelProps {
   onMinDensityChange?: (v: number) => void;
   /** true mientras el backend está calculando el diagnóstico — bloquea el panel y cambia el texto del botón. */
   isDiagnosing?: boolean;
+  /**
+   * Total area of the active analysis zone in km² — used to compute adaptive
+   * slider bounds (min = 0.1 % of zone, max = 25 % of zone).  Defaults to the
+   * national SIM_AREA_MAX when omitted.
+   */
+  zoneAreaKm2?: number;
 }
 
 export function CoverageSimulatorPanel({
@@ -73,6 +81,8 @@ export function CoverageSimulatorPanel({
   territoryMode = "national",
   customBoundaryPoints = 0,
   isDrawingBoundary = false,
+  isEditingBoundary = false,
+  onStartEditBoundary,
   onClearBoundary,
   regions = [],
   selectedRegionId = "national",
@@ -87,8 +97,16 @@ export function CoverageSimulatorPanel({
   minDensity = 0,
   onMinDensityChange,
   isDiagnosing = false,
+  zoneAreaKm2,
 }: CoverageSimulatorPanelProps) {
   const isDisabled = disabled || isDiagnosing;
+
+  // Adaptive slider bounds: 0.1 % – 25 % of the active zone area.
+  const effectiveZoneArea = zoneAreaKm2 ?? SIM_AREA_MAX;
+  const simAreaMin = Math.max(SIM_AREA_MIN, Math.round(effectiveZoneArea * 0.001));
+  const simAreaMax = Math.min(SIM_AREA_MAX, Math.round(effectiveZoneArea * 0.25));
+  const simAreaStep = Math.max(1, Math.round((simAreaMax - simAreaMin) / 200));
+
   const [minPopulation, setMinPopulation] = useState(MIN_POP_DEFAULT);
   const [densityInput, setDensityInput] = useState("0");
 
@@ -155,16 +173,23 @@ export function CoverageSimulatorPanel({
         </div>
       </div>
 
-      {/* Estado del área personalizada (dibujo en progreso / activa) */}
+      {/* Estado del área personalizada (dibujo en progreso / edición / activa) */}
       {territoryMode === "custom" && (
         <div className={`rounded-md px-3 py-2 text-xs ${
-          isDrawingBoundary
+          isEditingBoundary
+            ? "bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700 text-violet-700 dark:text-violet-300"
+            : isDrawingBoundary
             ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300"
             : hasBoundary
             ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300"
             : "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300"
         }`}>
-          {isDrawingBoundary ? (
+          {isEditingBoundary ? (
+            <>
+              <span className="font-semibold">Editando vértices...</span> Arrastrá para mover · clic derecho para eliminar · clic en punto medio para agregar.{" "}
+              <span className="opacity-75">Enter confirma · Esc cancela</span>
+            </>
+          ) : isDrawingBoundary ? (
             <>
               <span className="font-semibold">Dibujando zona...</span> Hacé clic en el mapa para agregar vértices.{" "}
               <span className="opacity-75">Enter cierra · Esc cancela · ⌘Z deshace</span>
@@ -172,16 +197,28 @@ export function CoverageSimulatorPanel({
           ) : hasBoundary ? (
             <div className="flex items-center justify-between gap-2">
               <span><span className="font-semibold">Zona activa</span> · {customBoundaryPoints} vértices</span>
-              {selectedRegionId === "national" && (
-                <button
-                  type="button"
-                  onClick={onClearBoundary}
-                  className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer transition-colors"
-                  title="Limpiar zona activa"
-                >
-                  <Trash2 className="w-3 h-3" /> Limpiar
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {onStartEditBoundary && (
+                  <button
+                    type="button"
+                    onClick={onStartEditBoundary}
+                    className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:text-violet-600 dark:hover:text-violet-400 cursor-pointer transition-colors"
+                    title="Editar vértices de la zona activa"
+                  >
+                    <Pencil className="w-3 h-3" /> Editar
+                  </button>
+                )}
+                {selectedRegionId === "national" && (
+                  <button
+                    type="button"
+                    onClick={onClearBoundary}
+                    className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer transition-colors"
+                    title="Limpiar zona activa"
+                  >
+                    <Trash2 className="w-3 h-3" /> Limpiar
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <span>Cambiá al mapa y hacé clic para comenzar a dibujar la zona.</span>
@@ -190,18 +227,18 @@ export function CoverageSimulatorPanel({
       )}
 
       <div className="flex items-center justify-between gap-2 text-sm">
-        <span className="text-slate-600 dark:text-slate-300">Radio de prueba</span>
+        <span className="text-slate-600 dark:text-slate-300">Radio de cobertura</span>
         <div className="flex items-center gap-1">
           <input
             type="number"
-            min={SIM_AREA_MIN}
-            max={SIM_AREA_MAX}
-            step={SIM_AREA_STEP}
+            min={simAreaMin}
+            max={simAreaMax}
+            step={simAreaStep}
             value={areaInput}
             onChange={(e) => setAreaInput(e.target.value)}
             onBlur={() => {
               const raw = Number(areaInput);
-              const v = isNaN(raw) ? SIM_AREA_MIN : Math.max(SIM_AREA_MIN, Math.min(SIM_AREA_MAX, raw));
+              const v = isNaN(raw) ? simAreaMin : Math.max(simAreaMin, Math.min(simAreaMax, raw));
               onAreaChange(v);
               setAreaInput(String(v));
             }}
@@ -215,9 +252,9 @@ export function CoverageSimulatorPanel({
 
       <input
         type="range"
-        min={SIM_AREA_MIN}
-        max={SIM_AREA_MAX}
-        step={SIM_AREA_STEP}
+        min={simAreaMin}
+        max={simAreaMax}
+        step={simAreaStep}
         value={areaKm2}
         onChange={(e) => {
           const v = Number(e.target.value);
@@ -331,7 +368,7 @@ export function CoverageSimulatorPanel({
                 : "bg-white dark:bg-gray-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700"
             }`}
           >
-            Radio de prueba
+            Cobertura geográfica
           </button>
           <button
             type="button"

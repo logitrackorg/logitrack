@@ -31,7 +31,7 @@ import {
 } from "../../api/coverage";
 import { regionsApi, type Region as CoverageRegion } from "../../api/regions";
 import { VoronoiCoverageMap, type VoronoiCoverageMapHandle } from "../../components/VoronoiCoverageMap";
-import { CoverageSimulatorPanel, SIM_AREA_DEFAULT, type DiagnosisMode } from "../../components/CoverageSimulatorPanel";
+import { CoverageSimulatorPanel, SIM_AREA_DEFAULT, SIM_AREA_MIN, SIM_AREA_MAX, type DiagnosisMode } from "../../components/CoverageSimulatorPanel";
 import { CollapsiblePanel } from "../../components/CollapsiblePanel";
 import { SkeletonCard } from "../../components/ui/skeleton";
 // ── Palette ──────────────────────────────────────────────────────────────────
@@ -993,6 +993,7 @@ export function CoberturaTab() {
   const [isDiagnosing, setIsDiagnosing] = useState(false);
   const [isFindingMore, setIsFindingMore] = useState(false);
   const [excludedCitiesForMore, setExcludedCitiesForMore] = useState<string[]>([]);
+  const [findMoreSummary, setFindMoreSummary] = useState<{ found: number; error: boolean } | null>(null);
   const [snapError, setSnapError] = useState<string | null>(null);
   const [snapMinPopulation, setSnapMinPopulation] = useState(0);
 
@@ -1038,6 +1039,7 @@ export function CoberturaTab() {
   const [territoryMode, setTerritoryMode] = useState<"national" | "custom">("national");
   const [customBoundary, setCustomBoundary] = useState<[number, number][] | null>(null);
   const [isDrawingBoundary, setIsDrawingBoundary] = useState(false);
+  const [isEditingBoundary, setIsEditingBoundary] = useState(false);
 
   // Zonas guardadas (predefinidas + zonas del usuario).
   const [regions, setRegions] = useState<CoverageRegion[]>([]);
@@ -1173,6 +1175,20 @@ export function CoberturaTab() {
     setIsDrawingBoundary(true);
   }, []);
 
+  const handleStartEditBoundary = useCallback(() => {
+    setIsEditingBoundary(true);
+  }, []);
+
+  const handleBoundaryEdited = useCallback((pts: [number, number][]) => {
+    setCustomBoundary(pts);
+    setIsEditingBoundary(false);
+    resetDiagnosis();
+  }, [resetDiagnosis]);
+
+  const handleBoundaryEditCancel = useCallback(() => {
+    setIsEditingBoundary(false);
+  }, []);
+
   const handleSaveNewRegion = useCallback(async () => {
     if (!pendingRegionBoundary || !savingRegionName.trim()) return;
     setSavingRegion(true);
@@ -1233,6 +1249,7 @@ export function CoberturaTab() {
     setSnapError(null);
     setBlacklistedCities([]);
     setExcludedCitiesForMore([]);
+    setFindMoreSummary(null);
     setIsDiagnosing(true);
     coverageApi
       .diagnose(
@@ -1309,6 +1326,8 @@ export function CoberturaTab() {
     ];
     setExcludedCitiesForMore(newExcluded);
     setIsFindingMore(true);
+    setFindMoreSummary(null);
+    setProjection(null); // clear projection so the user sees it recalculate after results arrive
     const area = visualAreaRef.current;
     const boundary = customBoundaryRef.current;
     const territoryMode = territoryModeRef.current;
@@ -1348,6 +1367,7 @@ export function CoberturaTab() {
       .then((result) => {
         const mathSuggs = result.mathematical_suggestions ?? [];
         const newSuggs = [...result.suggested_locations, ...mathSuggs];
+        setFindMoreSummary({ found: newSuggs.length, error: false });
         if (newSuggs.length === 0) return;
         setSimResult((prev) => {
           if (!prev) return prev;
@@ -1363,7 +1383,10 @@ export function CoberturaTab() {
           return [...existing, ...newEntries];
         });
       })
-      .catch(() => setSimError("No se pudo buscar más sugerencias en este momento."))
+      .catch(() => {
+        setFindMoreSummary({ found: 0, error: true });
+        setSimError("No se pudo buscar más sugerencias en este momento.");
+      })
       .finally(() => setIsFindingMore(false));
   }, [isFindingMore, isDiagnosing, snappedCities, excludedCitiesForMore]);
 
@@ -1574,6 +1597,21 @@ export function CoberturaTab() {
   // para acotar la Proyección de Impacto a las sucursales de la zona.
   const isZoneActive = territoryMode === "custom" && !!customBoundary && customBoundary.length >= 3;
 
+  // Total area of the active zone — drives the adaptive slider bounds.
+  const zoneAreaKm2 = useMemo(() => {
+    if (isZoneActive && customBoundary && customBoundary.length >= 3) {
+      return polygonAreaKm2(customBoundary);
+    }
+    return diagram?.total_area_km2 ?? SIM_AREA_MAX;
+  }, [isZoneActive, customBoundary, diagram]);
+
+  // Clamp the coverage-radius slider whenever the zone area changes.
+  useEffect(() => {
+    const minA = Math.max(SIM_AREA_MIN, Math.round(zoneAreaKm2 * 0.001));
+    const maxA = Math.min(SIM_AREA_MAX, Math.round(zoneAreaKm2 * 0.25));
+    setVisualArea((prev) => Math.max(minA, Math.min(maxA, prev)));
+  }, [zoneAreaKm2]);
+
   const isBranchInZone = useCallback(
     (b: PanelBranchItem) =>
       b.lat != null && b.lng != null && !!customBoundary && rayCastPointInPolygon(b.lat, b.lng, customBoundary),
@@ -1731,6 +1769,9 @@ export function CoberturaTab() {
               onBoundaryCancel={handleBoundaryCancel}
               customBoundary={customBoundary}
               redrawReference={redrawReference}
+              isEditingBoundary={isEditingBoundary}
+              onBoundaryEdited={handleBoundaryEdited}
+              onBoundaryEditCancel={handleBoundaryEditCancel}
             />
           </div>
         </Card>
@@ -1758,6 +1799,8 @@ export function CoberturaTab() {
                 territoryMode={territoryMode}
                 customBoundaryPoints={customBoundary?.length ?? 0}
                 isDrawingBoundary={isDrawingBoundary}
+                isEditingBoundary={isEditingBoundary}
+                onStartEditBoundary={customBoundary && customBoundary.length >= 3 ? handleStartEditBoundary : undefined}
                 onClearBoundary={handleClearBoundary}
                 regions={regions}
                 selectedRegionId={selectedRegionId}
@@ -1771,6 +1814,7 @@ export function CoberturaTab() {
                 onRankingModeChange={setRankingMode}
                 minDensity={minDensity}
                 onMinDensityChange={setMinDensity}
+                zoneAreaKm2={zoneAreaKm2}
               />
               {simResult !== null && (
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -1778,9 +1822,15 @@ export function CoberturaTab() {
                 </p>
               )}
               {simResult !== null && simResult.suggested_locations.length === 0 && !simError && (
-                <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
-                  No se detectaron vacíos de cobertura con este radio. Reducí el radio de prueba para ver sugerencias de nuevas sucursales.
-                </p>
+                diagnosisModeRef.current === "density" ? (
+                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                    No se encontraron ciudades sin cobertura en la zona. Si el área es grande o no hay zona personalizada, Overpass puede agotar el tiempo. Definí una zona más pequeña o usá el modo Radio de cobertura.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
+                    No se detectaron vacíos de cobertura con este radio. Reducí el radio de cobertura para ver sugerencias de nuevas sucursales.
+                  </p>
+                )
               )}
               {simError && (
                 <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{simError}</p>
@@ -1943,6 +1993,15 @@ export function CoberturaTab() {
                             </>
                           )}
                         </button>
+                      )}
+                      {findMoreSummary && !isFindingMore && (
+                        <p className={`mt-1.5 text-xs ${findMoreSummary.error ? "text-rose-600 dark:text-rose-400" : findMoreSummary.found === 0 ? "text-slate-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                          {findMoreSummary.error
+                            ? "Error al buscar más sugerencias."
+                            : findMoreSummary.found === 0
+                              ? "No se encontraron más sugerencias."
+                              : `Se encontraron ${findMoreSummary.found} sugerencia${findMoreSummary.found === 1 ? "" : "s"} nueva${findMoreSummary.found === 1 ? "" : "s"}.`}
+                        </p>
                       )}
                     </>
                   )}
@@ -2577,6 +2636,21 @@ function BranchSimulationCard({
 
 /** Ray-casting point-in-polygon for lat/lng coordinates.
  *  polygon is `[lat, lng][]` — the same format as `customBoundary`. */
+/** Spherical polygon area in km² using the trapezoidal formula on WGS-84. */
+function polygonAreaKm2(pts: [number, number][]): number {
+  if (pts.length < 3) return 0;
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  let area = 0;
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const [lat1, lng1] = [toRad(pts[i][0]), toRad(pts[i][1])];
+    const [lat2, lng2] = [toRad(pts[(i + 1) % n][0]), toRad(pts[(i + 1) % n][1])];
+    area += (lng2 - lng1) * (2 + Math.sin(lat1) + Math.sin(lat2));
+  }
+  return (Math.abs(area) * R * R) / 2;
+}
+
 function rayCastPointInPolygon(lat: number, lng: number, polygon: [number, number][]): boolean {
   let inside = false;
   const n = polygon.length;

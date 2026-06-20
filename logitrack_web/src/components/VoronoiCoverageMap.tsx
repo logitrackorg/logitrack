@@ -66,6 +66,16 @@ interface VoronoiCoverageMapProps {
    * polígono. `null` = no hay re-dibujo en curso.
    */
   redrawReference?: [number, number][] | null;
+  /**
+   * Cuando true, el mapa entra en modo edición de vértices: muestra handles
+   * arrastrables en cada vértice del polígono activo y marcadores en los
+   * puntos medios para insertar nuevos vértices. Enter confirma, Esc cancela.
+   */
+  isEditingBoundary?: boolean;
+  /** Llamado con los vértices finales cuando el usuario confirma la edición (Enter). */
+  onBoundaryEdited?: (pts: [number, number][]) => void;
+  /** Llamado cuando el usuario presiona Esc durante la edición. */
+  onBoundaryEditCancel?: () => void;
 }
 
 const FACTORY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg>`;
@@ -110,6 +120,9 @@ function VoronoiCoverageMap({
   onBoundaryCancel,
   customBoundary,
   redrawReference,
+  isEditingBoundary = false,
+  onBoundaryEdited,
+  onBoundaryEditCancel,
 }: VoronoiCoverageMapProps, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -131,6 +144,7 @@ function VoronoiCoverageMap({
   const boundaryLayer = useRef<L.LayerGroup | null>(null);
   const referenceLayer = useRef<L.LayerGroup | null>(null);
   const drawLayer = useRef<L.LayerGroup | null>(null);
+  const editLayer = useRef<L.LayerGroup | null>(null);
 
   // Refs para manejar el estado de dibujo sin stale closures en los event handlers.
   const isDrawingRef = useRef(isDrawingBoundary);
@@ -138,11 +152,16 @@ function VoronoiCoverageMap({
   const onBoundaryCompleteRef = useRef(onBoundaryComplete);
   const onBoundaryCancelRef = useRef(onBoundaryCancel);
   const onSelectRef = useRef(onSelectBranch);
+  const editVerticesRef = useRef<[number, number][]>([]);
+  const onBoundaryEditedRef = useRef(onBoundaryEdited);
+  const onBoundaryEditCancelRef = useRef(onBoundaryEditCancel);
 
   useEffect(() => { isDrawingRef.current = isDrawingBoundary; }, [isDrawingBoundary]);
   useEffect(() => { onBoundaryCompleteRef.current = onBoundaryComplete; }, [onBoundaryComplete]);
   useEffect(() => { onBoundaryCancelRef.current = onBoundaryCancel; }, [onBoundaryCancel]);
   useEffect(() => { onSelectRef.current = onSelectBranch; }, [onSelectBranch]);
+  useEffect(() => { onBoundaryEditedRef.current = onBoundaryEdited; }, [onBoundaryEdited]);
+  useEffect(() => { onBoundaryEditCancelRef.current = onBoundaryEditCancel; }, [onBoundaryEditCancel]);
 
   const suggestionMarkersRef = useRef<
     { marker: L.Marker; circle: L.Circle | null; loc: SuggestedLocation }[]
@@ -169,6 +188,7 @@ function VoronoiCoverageMap({
     boundaryLayer.current = L.layerGroup().addTo(map);
     referenceLayer.current = L.layerGroup().addTo(map);
     drawLayer.current = L.layerGroup().addTo(map);
+    editLayer.current = L.layerGroup().addTo(map);
 
     const ro = new ResizeObserver(() => map.invalidateSize());
     ro.observe(containerRef.current);
@@ -277,11 +297,12 @@ function VoronoiCoverageMap({
   }, [isDrawingBoundary]);
 
   // Renderizar el polígono personalizado confirmado (borde azul permanente).
+  // Se omite cuando está en modo edición — editLayer dibuja la versión editable.
   useEffect(() => {
     const layer = boundaryLayer.current;
     if (!layer) return;
     layer.clearLayers();
-    if (!customBoundary || customBoundary.length < 3) return;
+    if (isEditingBoundary || !customBoundary || customBoundary.length < 3) return;
 
     L.polygon(customBoundary, {
       color: "#2563eb",
@@ -292,7 +313,113 @@ function VoronoiCoverageMap({
     })
       .bindTooltip("Área personalizada activa", { sticky: true })
       .addTo(layer);
-  }, [customBoundary]);
+  }, [customBoundary, isEditingBoundary]);
+
+  // Modo edición de vértices: handles arrastrables + puntos medios para insertar.
+  useEffect(() => {
+    const layer = editLayer.current;
+    if (!layer) return;
+
+    if (!isEditingBoundary || !customBoundary || customBoundary.length < 3) {
+      layer.clearLayers();
+      return;
+    }
+
+    editVerticesRef.current = [...customBoundary];
+
+    const vertexIcon = (total: number) =>
+      L.divIcon({
+        html: `<div style="width:12px;height:12px;border-radius:50%;background:#6d28d9;border:2.5px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.5);cursor:grab" title="${total > 3 ? "Arrastrar · clic derecho para eliminar" : "Arrastrar para mover"}"></div>`,
+        className: "",
+        iconSize: [12, 12],
+        iconAnchor: [6, 6],
+      });
+
+    let editPoly: L.Polygon | null = null;
+
+    const rebuild = () => {
+      const verts = editVerticesRef.current;
+      layer.clearLayers();
+
+      editPoly = L.polygon(verts, {
+        color: "#7c3aed",
+        weight: 2,
+        dashArray: "6 4",
+        fillColor: "#7c3aed",
+        fillOpacity: 0.07,
+      }).addTo(layer);
+
+      const n = verts.length;
+
+      // Vertex handles (draggable L.Marker with DivIcon)
+      verts.forEach((pt, i) => {
+        const marker = L.marker(pt, {
+          draggable: true,
+          icon: vertexIcon(n),
+        }).addTo(layer);
+
+        marker.on("drag", (e) => {
+          const latlng = (e.target as L.Marker).getLatLng();
+          editVerticesRef.current[i] = [latlng.lat, latlng.lng];
+          if (editPoly) editPoly.setLatLngs(editVerticesRef.current as L.LatLngExpression[]);
+        });
+
+        marker.on("dragend", () => rebuild());
+
+        if (n > 3) {
+          marker.on("contextmenu", (e) => {
+            L.DomEvent.stopPropagation(e);
+            editVerticesRef.current = [
+              ...editVerticesRef.current.slice(0, i),
+              ...editVerticesRef.current.slice(i + 1),
+            ];
+            rebuild();
+          });
+        }
+      });
+
+      // Midpoint handles (click to insert new vertex)
+      verts.forEach((pt, i) => {
+        const nextPt = verts[(i + 1) % n];
+        const midPt: [number, number] = [(pt[0] + nextPt[0]) / 2, (pt[1] + nextPt[1]) / 2];
+        L.circleMarker(midPt, {
+          radius: 5,
+          color: "#7c3aed",
+          fillColor: "#ede9fe",
+          fillOpacity: 1,
+          weight: 2,
+          bubblingMouseEvents: false,
+        } as L.CircleMarkerOptions)
+          .bindTooltip("Clic para agregar vértice", { direction: "top", offset: [0, -8] })
+          .on("click", (e) => {
+            L.DomEvent.stopPropagation(e);
+            editVerticesRef.current = [
+              ...editVerticesRef.current.slice(0, i + 1),
+              midPt,
+              ...editVerticesRef.current.slice(i + 1),
+            ];
+            rebuild();
+          })
+          .addTo(layer);
+      });
+    };
+
+    rebuild();
+
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && editVerticesRef.current.length >= 3) {
+        onBoundaryEditedRef.current?.([...editVerticesRef.current]);
+      } else if (e.key === "Escape") {
+        onBoundaryEditCancelRef.current?.();
+      }
+    };
+    window.addEventListener("keydown", keyHandler);
+
+    return () => {
+      window.removeEventListener("keydown", keyHandler);
+      layer.clearLayers();
+    };
+  }, [isEditingBoundary, customBoundary]);
 
   // Forma original de referencia mientras se re-dibuja una zona: relleno claro
   // de fondo, lo bastante visible para ubicarse pero más tenue que el borrador.

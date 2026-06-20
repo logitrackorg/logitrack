@@ -669,9 +669,9 @@ func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCe
 // the Overpass snap API in density mode. Candidates are pre-sorted by
 // uncovered-fragment area descending so the largest (most likely populated)
 // ones are evaluated first. Each batch of 5 costs ~1.5 s of Overpass
-// rate-limiting: 15 candidates ≈ 3 batches ≈ 4.5 s — acceptable for an
-// interactive request.
-const densityModeMaxCandidates = 15
+// rate-limiting: 25 candidates ≈ 5 batches ≈ 7.5 s — acceptable for an
+// interactive request while giving large zones a wider geographic sample.
+const densityModeMaxCandidates = 25
 
 // densityModeMinFragAreaKm2 is the minimum uncovered-fragment area (km²)
 // considered in density mode. Smaller than coverageSuggestionMinFragmentAreaKm2
@@ -818,6 +818,116 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 			}
 		}
 		candidates = inBounds
+	}
+
+	// Remove snapped candidates whose city falls within minSepKm of an EXISTING
+	// branch site.  Without this filter, density mode can suggest Buenos Aires or
+	// Bahía Blanca even when CDBA-01 / BAHB-01 are already located there — the
+	// geometric PoI may be far from the branch, but the snap pulls the candidate
+	// to the nearest large city, which may already host a branch.
+	{
+		branchLocs := make([]model.SuggestedLocation, len(coverageCells))
+		for i, cell := range coverageCells {
+			branchLocs[i].Lat = cell.Site.Lat
+			branchLocs[i].Lng = cell.Site.Lng
+		}
+		notNearBranch := candidates[:0]
+		for _, c := range candidates {
+			if !tooCloseToExisting(c, branchLocs, minSepKm) {
+				notNearBranch = append(notNearBranch, c)
+			}
+		}
+		candidates = notNearBranch
+	}
+
+	// Post-snap geographic dedup: two different city names can still be within
+	// minSepKm of each other after snapping (the snap radius pulls candidates
+	// toward nearby cities that may already be covered by another suggestion's
+	// circle).  Re-running the distance check on the snapped coordinates
+	// guarantees that no two coverage circles overlap regardless of city name.
+	geoDeduped := make([]model.SuggestedLocation, 0, len(candidates))
+	for _, c := range candidates {
+		if !tooCloseToExisting(c, geoDeduped, minSepKm) {
+			geoDeduped = append(geoDeduped, c)
+		}
+	}
+	candidates = geoDeduped
+
+	// Density mode only surfaces real cities. Drop any geometric PoI candidates
+	// that the snapper could not resolve (Overpass timeout or no city within the
+	// search radius). Keeping them would produce 0-population / 0-density entries
+	// that pass any MinDensity filter and show a misleading "0% → 0%" projection
+	// on the frontend — especially common on large zones without a custom boundary.
+	{
+		snapped := candidates[:0]
+		for _, c := range candidates {
+			if c.IsSnapped {
+				snapped = append(snapped, c)
+			}
+		}
+		candidates = snapped
+	}
+
+	// Recompute ActualAddedKm2 at the snapped city's real coordinates and subtract
+	// every existing-branch coverage circle so the figure reflects genuine NET new
+	// coverage — not just "circle is fully within the zone".  Without this, a
+	// suggestion next to an existing branch still reports the full circle area.
+	for i := range candidates {
+		if !candidates[i].IsSnapped {
+			continue
+		}
+		cProj := newProjector(candidates[i].Lat, candidates[i].Lng)
+		// City circle centred at local origin (the city itself).
+		remainder := toPolyclip(circlePolygon(radiusKm, coverageSuggestionCircleVertices))
+
+		// Clip to the custom boundary when one is active.  For national scope we
+		// skip this because calling computeTierraFertil with the full Argentina
+		// outline for every candidate is expensive and the circle is almost always
+		// contained within the country anyway.
+		if len(customBoundary) >= 3 {
+			tierra := computeTierraFertil(customBoundary, dangerousZones, cProj)
+			remainder = remainder.Construct(polyclip.INTERSECTION, tierra)
+			if len(remainder) == 0 {
+				candidates[i].ActualAddedKm2 = 0
+				continue
+			}
+		}
+
+		// Subtract each existing branch's coverage circle.
+		for _, cell := range coverageCells {
+			if len(remainder) == 0 {
+				break
+			}
+			branchPt := cProj.project(cell.Site.Lat, cell.Site.Lng)
+			branchCircle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), branchPt))
+			remainder = remainder.Construct(polyclip.DIFFERENCE, branchCircle)
+		}
+
+		// Subtract already-placed suggestions from earlier "Buscar más" rounds.
+		for _, site := range density.AdditionalSites {
+			if len(remainder) == 0 {
+				break
+			}
+			sitePt := cProj.project(site.Lat, site.Lng)
+			siteCircle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), sitePt))
+			remainder = remainder.Construct(polyclip.DIFFERENCE, siteCircle)
+		}
+
+		candidates[i].ActualAddedKm2 = sumArea(fromPolyclip(remainder))
+	}
+
+	// Drop candidates whose net new coverage is negligible (e.g. a city sitting
+	// right on the edge of an existing branch circle may contribute only 1 km²).
+	// Require at least 5 % of the simulated circle area as a useful contribution.
+	{
+		minUsefulKm2 := math.Max(5.0, simulatedAreaKm2*0.05)
+		useful := candidates[:0]
+		for _, c := range candidates {
+			if c.ActualAddedKm2 >= minUsefulKm2 {
+				useful = append(useful, c)
+			}
+		}
+		candidates = useful
 	}
 
 	// Density = population / uncovered-fragment area (hab./km²).
