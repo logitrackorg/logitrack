@@ -60,6 +60,9 @@ export function DriverShipmentDetail() {
   const [cameraOpen, setCameraOpen] = useState(false);
   // Aviso de geofence: el chofer está a > GEOFENCE_RADIUS_M del domicilio.
   const [geoWarning, setGeoWarning] = useState<{ distanceM: number; onConfirm: () => void } | null>(null);
+  // GPS capturado al momento de abrir el sheet (o disparar el warning) — evita
+  // que la posición se pierda entre el warning y el submit online.
+  const [capturedPosition, setCapturedPosition] = useState<{ lat: number; lng: number } | null>(null);
   // Intentos fallidos de palabra clave validados localmente (offline).
   const [offlineKeywordAttempts, setOfflineKeywordAttempts] = useState(0);
   // Popover de mensajes rápidos de WhatsApp.
@@ -208,12 +211,13 @@ export function DriverShipmentDetail() {
 
     // ── Path online ───────────────────────────────────────────────────────────
     setSubmitting(true); setActionError("");
+    const gpsCoords = capturedPosition ?? position;
     try {
       if (isLastMile) {
-        await shipmentApi.deliver(shipment.tracking_id, { keyword: useContingency ? undefined : deliveryKeyword.trim(), recipient_dni: useContingency ? recipientDni.trim() : undefined, contingency: useContingency, current_speed: effectiveSpeed, speed_source: speedSource, photo: deliveryPhoto! });
+        await shipmentApi.deliver(shipment.tracking_id, { keyword: useContingency ? undefined : deliveryKeyword.trim(), recipient_dni: useContingency ? recipientDni.trim() : undefined, contingency: useContingency, current_speed: effectiveSpeed, speed_source: speedSource, photo: deliveryPhoto!, latitude: gpsCoords?.lat, longitude: gpsCoords?.lng });
       }
-      else await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivered", location: "", recipient_dni: recipientDni.trim(), current_speed: effectiveSpeed, speed_source: speedSource });
-      setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); setDeliveryPhoto(null);
+      else await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivered", location: "", recipient_dni: recipientDni.trim(), current_speed: effectiveSpeed, speed_source: speedSource, latitude: gpsCoords?.lat, longitude: gpsCoords?.lng });
+      setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); setDeliveryPhoto(null); setCapturedPosition(null);
       await reload(shipment.tracking_id);
     } catch (err: unknown) { const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error; if (msg?.includes("intento") || msg?.includes("bloqueado")) { setDeliveryKeyword(""); const u = await shipmentApi.get(shipment.tracking_id).catch(() => null); if (u) setShipment(u); } setActionError(msg ?? "No se pudo registrar la entrega."); } finally { setSubmitting(false); }
   };
@@ -238,7 +242,8 @@ export function DriverShipmentDetail() {
       return;
     }
 
-    try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivery_failed", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource }); setFailedOpen(false); setFailedReason(""); setFailedNotes(""); await reload(shipment.tracking_id); }
+    const gpsCoords = capturedPosition ?? position;
+    try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivery_failed", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource, latitude: gpsCoords?.lat, longitude: gpsCoords?.lng }); setFailedOpen(false); setFailedReason(""); setFailedNotes(""); setCapturedPosition(null); await reload(shipment.tracking_id); }
     catch (err: unknown) { setActionError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo registrar el intento fallido."); } finally { setSubmitting(false); }
   };
 
@@ -262,7 +267,8 @@ export function DriverShipmentDetail() {
       return;
     }
 
-    try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "rechazado", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource }); setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); await reload(shipment.tracking_id); }
+    const gpsCoords = capturedPosition ?? position;
+    try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "rechazado", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource, latitude: gpsCoords?.lat, longitude: gpsCoords?.lng }); setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); setCapturedPosition(null); await reload(shipment.tracking_id); }
     catch (err: unknown) { setActionError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo registrar el rechazo."); } finally { setSubmitting(false); }
   };
 
@@ -277,6 +283,7 @@ export function DriverShipmentDetail() {
   // fuera del radio (continúa solo si confirma). Igual que en DriverRoute.
   const withGeofence = (proceed: () => void) => {
     const d = checkGeofence();
+    setCapturedPosition(position ?? null);
     if (d !== null && d > GEOFENCE_RADIUS_M) {
       setGeoWarning({ distanceM: d, onConfirm: () => { setGeoWarning(null); proceed(); } });
     } else {

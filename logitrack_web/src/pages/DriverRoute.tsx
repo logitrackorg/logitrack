@@ -163,6 +163,10 @@ function LastMileView() {
   // Geofence warning: when set, shows a confirmation modal before proceeding.
   // Stores the distance (m) and a callback to execute if the driver confirms.
   const [geoWarning, setGeoWarning] = useState<{ distanceM: number; onConfirm: () => void } | null>(null);
+  // GPS coords captured at the moment the delivery sheet opens (or geo-warning fires).
+  // Using these instead of re-reading driverCoords() at submit time prevents a race
+  // condition where GPS becomes unavailable between showing the warning and submitting.
+  const [capturedCoords, setCapturedCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [tab, setTab] = useState<Tab>("pendientes");
   const [isDangerDismissed, setIsDangerDismissed] = useState(false);
 
@@ -366,28 +370,37 @@ function LastMileView() {
     // Resetear antes de cargar para evitar que queden intentos de un envío anterior.
     setOfflineKeywordAttempts(0);
     getKeywordAttempts(shipment.tracking_id).then(setOfflineKeywordAttempts).catch(() => {});
+    const coords = driverCoords();
     const distM = checkGeofence(shipment);
     if (distM !== null && distM > GEOFENCE_RADIUS_M) {
+      setCapturedCoords(coords);
       setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setDeliverShipment(shipment); } });
     } else {
+      setCapturedCoords(coords);
       setDeliverShipment(shipment);
     }
   };
 
   const openFailedSheet = (shipment: Shipment) => {
+    const coords = driverCoords();
     const distM = checkGeofence(shipment);
     if (distM !== null && distM > GEOFENCE_RADIUS_M) {
+      setCapturedCoords(coords);
       setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setFailedShipment(shipment); } });
     } else {
+      setCapturedCoords(coords);
       setFailedShipment(shipment);
     }
   };
 
   const openRejectedSheet = (shipment: Shipment) => {
+    const coords = driverCoords();
     const distM = checkGeofence(shipment);
     if (distM !== null && distM > GEOFENCE_RADIUS_M) {
+      setCapturedCoords(coords);
       setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setRejectedShipment(shipment); } });
     } else {
+      setCapturedCoords(coords);
       setRejectedShipment(shipment);
     }
   };
@@ -404,6 +417,7 @@ function LastMileView() {
     setRejectedReason("");
     setRejectedNotes("");
     setDeliveryPhoto(null);
+    setCapturedCoords(null);
   };
 
   const checkReTestGate = async () => {
@@ -478,7 +492,7 @@ function LastMileView() {
           return;
         }
       }
-      const coords = driverCoords();
+      const coords = capturedCoords ?? driverCoords();
       await enqueueAction({
         type: "deliver",
         trackingId: deliverShipment.tracking_id,
@@ -504,7 +518,7 @@ function LastMileView() {
     // ── Path online ─────────────────────────────────────────────────────────
     setSubmitting(true);
     setActionError("");
-    const coords = driverCoords();
+    const coords = capturedCoords ?? driverCoords();
     try {
       if (isLastMile) {
         await shipmentApi.deliver(deliverShipment.tracking_id, {
@@ -551,7 +565,7 @@ function LastMileView() {
 
     setSubmitting(true);
     setActionError("");
-    const coords = driverCoords();
+    const coords = capturedCoords ?? driverCoords();
 
     if (!isOnline) {
       await enqueueAction({
@@ -595,7 +609,7 @@ function LastMileView() {
 
     setSubmitting(true);
     setActionError("");
-    const coords = driverCoords();
+    const coords = capturedCoords ?? driverCoords();
 
     if (!isOnline) {
       await enqueueAction({
