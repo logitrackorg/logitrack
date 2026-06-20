@@ -1,0 +1,31 @@
+logitrack_web/src/pages/DriverScanVehicle.tsx
+  s_06650627c0dcfb::t_ca98348da8530f 153
+  s_06650627c0dcfb::t_81226fa80c60e4 168
+  s_06650627c0dcfb::t_bdf86d66180cf2 136
+  s_06650627c0dcfb::t_6def7acdd7f8b7 50-54
+  s_06650627c0dcfb::t_b7e4cd8b9b4516 6
+  s_06650627c0dcfb::t_fbf9b009e46265 96,98-112
+logitrack_web/src/components/KssCheckIn.tsx
+  s_06650627c0dcfb::t_d6e763ef9d6613 194
+logitrack_web/src/pages/DriverRoute.tsx
+  s_06650627c0dcfb::t_e354c8a69c1317 106-112
+  s_06650627c0dcfb::t_882250d13fc312 2
+  s_06650627c0dcfb::t_c269e42646daa4 262-287
+  s_06650627c0dcfb::t_9690180e7975e9 130-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "257ada4e15f55e9ebc93132ab4e33aa2586c602b",
+  "prompts": {},
+  "sessions": {
+    "s_06650627c0dcfb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "90de645d-8e42-4009-8d7a-b5c0167f3372",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
