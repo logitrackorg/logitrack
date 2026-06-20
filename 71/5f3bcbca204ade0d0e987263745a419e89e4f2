@@ -1,0 +1,19 @@
+logitrack_web/src/pages/DriverScanVehicle.tsx
+  s_f3193ac3a7ca01::t_1a1f6e7adab927 56-63,69,71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "715f3bcbca204ade0d0e987263745a419e89e4f2",
+  "prompts": {},
+  "sessions": {
+    "s_f3193ac3a7ca01": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2ff7887d-8bba-47a7-a186-887d1979fc00",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
