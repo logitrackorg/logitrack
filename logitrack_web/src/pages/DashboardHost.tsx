@@ -20,6 +20,7 @@ import {
   RotateCcw,
   X,
   Globe,
+  MessageSquareWarning,
 } from "lucide-react";
 import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
@@ -36,6 +37,7 @@ import type { ResumenTabRef } from "./reports/ResumenTab";
 const ResumenTab = lazy(() => import("./reports/ResumenTab").then(m => ({ default: m.ResumenTab })));
 const ChoferesTab = lazy(() => import("./reports/ChoferesTab").then(m => ({ default: m.ChoferesTab })));
 const ReclamosTab = lazy(() => import("./reports/ReclamosTab").then(m => ({ default: m.ReclamosTab })));
+const ClaimsTab = lazy(() => import("./reports/ClaimsTab").then(m => ({ default: m.ClaimsTab })));
 const FacturacionTab = lazy(() => import("./reports/FacturacionTab").then(m => ({ default: m.FacturacionTab })));
 const RankingTab = lazy(() => import("./reports/RankingTab").then(m => ({ default: m.RankingTab })));
 const VolumenTab = lazy(() => import("./reports/VolumenTab").then(m => ({ default: m.VolumenTab })));
@@ -52,6 +54,7 @@ const tabs = [
   { id: "resumen", label: "Resumen", icon: LayoutDashboard },
   { id: "choferes", label: "Choferes", icon: Users },
   { id: "reclamos", label: "Incidentes", icon: AlertTriangle },
+  { id: "claims", label: "Reclamos", icon: MessageSquareWarning },
   { id: "facturacion", label: "Facturación", icon: DollarSign },
   { id: "ranking", label: "Ranking", icon: BarChart3 },
   { id: "volumen", label: "Vol. por Ventana", icon: Clock },
@@ -355,6 +358,7 @@ export function DashboardHost() {
             )}
             {activeTab === "choferes" && <ChoferesTab {...sharedProps} />}
             {activeTab === "reclamos" && <ReclamosTab {...sharedProps} />}
+            {activeTab === "claims" && <ClaimsTab {...sharedProps} />}
             {activeTab === "facturacion" && <FacturacionTab {...sharedProps} />}
             {activeTab === "ranking" && <RankingTab {...sharedProps} />}
             {activeTab === "volumen" && <VolumenTab {...sharedProps} />}

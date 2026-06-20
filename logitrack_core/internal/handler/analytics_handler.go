@@ -73,6 +73,10 @@ func fetchAllEvents(event string, since string) ([]map[string]interface{}, error
 			return nil, err
 		}
 
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("posthog returned %d: %s", resp.StatusCode, string(body))
+		}
+
 		var page struct {
 			Next    *string                  `json:"next"`
 			Results []map[string]interface{} `json:"results"`
@@ -95,6 +99,14 @@ func fetchAllEvents(event string, since string) ([]map[string]interface{}, error
 }
 
 func (h *AnalyticsHandler) GetChatbotStats(c *gin.Context) {
+	if getPosthogAPIKey() == "" {
+		c.JSON(http.StatusOK, ChatbotStats{
+			Actions:    map[string]int{},
+			ClaimTypes: map[string]int{},
+		})
+		return
+	}
+
 	since := time.Now().AddDate(0, 0, -30).Format("2006-01-02")
 
 	stats := ChatbotStats{

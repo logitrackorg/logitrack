@@ -800,6 +800,8 @@ func RunMigrations(db *sql.DB) error {
 			('supervisor', 'fatiga',         true),
 			('supervisor', 'sla',            true),
 			('supervisor', 'empleado-mes',   true),
+			('supervisor', 'claims',         true),
+			('supervisor', 'analytics',      true),
 			('manager',    'resumen',        true),
 			('manager',    'choferes',       true),
 			('manager',    'reclamos',       true),
@@ -812,7 +814,9 @@ func RunMigrations(db *sql.DB) error {
 			('manager',    'exito',          true),
 			('manager',    'fatiga',         true),
 			('manager',    'sla',            true),
-			('manager',    'empleado-mes',   true)
+			('manager',    'empleado-mes',   true),
+			('manager',    'claims',         true),
+			('manager',    'analytics',      true)
 		ON CONFLICT (role_name, metric_id) DO NOTHING;
 
 		-- Excepciones de permisos por usuario individual.

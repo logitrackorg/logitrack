@@ -14,7 +14,8 @@ type KnownMetric struct {
 var AllMetrics = []KnownMetric{
 	{ID: "resumen",        Label: "Resumen"},
 	{ID: "choferes",       Label: "Choferes"},
-	{ID: "reclamos",       Label: "Reclamos"},
+	{ID: "reclamos",       Label: "Incidentes"},
+	{ID: "claims",         Label: "Reclamos"},
 	{ID: "facturacion",    Label: "Facturación"},
 	{ID: "ranking",        Label: "Ranking"},
 	{ID: "volumen",        Label: "Vol. por Ventana"},
@@ -25,6 +26,7 @@ var AllMetrics = []KnownMetric{
 	{ID: "fatiga",         Label: "Fatiga"},
 	{ID: "sla",            Label: "SLA"},
 	{ID: "empleado-mes",   Label: "Empleado del Mes"},
+	{ID: "analytics",      Label: "Analytics"},
 }
 
 // MetricPermission stores whether a role can see a specific metric.

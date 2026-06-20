@@ -18,6 +18,7 @@ type StatsExtendedRepository interface {
 	VolumeByDeliveryMethod(dateFrom, dateTo *time.Time, branchID string) (model.VolumeByDeliveryMethodResponse, error)
 	ReturnMetrics(dateFrom, dateTo *time.Time, branchID string) (model.ReturnMetricsResponse, error)
 	SuccessRateByBranch(dateFrom, dateTo *time.Time, branchID string) (model.SuccessRateByBranchResponse, error)
+	ClaimStats(dateFrom, dateTo *time.Time, branchID string) (model.ClaimStatsResponse, error)
 }
 
 type postgresStatsExtendedRepository struct {
@@ -688,5 +689,161 @@ func (r *postgresStatsExtendedRepository) SuccessRateByBranch(dateFrom, dateTo *
 	if err := rows.Err(); err != nil {
 		return model.SuccessRateByBranchResponse{}, fmt.Errorf("success rate branch rows error: %w", err)
 	}
+	return result, nil
+}
+
+func (r *postgresStatsExtendedRepository) ClaimStats(dateFrom, dateTo *time.Time, branchID string) (model.ClaimStatsResponse, error) {
+	now := time.Now()
+	from := now.AddDate(0, 0, -30)
+	to := now
+	if dateFrom != nil {
+		from = *dateFrom
+	}
+	if dateTo != nil {
+		to = *dateTo
+	}
+
+	result := model.ClaimStatsResponse{
+		ByStatus:     map[string]int{},
+		ByPriority:   map[string]int{},
+		ByType:       map[string]int{},
+		ByCategory:   map[string]int{},
+		ByResolution: map[string]int{},
+		ByBranch:     []model.ClaimBranchStat{},
+		Trend:        []model.ClaimTrendPoint{},
+	}
+
+	// Cohorte principal: reclamos creados en el rango, agrupados por campos clave.
+	// La sucursal efectiva es assigned_branch_id (si tiene), si no origin_branch_id del envío.
+	cohortRows, err := r.db.Query(`
+		SELECT
+			c.status,
+			c.priority,
+			c.claim_type,
+			COALESCE(c.assigned_category, '')                              AS assigned_category,
+			COALESCE(c.resolution_type, '')                                AS resolution_type,
+			COALESCE(c.priority_note, '')                                  AS priority_note,
+			EXTRACT(EPOCH FROM (
+				CASE WHEN c.status LIKE 'resolved_%' THEN c.updated_at ELSE NULL END
+				- c.created_at
+			)) / 3600.0                                                    AS resolution_hours,
+			COALESCE(NULLIF(c.assigned_branch_id, ''), s.origin_branch_id, '') AS eff_branch_id,
+			COALESCE(b.name, '')                                           AS branch_name
+		FROM shipment_claims c
+		LEFT JOIN shipments s    ON s.tracking_id = c.tracking_id
+		LEFT JOIN branches  b    ON b.id = COALESCE(NULLIF(c.assigned_branch_id, ''), s.origin_branch_id)
+		WHERE c.created_at >= $1 AND c.created_at <= $2
+		  AND ($3 = '' OR c.assigned_branch_id = $3 OR s.origin_branch_id = $3)
+	`, from, to, branchID)
+	if err != nil {
+		return result, fmt.Errorf("claim stats cohort query: %w", err)
+	}
+	defer cohortRows.Close()
+
+	type branchKey struct{ id, name string }
+	type branchAcc struct{ total, open, resolved int }
+	branchMap := map[branchKey]*branchAcc{}
+	var totalResHours float64
+	var resolvedCount int
+
+	for cohortRows.Next() {
+		var status, priority, claimType, category, resolution, priorityNote, effBranchID, branchName string
+		var resHours *float64
+		if err := cohortRows.Scan(&status, &priority, &claimType, &category, &resolution, &priorityNote, &resHours, &effBranchID, &branchName); err != nil {
+			return result, fmt.Errorf("claim stats cohort scan: %w", err)
+		}
+
+		result.Total++
+		result.ByStatus[status]++
+		result.ByPriority[priority]++
+		result.ByType[claimType]++
+		if category != "" {
+			result.ByCategory[category]++
+		}
+		isResolved := len(status) >= 9 && status[:9] == "resolved_"
+		if isResolved {
+			result.Resolved++
+			if resolution != "" {
+				result.ByResolution[resolution]++
+			}
+			if resHours != nil {
+				totalResHours += *resHours
+				resolvedCount++
+			}
+		} else {
+			result.Open++
+		}
+		if len(priorityNote) >= 21 && priorityNote[:21] == "Escalado automático:" {
+			result.Escalated++
+		}
+
+		if effBranchID != "" {
+			key := branchKey{id: effBranchID, name: branchName}
+			if _, ok := branchMap[key]; !ok {
+				branchMap[key] = &branchAcc{}
+			}
+			branchMap[key].total++
+			if isResolved {
+				branchMap[key].resolved++
+			} else {
+				branchMap[key].open++
+			}
+		}
+	}
+	if err := cohortRows.Err(); err != nil {
+		return result, fmt.Errorf("claim stats cohort rows: %w", err)
+	}
+
+	if resolvedCount > 0 {
+		avg := totalResHours / float64(resolvedCount)
+		result.AvgResolutionHours = &avg
+	}
+
+	for k, v := range branchMap {
+		result.ByBranch = append(result.ByBranch, model.ClaimBranchStat{
+			BranchID:   k.id,
+			BranchName: k.name,
+			Total:      v.total,
+			Open:       v.open,
+			Resolved:   v.resolved,
+		})
+	}
+
+	// Tendencia diaria: created vs resolved por día.
+	trendRows, err := r.db.Query(`
+		SELECT day, SUM(created) AS created, SUM(resolved) AS resolved
+		FROM (
+			SELECT c.created_at::date AS day, 1 AS created, 0 AS resolved
+			FROM shipment_claims c
+			LEFT JOIN shipments s ON s.tracking_id = c.tracking_id
+			WHERE c.created_at >= $1 AND c.created_at <= $2
+			  AND ($3 = '' OR c.assigned_branch_id = $3 OR s.origin_branch_id = $3)
+			UNION ALL
+			SELECT c.updated_at::date AS day, 0 AS created, 1 AS resolved
+			FROM shipment_claims c
+			LEFT JOIN shipments s ON s.tracking_id = c.tracking_id
+			WHERE c.status LIKE 'resolved_%'
+			  AND c.updated_at >= $1 AND c.updated_at <= $2
+			  AND ($3 = '' OR c.assigned_branch_id = $3 OR s.origin_branch_id = $3)
+		) sub
+		GROUP BY day
+		ORDER BY day
+	`, from, to, branchID)
+	if err != nil {
+		return result, fmt.Errorf("claim stats trend query: %w", err)
+	}
+	defer trendRows.Close()
+
+	for trendRows.Next() {
+		var pt model.ClaimTrendPoint
+		if err := trendRows.Scan(&pt.Date, &pt.Created, &pt.Resolved); err != nil {
+			return result, fmt.Errorf("claim stats trend scan: %w", err)
+		}
+		result.Trend = append(result.Trend, pt)
+	}
+	if err := trendRows.Err(); err != nil {
+		return result, fmt.Errorf("claim stats trend rows: %w", err)
+	}
+
 	return result, nil
 }

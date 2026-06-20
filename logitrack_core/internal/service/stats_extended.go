@@ -51,3 +51,7 @@ func (s *StatsExtendedService) ReturnMetrics(dateFrom, dateTo *time.Time, branch
 func (s *StatsExtendedService) SuccessRateByBranch(dateFrom, dateTo *time.Time, branchID string) (model.SuccessRateByBranchResponse, error) {
 	return s.repo.SuccessRateByBranch(dateFrom, dateTo, branchID)
 }
+
+func (s *StatsExtendedService) ClaimStats(dateFrom, dateTo *time.Time, branchID string) (model.ClaimStatsResponse, error) {
+	return s.repo.ClaimStats(dateFrom, dateTo, branchID)
+}
