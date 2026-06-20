@@ -1,7 +1,9 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet.heat";
 import {
+  coverageApi,
   type CoverageCell,
   type SuggestedLocation,
   type SnappedCity,
@@ -76,6 +78,12 @@ interface VoronoiCoverageMapProps {
   onBoundaryEdited?: (pts: [number, number][]) => void;
   /** Llamado cuando el usuario presiona Esc durante la edición. */
   onBoundaryEditCancel?: () => void;
+  /**
+   * Cuando true, superpone un mapa de calor de zonas industriales OSM sobre
+   * la vista actual. Se actualiza automáticamente en cada paneo/zoom (moveend).
+   * Solo activo a partir del zoom 7 (vista regional); se borra al deshabilitar.
+   */
+  showIndustrialHeatmap?: boolean;
 }
 
 const FACTORY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg>`;
@@ -123,6 +131,7 @@ function VoronoiCoverageMap({
   isEditingBoundary = false,
   onBoundaryEdited,
   onBoundaryEditCancel,
+  showIndustrialHeatmap = false,
 }: VoronoiCoverageMapProps, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -145,6 +154,7 @@ function VoronoiCoverageMap({
   const referenceLayer = useRef<L.LayerGroup | null>(null);
   const drawLayer = useRef<L.LayerGroup | null>(null);
   const editLayer = useRef<L.LayerGroup | null>(null);
+  const heatmapLayerRef = useRef<L.HeatLayer | null>(null);
 
   // Refs para manejar el estado de dibujo sin stale closures en los event handlers.
   const isDrawingRef = useRef(isDrawingBoundary);
@@ -176,9 +186,23 @@ function VoronoiCoverageMap({
       zoomControl: true,
       scrollWheelZoom: true,
     });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors",
+    const osmLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
+    }).addTo(map);
+    const topoLayer = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+      attribution: '© <a href="https://opentopomap.org">OpenTopoMap</a>, © OpenStreetMap',
+      maxZoom: 17,
+    });
+    L.control.layers(
+      { "🏙 Vista Urbana": osmLayer, "🗺 Vista Topográfica": topoLayer },
+      {},
+      { position: "topright" },
+    ).addTo(map);
+    heatmapLayerRef.current = L.heatLayer([], {
+      radius: 25,
+      blur: 20,
+      gradient: { 0.3: "#fef3c7", 0.6: "#f59e0b", 1.0: "#b45309" },
     }).addTo(map);
     mapRef.current = map;
     cellsLayer.current = L.layerGroup().addTo(map);
@@ -602,6 +626,38 @@ function VoronoiCoverageMap({
       );
     });
   }, [snappedCities]);
+
+  // Mapa de calor industrial: suscribe al evento moveend, fetcha Overpass por bbox
+  // y actualiza la heatLayer. Solo activo cuando showIndustrialHeatmap es true.
+  useEffect(() => {
+    const map = mapRef.current;
+    const heat = heatmapLayerRef.current;
+    if (!map || !heat) return;
+
+    let cancelled = false;
+
+    const fetchHeatmap = () => {
+      if (!showIndustrialHeatmap || map.getZoom() < 7) {
+        heat.setLatLngs([]);
+        return;
+      }
+      const b = map.getBounds();
+      const bbox = `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
+      coverageApi
+        .getIndustrialHeatmap(bbox)
+        .then((pts) => { if (!cancelled) heat.setLatLngs(pts as [number, number][]); })
+        .catch(() => {});
+    };
+
+    map.on("moveend", fetchHeatmap);
+    if (showIndustrialHeatmap) fetchHeatmap();
+
+    return () => {
+      cancelled = true;
+      map.off("moveend", fetchHeatmap);
+      heat.setLatLngs([]);
+    };
+  }, [showIndustrialHeatmap]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 });

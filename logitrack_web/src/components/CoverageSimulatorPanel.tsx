@@ -67,6 +67,9 @@ interface CoverageSimulatorPanelProps {
   onApplyTerrainFrictionChange?: (v: boolean) => void;
   /** true mientras el backend está calculando el diagnóstico — bloquea el panel y cambia el texto del botón. */
   isDiagnosing?: boolean;
+  /** Toggles the industrial heatmap overlay on the map (leaflet.heat). */
+  showIndustrialHeatmap?: boolean;
+  onIndustrialHeatmapChange?: (v: boolean) => void;
   /**
    * Total area of the active analysis zone in km² — used to compute adaptive
    * slider bounds (min = 0.1 % of zone, max = 25 % of zone).  Defaults to the
@@ -108,6 +111,8 @@ export function CoverageSimulatorPanel({
   onApplyTerrainFrictionChange,
   isDiagnosing = false,
   zoneAreaKm2,
+  showIndustrialHeatmap = false,
+  onIndustrialHeatmapChange,
 }: CoverageSimulatorPanelProps) {
   const isDisabled = disabled || isDiagnosing;
 
@@ -538,6 +543,35 @@ export function CoverageSimulatorPanel({
       >
         {isDiagnosing ? "Realizando diagnóstico…" : "Confirmar y Diagnosticar"}
       </button>
+
+      <div className="pt-3 border-t border-slate-200 dark:border-gray-700">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
+          Capas del mapa
+        </p>
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showIndustrialHeatmap}
+            onClick={() => onIndustrialHeatmapChange?.(!showIndustrialHeatmap)}
+            className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer focus:outline-none ${
+              showIndustrialHeatmap ? "bg-amber-500" : "bg-slate-300 dark:bg-gray-600"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
+                showIndustrialHeatmap ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <span className="text-[11px] text-slate-600 dark:text-slate-300">🏭 Calor industrial</span>
+        </label>
+        {showIndustrialHeatmap && (
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 leading-tight">
+            Zonas industriales OSM. Se actualiza al mover el mapa. Activo desde zoom regional (nivel 7+).
+          </p>
+        )}
+      </div>
     </div>
   );
 }

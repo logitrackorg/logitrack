@@ -1044,6 +1044,7 @@ export function CoberturaTab() {
   const [customBoundary, setCustomBoundary] = useState<[number, number][] | null>(null);
   const [isDrawingBoundary, setIsDrawingBoundary] = useState(false);
   const [isEditingBoundary, setIsEditingBoundary] = useState(false);
+  const [showIndustrialHeatmap, setShowIndustrialHeatmap] = useState(false);
 
   // Zonas guardadas (predefinidas + zonas del usuario).
   const [regions, setRegions] = useState<CoverageRegion[]>([]);
@@ -1782,6 +1783,7 @@ export function CoberturaTab() {
               isEditingBoundary={isEditingBoundary}
               onBoundaryEdited={handleBoundaryEdited}
               onBoundaryEditCancel={handleBoundaryEditCancel}
+              showIndustrialHeatmap={showIndustrialHeatmap}
             />
           </div>
         </Card>
@@ -1829,6 +1831,8 @@ export function CoberturaTab() {
                 applyTerrainFriction={applyTerrainFriction}
                 onApplyTerrainFrictionChange={setApplyTerrainFriction}
                 zoneAreaKm2={zoneAreaKm2}
+                showIndustrialHeatmap={showIndustrialHeatmap}
+                onIndustrialHeatmapChange={setShowIndustrialHeatmap}
               />
               {simResult !== null && (
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">

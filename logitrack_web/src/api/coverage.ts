@@ -258,6 +258,17 @@ export const coverageApi = {
         ...(customBoundingArea?.length ? { custom_bounding_area: customBoundingArea } : {}),
       })
       .then((r) => r.data),
+
+  /**
+   * Returns OSM industrial-zone centroids inside the given bounding box as
+   * [lat, lng] pairs for the leaflet.heat layer. Empty array when the bbox is
+   * too large or Overpass is unreachable. Results are cached 15 min server-side.
+   * bbox format: "minLon,minLat,maxLon,maxLat" (Leaflet getBounds order).
+   */
+  getIndustrialHeatmap: (bbox: string) =>
+    api
+      .get<[number, number][]>("/coverage/industrial-heatmap", { params: { bbox } })
+      .then((r) => r.data),
 };
 
 // Paleta por severidad de gap (consistente con StatusBadge/PriorityBadge del sistema).

@@ -654,6 +654,7 @@ func main() {
 	protected.POST("/coverage/diagnose", canViewStats, coverageHandler.Diagnose)
 	protected.POST("/coverage/snap-to-city", canViewStats, coverageHandler.SnapToCity)
 	protected.POST("/coverage/project", canViewStats, coverageHandler.Project)
+	protected.GET("/coverage/industrial-heatmap", canViewStats, coverageHandler.IndustrialHeatmap)
 	protected.GET("/regions", canViewStats, regionHandler.List)
 	protected.POST("/regions", canViewStats, regionHandler.Create)
 	protected.PUT("/regions/:id", canViewStats, regionHandler.Update)
