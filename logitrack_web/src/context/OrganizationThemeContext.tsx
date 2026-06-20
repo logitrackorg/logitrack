@@ -108,6 +108,7 @@ const ORG_TOKEN_KEYS = [
   "--ring",
   "--fc-button-bg-color", "--fc-button-border-color",
   "--fc-button-hover-bg-color", "--fc-button-active-bg-color", "--fc-highlight-color",
+  "--font-family",
 ];
 
 function clearOrgTokens(root: HTMLElement) {
@@ -178,6 +179,14 @@ function injectThemeTokens(config: OrganizationBranding | null) {
         hslToHex(sidebarHSL.h, sidebarHSL.s, Math.max(sidebarHSL.l - 10, 0))
       );
     }
+  }
+
+  // Inject font family
+  if (config.font_family && config.font_family !== '') {
+    const family = config.font_family === 'System UI'
+      ? 'system-ui, -apple-system, sans-serif'
+      : `'${config.font_family}', system-ui, sans-serif`;
+    root.style.setProperty('--font-family', family);
   }
 }
 

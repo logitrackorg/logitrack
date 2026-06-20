@@ -33,6 +33,7 @@ export interface OrganizationBranding {
   accent_color?: string;
   sidebar_color?: string;
   logo_url?: string;
+  font_family?: string;
 }
 
 // Cliente público sin interceptor de auth: se usa para aplicar el tema antes
