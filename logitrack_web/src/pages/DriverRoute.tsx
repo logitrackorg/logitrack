@@ -150,6 +150,7 @@ function LastMileView() {
   const [recipientDni, setRecipientDni] = useState("");
   const [deliveryKeyword, setDeliveryKeyword] = useState("");
   const [deliveryPhoto, setDeliveryPhoto] = useState<Blob | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | undefined>();
   const [cameraOpen, setCameraOpen] = useState(false);
   const [useContingency, setUseContingency] = useState(false);
   const [failedReason, setFailedReason] = useState<string>("");
@@ -162,11 +163,22 @@ function LastMileView() {
   // Geofence warning: when set, shows a confirmation modal before proceeding.
   // Stores the distance (m) and a callback to execute if the driver confirms.
   const [geoWarning, setGeoWarning] = useState<{ distanceM: number; onConfirm: () => void } | null>(null);
+  // GPS coords captured at the moment the delivery sheet opens (or geo-warning fires).
+  // Using these instead of re-reading driverCoords() at submit time prevents a race
+  // condition where GPS becomes unavailable between showing the warning and submitting.
+  const [capturedCoords, setCapturedCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [tab, setTab] = useState<Tab>("pendientes");
   const [isDangerDismissed, setIsDangerDismissed] = useState(false);
 
   const { getMisfires, resetMisfires, triggerCheckin, closeCheckin } =
     useMisfireTracking();
+
+  useEffect(() => {
+    if (!deliveryPhoto) { setPhotoPreviewUrl(undefined); return; }
+    const url = URL.createObjectURL(deliveryPhoto);
+    setPhotoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [deliveryPhoto]);
 
   const load = () =>
     driverApi
@@ -354,33 +366,41 @@ function LastMileView() {
 
   // Opens a sheet after checking geofence. If outside radius, shows the warning
   // first and only opens the sheet if the driver confirms.
-  const openDeliverSheet = (shipment: Shipment, onReady?: () => void) => {
+  const openDeliverSheet = (shipment: Shipment) => {
     // Resetear antes de cargar para evitar que queden intentos de un envío anterior.
     setOfflineKeywordAttempts(0);
     getKeywordAttempts(shipment.tracking_id).then(setOfflineKeywordAttempts).catch(() => {});
+    const coords = driverCoords();
     const distM = checkGeofence(shipment);
     if (distM !== null && distM > GEOFENCE_RADIUS_M) {
-      setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setDeliverShipment(shipment); onReady?.(); } });
+      setCapturedCoords(coords);
+      setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setDeliverShipment(shipment); } });
     } else {
+      setCapturedCoords(coords);
       setDeliverShipment(shipment);
-      onReady?.();
     }
   };
 
   const openFailedSheet = (shipment: Shipment) => {
+    const coords = driverCoords();
     const distM = checkGeofence(shipment);
     if (distM !== null && distM > GEOFENCE_RADIUS_M) {
+      setCapturedCoords(coords);
       setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setFailedShipment(shipment); } });
     } else {
+      setCapturedCoords(coords);
       setFailedShipment(shipment);
     }
   };
 
   const openRejectedSheet = (shipment: Shipment) => {
+    const coords = driverCoords();
     const distM = checkGeofence(shipment);
     if (distM !== null && distM > GEOFENCE_RADIUS_M) {
+      setCapturedCoords(coords);
       setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setRejectedShipment(shipment); } });
     } else {
+      setCapturedCoords(coords);
       setRejectedShipment(shipment);
     }
   };
@@ -397,6 +417,7 @@ function LastMileView() {
     setRejectedReason("");
     setRejectedNotes("");
     setDeliveryPhoto(null);
+    setCapturedCoords(null);
   };
 
   const checkReTestGate = async () => {
@@ -471,7 +492,7 @@ function LastMileView() {
           return;
         }
       }
-      const coords = driverCoords();
+      const coords = capturedCoords ?? driverCoords();
       await enqueueAction({
         type: "deliver",
         trackingId: deliverShipment.tracking_id,
@@ -497,7 +518,7 @@ function LastMileView() {
     // ── Path online ─────────────────────────────────────────────────────────
     setSubmitting(true);
     setActionError("");
-    const coords = driverCoords();
+    const coords = capturedCoords ?? driverCoords();
     try {
       if (isLastMile) {
         await shipmentApi.deliver(deliverShipment.tracking_id, {
@@ -544,7 +565,7 @@ function LastMileView() {
 
     setSubmitting(true);
     setActionError("");
-    const coords = driverCoords();
+    const coords = capturedCoords ?? driverCoords();
 
     if (!isOnline) {
       await enqueueAction({
@@ -588,7 +609,7 @@ function LastMileView() {
 
     setSubmitting(true);
     setActionError("");
-    const coords = driverCoords();
+    const coords = capturedCoords ?? driverCoords();
 
     if (!isOnline) {
       await enqueueAction({
@@ -964,9 +985,7 @@ function LastMileView() {
             canAct={canAct}
             onDeliver={() => {
               if (!nextShipment) return;
-              openDeliverSheet(nextShipment, () => {
-                if (nextShipment.delivery_method === "ultima_milla") setCameraOpen(true);
-              });
+              openDeliverSheet(nextShipment);
             }}
             onFailed={() => { if (nextShipment) openFailedSheet(nextShipment); }}
             onRejected={() => { if (nextShipment) openRejectedSheet(nextShipment); }}
@@ -1009,6 +1028,9 @@ function LastMileView() {
         onRequestLocation={requestLocation}
         error={actionError}
         offlineKeywordAttempts={offlineKeywordAttempts}
+        hasPhoto={!!deliveryPhoto}
+        photoPreviewUrl={photoPreviewUrl}
+        onTakePhoto={() => setCameraOpen(true)}
       />
       <DeliveryActionSheet
         mode="failed"

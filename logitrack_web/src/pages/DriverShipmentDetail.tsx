@@ -56,9 +56,13 @@ export function DriverShipmentDetail() {
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [deliveryPhoto, setDeliveryPhoto] = useState<Blob | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | undefined>();
   const [cameraOpen, setCameraOpen] = useState(false);
   // Aviso de geofence: el chofer está a > GEOFENCE_RADIUS_M del domicilio.
   const [geoWarning, setGeoWarning] = useState<{ distanceM: number; onConfirm: () => void } | null>(null);
+  // GPS capturado al momento de abrir el sheet (o disparar el warning) — evita
+  // que la posición se pierda entre el warning y el submit online.
+  const [capturedPosition, setCapturedPosition] = useState<{ lat: number; lng: number } | null>(null);
   // Intentos fallidos de palabra clave validados localmente (offline).
   const [offlineKeywordAttempts, setOfflineKeywordAttempts] = useState(0);
   // Popover de mensajes rápidos de WhatsApp.
@@ -133,6 +137,13 @@ export function DriverShipmentDetail() {
     getKeywordAttempts(shipment.tracking_id).then(setOfflineKeywordAttempts).catch(() => {});
   }, [deliverOpen, shipment?.tracking_id]);
 
+  useEffect(() => {
+    if (!deliveryPhoto) { setPhotoPreviewUrl(undefined); return; }
+    const url = URL.createObjectURL(deliveryPhoto);
+    setPhotoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [deliveryPhoto]);
+
   const handleDeliver = async () => {
     if (!shipment) return;
     const isLastMile = shipment.delivery_method === "ultima_milla";
@@ -200,12 +211,13 @@ export function DriverShipmentDetail() {
 
     // ── Path online ───────────────────────────────────────────────────────────
     setSubmitting(true); setActionError("");
+    const gpsCoords = capturedPosition ?? position;
     try {
       if (isLastMile) {
-        await shipmentApi.deliver(shipment.tracking_id, { keyword: useContingency ? undefined : deliveryKeyword.trim(), recipient_dni: useContingency ? recipientDni.trim() : undefined, contingency: useContingency, current_speed: effectiveSpeed, speed_source: speedSource, photo: deliveryPhoto! });
+        await shipmentApi.deliver(shipment.tracking_id, { keyword: useContingency ? undefined : deliveryKeyword.trim(), recipient_dni: useContingency ? recipientDni.trim() : undefined, contingency: useContingency, current_speed: effectiveSpeed, speed_source: speedSource, photo: deliveryPhoto!, latitude: gpsCoords?.lat, longitude: gpsCoords?.lng });
       }
-      else await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivered", location: "", recipient_dni: recipientDni.trim(), current_speed: effectiveSpeed, speed_source: speedSource });
-      setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); setDeliveryPhoto(null);
+      else await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivered", location: "", recipient_dni: recipientDni.trim(), current_speed: effectiveSpeed, speed_source: speedSource, latitude: gpsCoords?.lat, longitude: gpsCoords?.lng });
+      setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); setDeliveryPhoto(null); setCapturedPosition(null);
       await reload(shipment.tracking_id);
     } catch (err: unknown) { const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error; if (msg?.includes("intento") || msg?.includes("bloqueado")) { setDeliveryKeyword(""); const u = await shipmentApi.get(shipment.tracking_id).catch(() => null); if (u) setShipment(u); } setActionError(msg ?? "No se pudo registrar la entrega."); } finally { setSubmitting(false); }
   };
@@ -230,7 +242,8 @@ export function DriverShipmentDetail() {
       return;
     }
 
-    try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivery_failed", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource }); setFailedOpen(false); setFailedReason(""); setFailedNotes(""); await reload(shipment.tracking_id); }
+    const gpsCoords = capturedPosition ?? position;
+    try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivery_failed", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource, latitude: gpsCoords?.lat, longitude: gpsCoords?.lng }); setFailedOpen(false); setFailedReason(""); setFailedNotes(""); setCapturedPosition(null); await reload(shipment.tracking_id); }
     catch (err: unknown) { setActionError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo registrar el intento fallido."); } finally { setSubmitting(false); }
   };
 
@@ -254,7 +267,8 @@ export function DriverShipmentDetail() {
       return;
     }
 
-    try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "rechazado", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource }); setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); await reload(shipment.tracking_id); }
+    const gpsCoords = capturedPosition ?? position;
+    try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "rechazado", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource, latitude: gpsCoords?.lat, longitude: gpsCoords?.lng }); setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); setCapturedPosition(null); await reload(shipment.tracking_id); }
     catch (err: unknown) { setActionError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo registrar el rechazo."); } finally { setSubmitting(false); }
   };
 
@@ -269,6 +283,7 @@ export function DriverShipmentDetail() {
   // fuera del radio (continúa solo si confirma). Igual que en DriverRoute.
   const withGeofence = (proceed: () => void) => {
     const d = checkGeofence();
+    setCapturedPosition(position ?? null);
     if (d !== null && d > GEOFENCE_RADIUS_M) {
       setGeoWarning({ distanceM: d, onConfirm: () => { setGeoWarning(null); proceed(); } });
     } else {
@@ -445,7 +460,6 @@ export function DriverShipmentDetail() {
           onCapture={(blob) => {
             setDeliveryPhoto(blob);
             setCameraOpen(false);
-            setDeliverOpen(true);
           }}
           onClose={() => setCameraOpen(false)}
         />
@@ -455,7 +469,7 @@ export function DriverShipmentDetail() {
     {canAct && (
       <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
         <div className="flex flex-col gap-2 max-w-2xl mx-auto">
-          <Button onClick={() => withGeofence(() => { if (shipment.delivery_method === "ultima_milla") { setCameraOpen(true); } else { setDeliverOpen(true); } })} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
+          <Button onClick={() => withGeofence(() => setDeliverOpen(true))} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
             <CheckCircle2 className="w-5 h-5" />Entregar
           </Button>
           <div className="flex gap-2">
@@ -470,7 +484,7 @@ export function DriverShipmentDetail() {
       </div>
     )}
 
-    <DeliveryActionSheet mode="deliver" open={deliverOpen} onClose={() => { setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); }} shipment={shipment} keyword={deliveryKeyword} onKeywordChange={setDeliveryKeyword} useContingency={useContingency} onUseContingency={setUseContingency} dni={recipientDni} onDniChange={setRecipientDni} submitting={submitting} onConfirm={handleDeliver} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} offlineKeywordAttempts={offlineKeywordAttempts} />
+    <DeliveryActionSheet mode="deliver" open={deliverOpen && !cameraOpen} onClose={() => { setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); setDeliveryPhoto(null); }} shipment={shipment} keyword={deliveryKeyword} onKeywordChange={setDeliveryKeyword} useContingency={useContingency} onUseContingency={setUseContingency} dni={recipientDni} onDniChange={setRecipientDni} submitting={submitting} onConfirm={handleDeliver} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} offlineKeywordAttempts={offlineKeywordAttempts} hasPhoto={!!deliveryPhoto} photoPreviewUrl={photoPreviewUrl} onTakePhoto={() => setCameraOpen(true)} />
     <DeliveryActionSheet mode="failed" open={failedOpen} onClose={() => { setFailedOpen(false); setFailedReason(""); setFailedNotes(""); }} shipment={shipment} reason={failedReason} onReasonChange={setFailedReason} notes={failedNotes} onNotesChange={setFailedNotes} submitting={submitting} onConfirm={handleFailed} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
     <DeliveryActionSheet mode="rejected" open={rejectedOpen} onClose={() => { setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); }} shipment={shipment} reason={rejectedReason} onReasonChange={setRejectedReason} notes={rejectedNotes} onNotesChange={setRejectedNotes} submitting={submitting} onConfirm={handleRejected} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
 

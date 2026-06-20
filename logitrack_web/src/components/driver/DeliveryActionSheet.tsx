@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Camera } from "lucide-react";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,9 @@ export interface DeliveryActionSheetProps {
   dni?: string;
   onDniChange?: (s: string) => void;
   offlineKeywordAttempts?: number;
+  hasPhoto?: boolean;
+  photoPreviewUrl?: string;
+  onTakePhoto?: () => void;
 
   // failed / rejected mode
   reason?: string;
@@ -57,6 +60,9 @@ export function DeliveryActionSheet({
   dni = "",
   onDniChange,
   offlineKeywordAttempts = 0,
+  hasPhoto = false,
+  photoPreviewUrl,
+  onTakePhoto,
   // failed / rejected mode
   reason = "",
   onReasonChange,
@@ -94,9 +100,8 @@ export function DeliveryActionSheet({
   const locked = keywordAttempts >= 3;
 
   const deliverCanConfirm = isLastMile
-    ? useContingency
-      ? !!dni.trim()
-      : !locked && !!keyword.trim()
+    ? hasPhoto &&
+      (useContingency ? !!dni.trim() : !locked && !!keyword.trim())
     : !!dni.trim();
 
   // ── Failed / Rejected mode ────────────────────────────────────
@@ -147,6 +152,41 @@ export function DeliveryActionSheet({
       title={title}
       description={description}
     >
+      {/* ═══ DELIVER MODE — PHOTO ═══ */}
+      {isDeliver && isLastMile && (
+        <div className="mb-4">
+          {photoPreviewUrl ? (
+            <div className="relative">
+              <img
+                src={photoPreviewUrl}
+                alt="Foto de entrega"
+                className="w-full h-40 object-cover rounded-xl border border-[var(--border)]"
+              />
+              <button
+                onClick={onTakePhoto}
+                className="absolute bottom-2 right-2 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-black/60 text-white text-xs font-semibold active:scale-95"
+              >
+                <Camera size={12} />
+                Cambiar foto
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={onTakePhoto}
+                className="w-full h-24 rounded-xl border-2 border-dashed border-amber-400 dark:border-amber-500/60 bg-amber-50 dark:bg-amber-500/10 flex flex-col items-center justify-center gap-1.5 text-amber-700 dark:text-amber-400 active:scale-95 transition-transform"
+              >
+                <Camera size={26} />
+                <span className="text-sm font-semibold">Tomar foto</span>
+              </button>
+              <p className="mt-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                La foto es obligatoria para confirmar la entrega.
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ═══ DELIVER MODE ═══ */}
       {isDeliver && isLastMile && !useContingency && (
         <>

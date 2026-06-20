@@ -187,6 +187,8 @@ Middleware groups:
 
 **Geofence at delivery** — `model.GeofenceRadiusMeters = 300.0` (in `internal/model/event.go`). When a driver marks `delivered` or `delivery_failed` with GPS coords outside that radius, `maybeReportGeoIncident` in `handler/shipment.go` creates an `ubicacion_fuera_de_rango` incident and calls `NotificationService.NotifyGeoMismatch` to notify branch supervisors. Every event is recorded (no dedup). GPS coords flow through `UpdateStatusRequest.Latitude/Longitude` and `service.DeliverRequest.Latitude/Longitude`.
 
+**Dual driver delivery UI** — drivers can deliver from two independent pages, both of which must pass GPS coordinates for geofence to work: `DriverRoute.tsx` (via `openDeliverSheet` → `capturedCoords`) and `DriverShipmentDetail.tsx` (via `withGeofence` → `capturedPosition`). Any change to geofence logic or GPS coord handling must be applied to **both** files. The coords are captured at the moment the sheet/warning opens, not re-read at submit time (race condition prevention).
+
 **Offline mode (driver app — Capacitor APK)** — drivers can operate without connectivity except for login. Implementation in `logitrack_web/src/offline/`:
 - `db.ts`: IndexedDB schema (`logitrack_offline` v2). Stores: `routeCache` (full route response), `routeGeometry` (OSRM polyline coords), `actionQueue` (deliver/failed/rejected), `keywordAttempts` (per tracking_id). `clearDayCache(driverId)` clears all except `actionQueue` — called when route finishes and on stale-day detection at next load.
 - `useOffline.ts`: uses `Capacitor.isNativePlatform()` to choose between Capacitor Network plugin (APK) and DOM `online`/`offline` events (browser).
