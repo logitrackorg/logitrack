@@ -1,0 +1,20 @@
+logitrack_web/src/pages/Routing.tsx
+  s_c5ea671ab9c5a8::t_201eebf4d98c01 1032
+  s_c5ea671ab9c5a8::t_6614c32c367ee8 971
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "1b869a3a2067b6141e7674d1a04cdaeaaa07ead1",
+  "prompts": {},
+  "sessions": {
+    "s_c5ea671ab9c5a8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "00584cf2-da87-486b-8853-7fc63d8b2024",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
