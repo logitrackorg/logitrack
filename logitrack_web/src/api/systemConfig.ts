@@ -27,6 +27,20 @@ export interface SystemConfig {
   two_fa_cooldown_minutes: number;
   /** Umbral del detector de cobertura: área máxima (km²) de una celda antes de marcarla como gap. El diagrama usa un bounding box nacional fijo (~6.7M km²). Rango 100–10000000 (default 1000000). */
   max_coverage_area_km2: number;
+  /** Prioridad de reclamos: tope de "urgentes" por sucursal como fracción (0,1]. Default 0.20. */
+  urgent_claims_cap_pct: number;
+  /** Prioridad de reclamos: umbral del priority_score ML para clasificar alta. (0,1]. Default 0.65. */
+  claims_high_priority_threshold: number;
+  /** Prioridad de reclamos: umbral del priority_score ML para clasificar media. (0,1] y < high. Default 0.35. */
+  claims_medium_priority_threshold: number;
+  /** Escalado automático de prioridad: si está habilitado, un job sube de nivel los reclamos no terminales inactivos. Default true. */
+  claim_escalation_enabled: boolean;
+  /** Días de inactividad para escalar baja → media. Rango UI 1–5. Default 3. */
+  claim_escalation_baja_days: number;
+  /** Días de inactividad para escalar media → alta. Rango UI 1–5. Default 2. */
+  claim_escalation_media_days: number;
+  /** Días de inactividad para escalar alta → urgente. Rango UI 1–5. Default 1. */
+  claim_escalation_alta_days: number;
 }
 
 export const systemConfigApi = {

@@ -162,11 +162,17 @@ func main() {
 	// notificaciones reflejen el nuevo momento sin esperar al siguiente plan.
 	// slaRiskChecker se asigna más abajo, después de crear routingSvc.
 	var slaRiskChecker func()
+	// claimEscalationSvc se asigna más abajo (depende de claimRepo / sysConfigRepo
+	// que se construyen después); el closure lo captura por puntero a variable.
+	var claimEscalationRunner func()
 	clockHandler := handler.NewClockHandler(func() {
 		draftLifecycleSvc.RunExpirationJob()
 		draftLifecycleSvc.RunPurgeJob()
 		if slaRiskChecker != nil {
 			slaRiskChecker()
+		}
+		if claimEscalationRunner != nil {
+			claimEscalationRunner()
 		}
 	})
 
@@ -185,6 +191,15 @@ func main() {
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
 	claimEventRepo := repository.NewPostgresClaimEventRepository(database)
 	claimSvc := service.NewClaimService(claimRepo, claimEventRepo, shipmentRepo, eventStore)
+	claimSvc.SetSystemConfigService(sysConfigSvc)
+
+	// Escalado automático de prioridad de reclamos: cada 15 min sube un nivel
+	// los reclamos no terminales que pasaron el umbral de inactividad. También
+	// se ejecuta cuando el admin mueve el reloj de prueba.
+	claimEscalationSvc := service.NewClaimEscalationService(claimRepo, sysConfigRepo)
+	claimEscalationScheduler := service.NewClaimEscalationScheduler(claimEscalationSvc)
+	claimEscalationScheduler.Start()
+	claimEscalationRunner = func() { _, _ = claimEscalationSvc.Run() }
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)

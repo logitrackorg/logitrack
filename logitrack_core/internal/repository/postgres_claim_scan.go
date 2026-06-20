@@ -17,6 +17,8 @@ func (r *postgresClaimRepository) scanClaimRow(row *sql.Row) (model.Claim, error
 	var evidenceFileName, evidenceFilePath, evidenceMimeType, claimantDNI sql.NullString
 	var evidenceUploadDate sql.NullTime
 	var assignedBranchID sql.NullString
+	var priority sql.NullString
+	var priorityNote sql.NullString
 	if err := row.Scan(
 		&claim.ID,
 		&claim.TrackingID,
@@ -35,13 +37,15 @@ func (r *postgresClaimRepository) scanClaimRow(row *sql.Row) (model.Claim, error
 		&evidenceMimeType,
 		&evidenceUploadDate,
 		&assignedBranchID,
+		&priority,
+		&priorityNote,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return model.Claim{}, ErrClaimNotFound
 		}
 		return model.Claim{}, err
 	}
-	scanClaim(claimType, status, assignedCategory, resolutionType, evidenceFileName, evidenceFilePath, evidenceMimeType, evidenceUploadDate, claimantDNI, assignedBranchID, &claim)
+	scanClaim(claimType, status, assignedCategory, resolutionType, evidenceFileName, evidenceFilePath, evidenceMimeType, evidenceUploadDate, claimantDNI, assignedBranchID, priority, priorityNote, &claim)
 	return claim, nil
 }
 
@@ -52,6 +56,8 @@ func (r *postgresClaimRepository) scanClaimRows(rows claimScanner) (model.Claim,
 	var evidenceFileName, evidenceFilePath, evidenceMimeType, claimantDNI sql.NullString
 	var evidenceUploadDate sql.NullTime
 	var assignedBranchID sql.NullString
+	var priority sql.NullString
+	var priorityNote sql.NullString
 	if err := rows.Scan(
 		&claim.ID,
 		&claim.TrackingID,
@@ -70,10 +76,12 @@ func (r *postgresClaimRepository) scanClaimRows(rows claimScanner) (model.Claim,
 		&evidenceMimeType,
 		&evidenceUploadDate,
 		&assignedBranchID,
+		&priority,
+		&priorityNote,
 	); err != nil {
 		return model.Claim{}, err
 	}
-	scanClaim(claimType, status, assignedCategory, resolutionType, evidenceFileName, evidenceFilePath, evidenceMimeType, evidenceUploadDate, claimantDNI, assignedBranchID, &claim)
+	scanClaim(claimType, status, assignedCategory, resolutionType, evidenceFileName, evidenceFilePath, evidenceMimeType, evidenceUploadDate, claimantDNI, assignedBranchID, priority, priorityNote, &claim)
 	return claim, nil
 }
 
@@ -88,6 +96,8 @@ func scanClaim(
 	evidenceUploadDate sql.NullTime,
 	claimantDNI sql.NullString,
 	assignedBranchID sql.NullString,
+	priority sql.NullString,
+	priorityNote sql.NullString,
 	claim *model.Claim,
 ) {
 	claim.ClaimType = model.ClaimType(claimType)
@@ -117,6 +127,14 @@ func scanClaim(
 	if assignedBranchID.Valid {
 		claim.AssignedBranchID = assignedBranchID.String
 	}
+	if priority.Valid && model.ValidClaimPriorities[model.ClaimPriority(priority.String)] {
+		claim.Priority = model.ClaimPriority(priority.String)
+	} else {
+		claim.Priority = model.ClaimPriorityBaja
+	}
+	if priorityNote.Valid {
+		claim.PriorityNote = priorityNote.String
+	}
 }
 
-const claimSelectColumns = `id, tracking_id, claim_type, status, description, created_by, claimant_dni, created_at, updated_at, assigned_category, resolution_type, is_automatic, evidence_file_name, evidence_file_path, evidence_mime_type, evidence_upload_date, assigned_branch_id`
+const claimSelectColumns = `id, tracking_id, claim_type, status, description, created_by, claimant_dni, created_at, updated_at, assigned_category, resolution_type, is_automatic, evidence_file_name, evidence_file_path, evidence_mime_type, evidence_upload_date, assigned_branch_id, priority, priority_note`

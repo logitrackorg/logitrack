@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   AlertTriangle,
@@ -103,6 +103,13 @@ export function DriverRoute() {
 
 function LastMileView() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // State pasado desde DriverScanVehicle tras un claim/start exitoso:
+  //   - route: la ruta ya pre-fetcheada (render inmediato, sin race).
+  //   - fromClaim: marca que venimos de un claim → si no hay data, reintentar el
+  //     fetch (cubre el read-after-write race). Si NO viene de claim (apertura en
+  //     frío o refresh), ante un 404 bounceamos al instante sin reintentar.
+  const navState = location.state as { fromClaim?: boolean; route?: DriverRouteResponse } | null;
   const { user } = useAuth();
   const isOnline = useOffline();
   // trackingIds de acciones encoladas localmente, pendientes de sincronizar.
@@ -120,8 +127,8 @@ function LastMileView() {
   // simulador (ver simulationActive / effectiveSpeed).
   const { speedKmh: gpsSpeedKmh, locationReady, requestLocation } = useCurrentSpeed();
 
-  const [data, setData] = useState<DriverRouteResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<DriverRouteResponse | null>(navState?.route ?? null);
+  const [loading, setLoading] = useState(!navState?.route);
   const [noRoute, setNoRoute] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
@@ -252,7 +259,32 @@ function LastMileView() {
       });
   };
 
-  useEffect(() => { loadWithRetry(); }, []);
+  useEffect(() => {
+    if (navState?.route) {
+      // La ruta llegó con la navegación desde el claim: render inmediato. Solo
+      // cacheamos y pre-fetcheamos la geometría en segundo plano; no hacemos fetch.
+      driverDebug("load_from_navstate", {
+        driverId: user?.id,
+        shipments: navState.route.shipments?.length ?? 0,
+      });
+      if (user) {
+        cacheRoute(user.id, navState.route).catch(() => {});
+        if (navState.route.waypoints && navState.route.waypoints.length >= 2) {
+          prefetchRouteGeometry(user.id, navState.route.waypoints, navState.route.origin ?? undefined).catch(() => {});
+        }
+      }
+      return;
+    }
+    if (navState?.fromClaim) {
+      // Venimos de un claim pero la ruta aún no es visible (race): reintentar.
+      loadWithRetry();
+      return;
+    }
+    // Apertura en frío / refresh: si no hay ruta, bounce inmediato (sin skeleton
+    // prolongado). load() ya hace exactamente eso ante un 404, y sirve cache offline
+    // ante errores de red.
+    load();
+  }, []);
   useEffect(() => { zoneApi.list().then(setZones).catch(() => {}); }, []);
 
   // Reconciliación de la cola offline. Corre en cada montaje y cada vez que

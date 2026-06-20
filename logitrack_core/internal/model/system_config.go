@@ -36,6 +36,30 @@ type SystemConfig struct {
 	// box (~6.7M km²), so cell areas are on the order of hundreds of thousands to
 	// millions of km². Default: 1000000. Range: 100–10000000.
 	MaxCoverageAreaKm2 float64 `json:"max_coverage_area_km2" db:"max_coverage_area_km2"`
+
+	// UrgentClaimsCapPct caps the ratio of "urgente" tickets in a branch's open
+	// pool. Anti-inflación: si al crear un reclamo la prioridad calculada es
+	// urgente y la sucursal ya supera este tope, se degrada a alta.
+	// Rango (0, 1]. Default: 0.20.
+	UrgentClaimsCapPct float64 `json:"urgent_claims_cap_pct" db:"urgent_claims_cap_pct"`
+
+	// ClaimsHighPriorityThreshold es el umbral de priority_score del ML del envío
+	// que dispara prioridad alta del reclamo. Default: 0.65. Rango (0, 1].
+	ClaimsHighPriorityThreshold float64 `json:"claims_high_priority_threshold" db:"claims_high_priority_threshold"`
+
+	// ClaimsMediumPriorityThreshold es el umbral de priority_score que dispara
+	// prioridad media del reclamo. Debe ser estrictamente menor que el alto.
+	// Default: 0.35. Rango (0, 1].
+	ClaimsMediumPriorityThreshold float64 `json:"claims_medium_priority_threshold" db:"claims_medium_priority_threshold"`
+
+	// Escalado automático de prioridad de reclamos por inactividad. Cuando un
+	// reclamo no terminal pasa el umbral de días sin updates, el job de
+	// escalado sube su prioridad al siguiente nivel y deja una nota explicativa.
+	// Default: enabled, 3d baja→media, 2d media→alta, 1d alta→urgente.
+	ClaimEscalationEnabled   bool `json:"claim_escalation_enabled" db:"claim_escalation_enabled"`
+	ClaimEscalationBajaDays  int  `json:"claim_escalation_baja_days" db:"claim_escalation_baja_days"`
+	ClaimEscalationMediaDays int  `json:"claim_escalation_media_days" db:"claim_escalation_media_days"`
+	ClaimEscalationAltaDays  int  `json:"claim_escalation_alta_days" db:"claim_escalation_alta_days"`
 }
 
 func DefaultSystemConfig() SystemConfig {
@@ -50,5 +74,12 @@ func DefaultSystemConfig() SystemConfig {
 		MaxRescheduleDays:       3,
 		TwoFACooldownMinutes: 1,
 		MaxCoverageAreaKm2:   1000000,
+		UrgentClaimsCapPct:            0.20,
+		ClaimsHighPriorityThreshold:   0.65,
+		ClaimsMediumPriorityThreshold: 0.35,
+		ClaimEscalationEnabled:        true,
+		ClaimEscalationBajaDays:       3,
+		ClaimEscalationMediaDays:      2,
+		ClaimEscalationAltaDays:       1,
 	}
 }

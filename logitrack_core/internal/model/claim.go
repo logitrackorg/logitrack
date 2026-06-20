@@ -88,6 +88,25 @@ var ValidClaimResolutionTypes = map[ClaimResolutionType]bool{
 	ClaimResolutionImprocedente: true,
 }
 
+// ClaimPriority es la prioridad calculada automáticamente para el ticket.
+// La asigna el motor de prioridad al crear el reclamo y NO es editable por el
+// cliente — cualquier valor enviado en el body de creación se ignora.
+type ClaimPriority string
+
+const (
+	ClaimPriorityBaja    ClaimPriority = "baja"
+	ClaimPriorityMedia   ClaimPriority = "media"
+	ClaimPriorityAlta    ClaimPriority = "alta"
+	ClaimPriorityUrgente ClaimPriority = "urgente"
+)
+
+var ValidClaimPriorities = map[ClaimPriority]bool{
+	ClaimPriorityBaja:    true,
+	ClaimPriorityMedia:   true,
+	ClaimPriorityAlta:    true,
+	ClaimPriorityUrgente: true,
+}
+
 type Claim struct {
 	ID                 string              `json:"id"`
 	TrackingID         string              `json:"tracking_id"`
@@ -106,6 +125,12 @@ type Claim struct {
 	EvidenceFilePath   string              `json:"-"`
 	EvidenceMimeType   string              `json:"evidence_mime_type,omitempty"`
 	EvidenceUploadDate *time.Time          `json:"evidence_upload_date,omitempty"`
+
+	// Priority y PriorityNote son set por el motor de prioridad automática al
+	// crear el reclamo. PriorityNote justifica una degradación (por ejemplo el
+	// tope de urgentes en sucursal).
+	Priority     ClaimPriority `json:"priority"`
+	PriorityNote string        `json:"priority_note,omitempty"`
 }
 
 type CreatePublicClaimRequest struct {

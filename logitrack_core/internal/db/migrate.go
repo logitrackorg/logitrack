@@ -440,6 +440,12 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS claimant_dni VARCHAR(20);
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS assigned_branch_id TEXT;
 
+		-- Prioridad automática de reclamos: nivel + nota justificativa (degradación
+		-- por tope de urgentes en sucursal). El default 'baja' es seguro para filas
+		-- pre-existentes; las nuevas filas siempre traen prioridad calculada por el motor.
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS priority      TEXT NOT NULL DEFAULT 'baja';
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS priority_note TEXT;
+
 		-- Ensure branches table exists before branch_zones FK can reference it
 		CREATE TABLE IF NOT EXISTS branches (
 			id          VARCHAR(50) PRIMARY KEY,
@@ -737,6 +743,32 @@ func RunMigrations(db *sql.DB) error {
 		-- son del orden de cientos de miles a millones de km².
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_coverage_area_km2 DOUBLE PRECISION NOT NULL DEFAULT 1000000;
 		UPDATE system_config SET max_coverage_area_km2 = 1000000 WHERE id = 1 AND max_coverage_area_km2 IN (0, 1500);
+
+		-- Prioridad automática de reclamos
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS urgent_claims_cap_pct          NUMERIC NOT NULL DEFAULT 0.20;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claims_high_priority_threshold NUMERIC NOT NULL DEFAULT 0.65;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claims_medium_priority_threshold NUMERIC NOT NULL DEFAULT 0.35;
+
+		-- Escalado automático de prioridad de reclamos por inactividad.
+		-- Unidad: días enteros (1–5 desde el admin). Las columnas *_hours del
+		-- diseño previo (nunca llegaron a producción) se migran dividiendo por
+		-- 24 si existen y luego se eliminan, para dejar solo *_days.
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claim_escalation_enabled    BOOLEAN NOT NULL DEFAULT TRUE;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claim_escalation_baja_days  INTEGER NOT NULL DEFAULT 3;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claim_escalation_media_days INTEGER NOT NULL DEFAULT 2;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claim_escalation_alta_days  INTEGER NOT NULL DEFAULT 1;
+		DO $migrate_escalation_units$
+		BEGIN
+			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'system_config' AND column_name = 'claim_escalation_baja_hours') THEN
+				UPDATE system_config SET claim_escalation_baja_days  = GREATEST(1, claim_escalation_baja_hours  / 24) WHERE id = 1;
+				UPDATE system_config SET claim_escalation_media_days = GREATEST(1, claim_escalation_media_hours / 24) WHERE id = 1;
+				UPDATE system_config SET claim_escalation_alta_days  = GREATEST(1, claim_escalation_alta_hours  / 24) WHERE id = 1;
+			END IF;
+		END
+		$migrate_escalation_units$;
+		ALTER TABLE system_config DROP COLUMN IF EXISTS claim_escalation_baja_hours;
+		ALTER TABLE system_config DROP COLUMN IF EXISTS claim_escalation_media_hours;
+		ALTER TABLE system_config DROP COLUMN IF EXISTS claim_escalation_alta_hours;
 
 		-- Permisos de pestañas del dashboard por rol (supervisor y manager).
 		-- El admin puede cambiar estos valores en tiempo real desde /admin/dashboard-config.
