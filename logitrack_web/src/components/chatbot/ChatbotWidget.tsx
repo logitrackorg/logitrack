@@ -5,6 +5,7 @@ import { ChatInput } from './ChatInput';
 import { chatbotService } from '../../api/chatbot';
 import { Button } from '@/components/ui/button';
 import { fmtDate } from '@/utils/date';
+import posthog from 'posthog-js';
 import type {
   ChatMessage,
   Shipment,
@@ -70,6 +71,7 @@ export function ChatbotWidget() {
   // Mensaje inicial al abrir
   useEffect(() => {
     if (isOpen && messages.length === 0) {
+      posthog.capture('chatbot_opened');
       addBotMessage(
         '¡Hola! 👋 Soy tu asistente virtual de LogiTrack.\n\n' +
         'Por favor ingresa tu ID de envío:'
@@ -113,6 +115,11 @@ export function ChatbotWidget() {
       setRecipientName(response.recipient_name);
       setTrackingId(trackingId);
       setActiveClaim(response.active_claim ?? null);
+      posthog.capture('chatbot_authenticated', {
+        user_type: 'recipient',
+        shipment_status: response.shipment.status,
+        available_actions: response.available_actions,
+      });
       setState('authenticated');
       setSessionActive(true);
       resetSessionTimer();
@@ -199,6 +206,11 @@ export function ChatbotWidget() {
       setSenderDni(dni);
       setTrackingId(trackingId);
       setActiveClaim(response.active_claim ?? null);
+      posthog.capture('chatbot_authenticated', {
+        user_type: 'sender',
+        shipment_status: response.shipment.status,
+        available_actions: response.available_actions ?? [],
+      });
       setState('authenticated');
       setSessionActive(true);
       resetSessionTimer();
@@ -508,6 +520,11 @@ export function ChatbotWidget() {
       const res = await chatbotService.fileClaim(
         trackingId, dni, name, claimType, damageSubtypes, desc, evidence ?? undefined
       );
+      posthog.capture('chatbot_claim_submitted', {
+        claim_type: claimType,
+        user_type: userType,
+        shipment_status: shipment?.status,
+      });
       addBotMessage(
         `✅ ${res.message}\n\nGuardá el número de reclamo: **${res.claim_id}**`,
         [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' as const }]
@@ -552,12 +569,15 @@ export function ChatbotWidget() {
           setState('authenticating');
           break;
         case 'pickup':
+          posthog.capture('chatbot_option_selected', { action: 'pickup', shipment_status: shipment?.status, user_type: userType });
           await handlePickupRequest();
           break;
         case 'reschedule':
+          posthog.capture('chatbot_option_selected', { action: 'reschedule', shipment_status: shipment?.status, user_type: userType });
           await handleRescheduleRequest();
           break;
         case 'cancel':
+          posthog.capture('chatbot_option_selected', { action: 'cancel', shipment_status: shipment?.status, user_type: userType });
           await handleCancelRequest();
           break;
         case 'select_date':
@@ -572,6 +592,7 @@ export function ChatbotWidget() {
 
         // US4: responder reclamo pendiente_customer
         case 'respond_claim': {
+          posthog.capture('chatbot_option_selected', { action: 'respond_claim', shipment_status: shipment?.status, user_type: userType });
           setPendingClaimId(activeClaim?.claim_id ?? '');
           setState('claim_response');
           const notes = activeClaim?.supervisor_notes;
@@ -592,6 +613,7 @@ export function ChatbotWidget() {
 
         // US5: flujo de reclamo
         case 'file_claim':
+          posthog.capture('chatbot_option_selected', { action: 'file_claim', shipment_status: shipment?.status, user_type: userType });
           addBotMessage(
             '📋 Vamos a registrar tu reclamo.\n\n¿Cuál es el motivo?',
             [
@@ -608,6 +630,7 @@ export function ChatbotWidget() {
 
         case 'select_claim_type': {
           const selectedType = value as ClaimType;
+          posthog.capture('chatbot_claim_type_selected', { claim_type: selectedType, user_type: userType });
           setClaimType(selectedType);
           setDamageSubtypes([]);
           if (selectedType === 'damage') {
@@ -636,7 +659,6 @@ export function ChatbotWidget() {
           setDamageSubtypes(newSubtypes);
           setState('claim_damage_subtypes');
 
-          // Redibujar el menú con checkmarks para reflejar selección actual
           const label = (s: DamageSubtype, base: string) =>
             newSubtypes.includes(s) ? `✅ ${base}` : `⬜ ${base}`;
           addBotMessage(

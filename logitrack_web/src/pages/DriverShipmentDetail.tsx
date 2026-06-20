@@ -2,11 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   AlertCircle, AlertTriangle, Ban, CheckCircle2, ChevronLeft,
-  Clock, MapPin, MessageCircle, Phone, XCircle,
+  Clock, MapPin, MessageCircle, Phone, WifiOff, XCircle,
 } from "lucide-react";
+import { compare as bcryptCompare } from "bcryptjs";
 import { shipmentApi, type Shipment } from "../api/shipments";
-import { driverApi, type DriverRoute as DriverRouteType } from "../api/driver";
+import { driverApi, type DriverRoute as DriverRouteType, type DriverRouteResponse } from "../api/driver";
+import { useAuth } from "../context/AuthContext";
+import { useOffline } from "../offline/useOffline";
+import {
+  getCachedRoute,
+  enqueueAction,
+  getKeywordAttempts,
+  incrementKeywordAttempts,
+} from "../offline/db";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
+import { GEOFENCE_RADIUS_M, distanceMeters } from "../utils/geo";
 import { StatusBadge } from "../components/StatusBadge";
 import { Button } from "../components/ui/button";
 
@@ -26,6 +36,8 @@ const PACKAGE_LABELS: Record<string, string> = { envelope: "Sobre", box: "Caja" 
 export function DriverShipmentDetail() {
   const { trackingId } = useParams<{ trackingId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isOnline = useOffline();
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [route, setRoute] = useState<DriverRouteType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,11 +57,15 @@ export function DriverShipmentDetail() {
   const [actionError, setActionError] = useState("");
   const [deliveryPhoto, setDeliveryPhoto] = useState<Blob | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  // Aviso de geofence: el chofer está a > GEOFENCE_RADIUS_M del domicilio.
+  const [geoWarning, setGeoWarning] = useState<{ distanceM: number; onConfirm: () => void } | null>(null);
+  // Intentos fallidos de palabra clave validados localmente (offline).
+  const [offlineKeywordAttempts, setOfflineKeywordAttempts] = useState(0);
 
   const { speedKmh: gpsSpeedKmh, locationReady, requestLocation } = useCurrentSpeed();
   const [simActive] = useState(false);
   const routePoints = useMemo(() => [], []);
-  const { mode: simulationMode } = useGeolocation(routePoints, simActive ? "simulate" : undefined);
+  const { mode: simulationMode, position } = useGeolocation(routePoints, simActive ? "simulate" : undefined);
   const simulationActive = simulationMode === "simulate";
   const effectiveSpeed = simulationActive ? 0 : gpsSpeedKmh;
   const speedSource: "simulation" | "real_gps" = simulationActive ? "simulation" : "real_gps";
@@ -60,18 +76,112 @@ export function DriverShipmentDetail() {
     ? "Detenga el vehículo para entregar"
     : locationMissing ? "Ubicación requerida. Active el GPS y deténgase para entregar" : "";
 
-  const reload = (id: string) =>
-    Promise.all([
-      shipmentApi.get(id).then(setShipment),
-      driverApi.getRoute().then((d) => setRoute(d.route)).catch(() => setRoute(null)),
-    ]);
+  // Carga el detalle del envío + estado de la ruta, con fallback a la cache
+  // offline (IndexedDB) cuando no hay conexión:
+  //  · GET /shipments/:id NO incluye keyword_hash (json:"-"); solo viene en
+  //    GET /driver/route. Por eso completamos el hash desde la ruta cacheada,
+  //    para poder validar la palabra clave localmente aunque el detalle se haya
+  //    abierto online.
+  //  · Si el fetch del envío falla (sin conexión), servimos el envío cacheado de
+  //    la ruta del día. Misma estrategia para el estado de la ruta.
+  const reload = async (id: string) => {
+    const cached = user
+      ? ((await getCachedRoute(user.id).catch(() => null)) as DriverRouteResponse | null)
+      : null;
+    const cachedShipment = cached?.shipments?.find((s) => s.tracking_id === id) ?? null;
 
-  useEffect(() => { if (trackingId) { setLoading(true); reload(trackingId).catch(() => setError("Envío no encontrado.")).finally(() => setLoading(false)); } }, [trackingId]);
+    await driverApi
+      .getRoute()
+      .then((d) => setRoute(d.route))
+      .catch(() => setRoute(cached?.route ?? null));
+
+    try {
+      const s = await shipmentApi.get(id);
+      const merged = !s.keyword_hash && cachedShipment?.keyword_hash
+        ? { ...s, keyword_hash: cachedShipment.keyword_hash }
+        : s;
+      setShipment(merged);
+    } catch (err) {
+      if (cachedShipment) { setShipment(cachedShipment); return; }
+      throw err;
+    }
+  };
+
+  useEffect(() => { if (trackingId) { setLoading(true); reload(trackingId).catch(() => setError("Envío no encontrado.")).finally(() => setLoading(false)); } }, [trackingId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Al abrir la hoja de entrega, sembrar los intentos offline persistidos.
+  useEffect(() => {
+    if (!deliverOpen || !shipment) return;
+    setOfflineKeywordAttempts(0);
+    getKeywordAttempts(shipment.tracking_id).then(setOfflineKeywordAttempts).catch(() => {});
+  }, [deliverOpen, shipment?.tracking_id]);
 
   const handleDeliver = async () => {
-    if (!shipment || !recipientDni.trim()) return;
+    if (!shipment) return;
     const isLastMile = shipment.delivery_method === "ultima_milla";
-    if (isLastMile) { const locked = (shipment.keyword_attempts ?? 0) >= 3; if (useContingency) { if (!recipientDni.trim()) return; } else { if (locked || !deliveryKeyword.trim()) return; } if (!deliveryPhoto) return; }
+    if (isLastMile) {
+      const serverLocked = (shipment.keyword_attempts ?? 0) >= 3;
+      if (useContingency) { if (!recipientDni.trim()) return; }
+      else { if (serverLocked || !deliveryKeyword.trim()) return; }
+      if (!deliveryPhoto) return;
+    } else {
+      if (!recipientDni.trim()) return;
+    }
+
+    // ── Path offline ────────────────────────────────────────────────────────
+    if (!isOnline) {
+      // El retiro en sucursal (updateStatus + DNI) no está soportado offline.
+      if (!isLastMile) { setActionError("La entrega en sucursal requiere conexión."); return; }
+      setSubmitting(true);
+      if (!useContingency) {
+        const offlineAttempts = await getKeywordAttempts(shipment.tracking_id);
+        if (offlineAttempts >= 3) {
+          setActionError("Palabra clave bloqueada (sin conexión). Usá el DNI como alternativa.");
+          setSubmitting(false); return;
+        }
+        const hash = shipment.keyword_hash;
+        if (!hash) {
+          const newCount = await incrementKeywordAttempts(shipment.tracking_id);
+          setOfflineKeywordAttempts(newCount);
+          setDeliveryKeyword("");
+          setActionError(newCount >= 3
+            ? "Sin conexión y sin datos de verificación local. Intentos agotados. Usá el DNI como alternativa."
+            : `Sin conexión y sin datos de verificación local. Intento ${newCount}/3. Usá el DNI como alternativa.`);
+          setSubmitting(false); return;
+        }
+        const valid = await bcryptCompare(deliveryKeyword.trim().toUpperCase(), hash);
+        if (!valid) {
+          const newCount = await incrementKeywordAttempts(shipment.tracking_id);
+          setOfflineKeywordAttempts(newCount);
+          setDeliveryKeyword("");
+          setActionError(newCount >= 3
+            ? "Palabra clave incorrecta. Intentos agotados. Usá el DNI como alternativa."
+            : `Palabra clave incorrecta. Intento ${newCount}/3.`);
+          setSubmitting(false); return;
+        }
+      }
+      await enqueueAction({
+        type: "deliver",
+        trackingId: shipment.tracking_id,
+        payload: {
+          keyword: useContingency ? undefined : deliveryKeyword.trim(),
+          recipient_dni: useContingency ? recipientDni.trim() : undefined,
+          contingency: useContingency || undefined,
+          current_speed: effectiveSpeed,
+          speed_source: speedSource,
+          latitude: position?.lat,
+          longitude: position?.lng,
+        },
+        photoBlob: deliveryPhoto ?? undefined,
+        enqueuedAt: new Date().getTime(),
+      });
+      setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); setDeliveryPhoto(null);
+      setSubmitting(false);
+      navigate("/driver/route");
+      return;
+    }
+
+    // ── Path online ───────────────────────────────────────────────────────────
     setSubmitting(true); setActionError("");
     try {
       if (isLastMile) {
@@ -89,6 +199,20 @@ export function DriverShipmentDetail() {
     const note = [reasonLabel, failedNotes.trim()].filter(Boolean).join(" — ");
     if (!note) return;
     setSubmitting(true); setActionError("");
+
+    if (!isOnline) {
+      await enqueueAction({
+        type: "delivery_failed",
+        trackingId: shipment.tracking_id,
+        payload: { status: "delivery_failed", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource, latitude: position?.lat, longitude: position?.lng },
+        enqueuedAt: new Date().getTime(),
+      });
+      setFailedOpen(false); setFailedReason(""); setFailedNotes("");
+      setSubmitting(false);
+      navigate("/driver/route");
+      return;
+    }
+
     try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivery_failed", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource }); setFailedOpen(false); setFailedReason(""); setFailedNotes(""); await reload(shipment.tracking_id); }
     catch (err: unknown) { setActionError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo registrar el intento fallido."); } finally { setSubmitting(false); }
   };
@@ -99,8 +223,40 @@ export function DriverShipmentDetail() {
     if (r.id === "otro" && !rejectedNotes.trim()) return;
     const note = r.id === "otro" ? rejectedNotes.trim() : `${r.label}${rejectedNotes.trim() ? ` — ${rejectedNotes.trim()}` : ""}`;
     setSubmitting(true); setActionError("");
+
+    if (!isOnline) {
+      await enqueueAction({
+        type: "rejected",
+        trackingId: shipment.tracking_id,
+        payload: { status: "rechazado", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource, latitude: position?.lat, longitude: position?.lng },
+        enqueuedAt: new Date().getTime(),
+      });
+      setRejectedOpen(false); setRejectedReason(""); setRejectedNotes("");
+      setSubmitting(false);
+      navigate("/driver/route");
+      return;
+    }
+
     try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "rechazado", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource }); setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); await reload(shipment.tracking_id); }
     catch (err: unknown) { setActionError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo registrar el rechazo."); } finally { setSubmitting(false); }
+  };
+
+  // Distancia (m) del chofer al domicilio del destinatario, o null si falta GPS o coords.
+  const checkGeofence = (): number | null => {
+    const addr = shipment?.recipient?.address;
+    if (!position || addr?.latitude == null || addr?.longitude == null) return null;
+    return distanceMeters(position.lat, position.lng, addr.latitude, addr.longitude);
+  };
+
+  // Ejecuta `proceed`, o muestra primero el aviso de geofence si el chofer está
+  // fuera del radio (continúa solo si confirma). Igual que en DriverRoute.
+  const withGeofence = (proceed: () => void) => {
+    const d = checkGeofence();
+    if (d !== null && d > GEOFENCE_RADIUS_M) {
+      setGeoWarning({ distanceM: d, onConfirm: () => { setGeoWarning(null); proceed(); } });
+    } else {
+      proceed();
+    }
   };
 
   if (loading) {
@@ -166,6 +322,14 @@ export function DriverShipmentDetail() {
 
       {/* Tracking ID */}
       <p className="text-[11px] text-[var(--text-muted)] text-center font-mono tracking-tight">{shipment.tracking_id}</p>
+
+      {/* Banner offline */}
+      {!isOnline && (
+        <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-700 text-white text-xs font-semibold">
+          <WifiOff className="w-3.5 h-3.5 shrink-0" />
+          Sin conexión — las acciones se guardan localmente y se sincronizan al volver la señal.
+        </div>
+      )}
 
       {/* Error */}
       {actionError && (
@@ -257,14 +421,14 @@ export function DriverShipmentDetail() {
     {canAct && (
       <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
         <div className="flex flex-col gap-2 max-w-2xl mx-auto">
-          <Button onClick={() => { if (shipment.delivery_method === "ultima_milla") { setCameraOpen(true); } else { setDeliverOpen(true); } }} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
+          <Button onClick={() => withGeofence(() => { if (shipment.delivery_method === "ultima_milla") { setCameraOpen(true); } else { setDeliverOpen(true); } })} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
             <CheckCircle2 className="w-5 h-5" />Entregar
           </Button>
           <div className="flex gap-2">
-          <Button onClick={() => setFailedOpen(true)} className="flex-1 h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold gap-1.5">
+          <Button onClick={() => withGeofence(() => setFailedOpen(true))} className="flex-1 h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold gap-1.5">
             <XCircle className="w-4 h-4" />No entregado
           </Button>
-          <Button onClick={() => setRejectedOpen(true)} className="flex-1 h-11 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold gap-1.5">
+          <Button onClick={() => withGeofence(() => setRejectedOpen(true))} className="flex-1 h-11 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold gap-1.5">
               <Ban className="w-4 h-4" />Rechazado
             </Button>
           </div>
@@ -272,9 +436,40 @@ export function DriverShipmentDetail() {
       </div>
     )}
 
-    <DeliveryActionSheet mode="deliver" open={deliverOpen} onClose={() => { setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); }} shipment={shipment} keyword={deliveryKeyword} onKeywordChange={setDeliveryKeyword} useContingency={useContingency} onUseContingency={setUseContingency} dni={recipientDni} onDniChange={setRecipientDni} submitting={submitting} onConfirm={handleDeliver} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
+    <DeliveryActionSheet mode="deliver" open={deliverOpen} onClose={() => { setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); }} shipment={shipment} keyword={deliveryKeyword} onKeywordChange={setDeliveryKeyword} useContingency={useContingency} onUseContingency={setUseContingency} dni={recipientDni} onDniChange={setRecipientDni} submitting={submitting} onConfirm={handleDeliver} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} offlineKeywordAttempts={offlineKeywordAttempts} />
     <DeliveryActionSheet mode="failed" open={failedOpen} onClose={() => { setFailedOpen(false); setFailedReason(""); setFailedNotes(""); }} shipment={shipment} reason={failedReason} onReasonChange={setFailedReason} notes={failedNotes} onNotesChange={setFailedNotes} submitting={submitting} onConfirm={handleFailed} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
     <DeliveryActionSheet mode="rejected" open={rejectedOpen} onClose={() => { setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); }} shipment={shipment} reason={rejectedReason} onReasonChange={setRejectedReason} notes={rejectedNotes} onNotesChange={setRejectedNotes} submitting={submitting} onConfirm={handleRejected} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
+
+    {/* Modal de advertencia de geofence */}
+    {geoWarning && (
+      <div className="fixed inset-0 z-[9999] flex items-end justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto">
+        <div className="w-full max-w-sm rounded-2xl bg-[var(--bg-card)] shadow-2xl overflow-hidden">
+          <div className="flex items-start gap-3 px-5 pt-5 pb-4">
+            <div className="w-10 h-10 rounded-xl bg-[var(--warn-bg)] flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5 text-[var(--warn)]" />
+            </div>
+            <div className="flex-1">
+              <p className="font-bold text-[var(--text-primary)]">Ubicación fuera de rango</p>
+              <p className="mt-1 text-sm text-[var(--text-secondary)] leading-relaxed">
+                Estás a <span className="font-semibold text-[var(--warn-text)]">{Math.round(geoWarning.distanceM)} m</span> del domicilio del destinatario
+                (máximo {GEOFENCE_RADIUS_M} m).
+              </p>
+              <p className="mt-2 text-xs text-[var(--text-muted)]">
+                Si confirmás, se registrará un incidente en el envío para revisión del supervisor.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 px-5 pb-5">
+            <Button variant="outline" onClick={() => setGeoWarning(null)} className="flex-1 py-2.5 rounded-xl">
+              Cancelar
+            </Button>
+            <Button variant="accent" onClick={geoWarning.onConfirm} className="flex-1 py-2.5 rounded-xl">
+              Confirmar igual
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 }
