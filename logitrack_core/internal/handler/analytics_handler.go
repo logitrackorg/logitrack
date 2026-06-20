@@ -41,63 +41,57 @@ type ChatbotStats struct {
 	ClaimTypes  map[string]int `json:"claim_types"`
 }
 
-func posthogEventCount(event string, since string) (int, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
+// fetchAllEvents pagina automáticamente hasta traer todos los eventos
+func fetchAllEvents(event string, since string) ([]map[string]interface{}, error) {
+	client := &http.Client{Timeout: 15 * time.Second}
+	apiKey := getPosthogAPIKey()
+	host := getPosthogHost()
+
+	var allResults []map[string]interface{}
+
+	// Primera página
 	url := fmt.Sprintf(
-		"%s/api/projects/@current/events/?event=%s&after=%s&limit=1",
-		getPosthogHost(), event, since,
+		"%s/api/projects/@current/events/?event=%s&after=%s&limit=100",
+		host, event, since,
 	)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return 0, err
-	}
-	req.Header.Set("Authorization", "Bearer "+getPosthogAPIKey())
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
+	for url != "" {
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	var result struct {
-		Count int `json:"count"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, err
-	}
-	return result.Count, nil
-}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
 
-func posthogEventList(event string, since string, limit int) ([]map[string]interface{}, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
-	url := fmt.Sprintf(
-		"%s/api/projects/@current/events/?event=%s&after=%s&limit=%d",
-		getPosthogHost(), event, since, limit,
-	)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+getPosthogAPIKey())
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return nil, err
+		}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+		var page struct {
+			Next    *string                  `json:"next"`
+			Results []map[string]interface{} `json:"results"`
+		}
+		if err := json.Unmarshal(body, &page); err != nil {
+			return nil, err
+		}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+		allResults = append(allResults, page.Results...)
+
+		// Seguir paginando si hay más
+		if page.Next != nil && *page.Next != "" {
+			url = *page.Next
+		} else {
+			url = ""
+		}
 	}
 
-	var result struct {
-		Results []map[string]interface{} `json:"results"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, err
-	}
-	return result.Results, nil
+	return allResults, nil
 }
 
 func (h *AnalyticsHandler) GetChatbotStats(c *gin.Context) {
@@ -108,20 +102,24 @@ func (h *AnalyticsHandler) GetChatbotStats(c *gin.Context) {
 		ClaimTypes: make(map[string]int),
 	}
 
-	opened, err := posthogEventCount("chatbot_opened", since)
+	// ── Chatbot abierto ──────────────────────────────────────
+	openedEvents, err := fetchAllEvents("chatbot_opened", since)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "no se pudo conectar con PostHog"})
 		return
 	}
-	stats.TotalOpened = opened
+	stats.TotalOpened = len(openedEvents)
 
-	auth, _ := posthogEventCount("chatbot_authenticated", since)
-	stats.TotalAuth = auth
+	// ── Autenticaciones ──────────────────────────────────────
+	authEvents, _ := fetchAllEvents("chatbot_authenticated", since)
+	stats.TotalAuth = len(authEvents)
 
-	claims, _ := posthogEventCount("chatbot_claim_submitted", since)
-	stats.TotalClaims = claims
+	// ── Reclamos enviados ────────────────────────────────────
+	claimEvents, _ := fetchAllEvents("chatbot_claim_submitted", since)
+	stats.TotalClaims = len(claimEvents)
 
-	actionEvents, _ := posthogEventList("chatbot_option_selected", since, 1000)
+	// ── Opciones más usadas ──────────────────────────────────
+	actionEvents, _ := fetchAllEvents("chatbot_option_selected", since)
 	for _, ev := range actionEvents {
 		props, ok := ev["properties"].(map[string]interface{})
 		if !ok {
@@ -132,8 +130,9 @@ func (h *AnalyticsHandler) GetChatbotStats(c *gin.Context) {
 		}
 	}
 
-	claimEvents, _ := posthogEventList("chatbot_claim_type_selected", since, 1000)
-	for _, ev := range claimEvents {
+	// ── Tipos de reclamos ────────────────────────────────────
+	claimTypeEvents, _ := fetchAllEvents("chatbot_claim_type_selected", since)
+	for _, ev := range claimTypeEvents {
 		props, ok := ev["properties"].(map[string]interface{})
 		if !ok {
 			continue
