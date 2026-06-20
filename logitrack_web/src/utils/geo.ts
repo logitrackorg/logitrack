@@ -34,13 +34,15 @@ export function haversineKm(
     return R * 2 * Math.asin(Math.sqrt(h));
   }
 
-  // Flat-params signature (original)
+  // Flat-params signature: (lat1, lng1, lat2, lng2)
+  const lat1 = aOrLat1 as number;
+  const lng1 = bOrLng1 as number;
   const R = 6371;
-  const dLat = ((bOrLng1 as number) - (aOrLat1 as number)) * Math.PI / 180;
-  const dLng = (lng2! - lat2!) * Math.PI / 180;
+  const dLat = (lat2! - lat1) * Math.PI / 180;
+  const dLng = (lng2! - lng1) * Math.PI / 180;
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos((aOrLat1 as number) * Math.PI / 180) *
+    Math.cos(lat1 * Math.PI / 180) *
       Math.cos(lat2! * Math.PI / 180) *
       Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));

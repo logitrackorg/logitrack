@@ -156,30 +156,35 @@ export const driverApi = {
   getTodayCheckin: () =>
     api.get<{ ok: boolean; requires_sleep_data: boolean; requires_fatigue_test?: boolean }>("/driver/checkin/today").then((r) => r.data),
   /** Resolves whether the driver must pass the fatigue gate before their next route.
-   *  Handles both 200 (requires_fatigue_test) and 404 (first route vs. second route).
+   *  Handles both 200 (check-in válido vigente) y 404 (sin check-in válido hoy).
    *  Never throws — always returns a safe result.
    *
-   *  requires_fatigue_test is false when:
-   *    - no route has started yet today (first route of the day), OR
-   *    - the driver is currently on an active route.
-   *  requires_fatigue_test is true when:
-   *    - a prior route was started and is now finished (second route+). */
-  getCheckinGateStatus: async (): Promise<{ needs_test: boolean; requires_sleep_data: boolean }> => {
+   *  needs_checkin es true cuando NO existe un check-in válido para hoy (404):
+   *    - primera ruta del día (todavía no hizo el check-in matutino), o
+   *    - el check-in fue invalidado (reset de admin, o venció la gracia de un salto).
+   *  Es el caso del primer check-in con horas de sueño.
+   *
+   *  needs_test (requires_fatigue_test) es ortogonal: true cuando ya inició ≥1 ruta
+   *  desde el último check-in (re-test de 2ª ruta en adelante). Puede ser true aun
+   *  con check-in válido vigente (200). */
+  getCheckinGateStatus: async (): Promise<{ needs_test: boolean; needs_checkin: boolean; requires_sleep_data: boolean }> => {
     try {
       const data = await api
         .get<{ ok: boolean; requires_sleep_data: boolean; requires_fatigue_test?: boolean }>("/driver/checkin/today")
         .then((r) => r.data);
+      // 200 → existe un check-in válido vigente. Solo falta gate si requiere re-test.
       return {
         needs_test: !!data.requires_fatigue_test,
+        needs_checkin: false,
         requires_sleep_data: !!data.requires_sleep_data,
       };
     } catch (err: unknown) {
-      // 404 body now includes requires_fatigue_test and requires_sleep_data.
-      // Use them directly — do NOT default needs_test to true, because a 404
-      // on the first route of the day should NOT trigger the gate.
+      // 404 → no hay check-in válido hoy: el chofer debe completarlo antes de la ruta.
+      // El cuerpo incluye requires_fatigue_test y requires_sleep_data.
       const body = (err as { response?: { data?: { requires_fatigue_test?: boolean; requires_sleep_data?: boolean } } })?.response?.data;
       return {
         needs_test: !!body?.requires_fatigue_test,
+        needs_checkin: true,
         requires_sleep_data: body?.requires_sleep_data ?? true,
       };
     }

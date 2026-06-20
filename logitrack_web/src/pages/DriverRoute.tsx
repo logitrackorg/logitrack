@@ -36,6 +36,7 @@ import {
   incrementKeywordAttempts,
   prefetchRouteGeometry,
   clearDayCache,
+  type QueuedAction,
 } from "../offline/db";
 import { syncQueue } from "../offline/sync";
 import { DeliveryActionSheet } from "../components/driver/DeliveryActionSheet";
@@ -106,6 +107,11 @@ function LastMileView() {
   // trackingIds de acciones encoladas localmente, pendientes de sincronizar.
   // Se siembra desde IndexedDB en cada montaje (sobrevive cierres de app).
   const [pendingSyncIds, setPendingSyncIds] = useState<Set<string>>(new Set());
+  // Resultado optimista de cada acción encolada (entrega / fallo / rechazo). Necesario
+  // para que el resumen del día muestre el ícono correcto mientras la acción no se
+  // sincronizó: offline el shipment sigue en out_for_delivery, así que sin esto un
+  // envío entregado se pintaría como fallido.
+  const [pendingSyncTypes, setPendingSyncTypes] = useState<Map<string, QueuedAction["type"]>>(new Map());
   const [syncing, setSyncing] = useState(false);
 
   // BUG-43: velocidad GPS real del chofer (sin fallback permisivo). El valor
@@ -228,6 +234,11 @@ function LastMileView() {
           actions.forEach((a) => next.add(a.trackingId));
           return next;
         });
+        setPendingSyncTypes((prev) => {
+          const next = new Map(prev);
+          actions.forEach((a) => next.set(a.trackingId, a.type));
+          return next;
+        });
       }
       if (!isOnline || actions.length === 0) return;
       setSyncing(true);
@@ -237,6 +248,11 @@ function LastMileView() {
         const okIds = new Set(results.filter((r) => r.success).map((r) => r.trackingId));
         setPendingSyncIds((prev) => {
           const next = new Set(prev);
+          okIds.forEach((id) => next.delete(id));
+          return next;
+        });
+        setPendingSyncTypes((prev) => {
+          const next = new Map(prev);
           okIds.forEach((id) => next.delete(id));
           return next;
         });
@@ -401,6 +417,7 @@ function LastMileView() {
         enqueuedAt: new Date().getTime(),
       });
       setPendingSyncIds((prev) => new Set(prev).add(deliverShipment.tracking_id));
+      setPendingSyncTypes((prev) => new Map(prev).set(deliverShipment.tracking_id, "deliver"));
       closeSheets();
       setSubmitting(false);
       return;
@@ -466,6 +483,7 @@ function LastMileView() {
         enqueuedAt: new Date().getTime(),
       });
       setPendingSyncIds((prev) => new Set(prev).add(failedShipment.tracking_id));
+      setPendingSyncTypes((prev) => new Map(prev).set(failedShipment.tracking_id, "delivery_failed"));
       closeSheets();
       setSubmitting(false);
       return;
@@ -509,6 +527,7 @@ function LastMileView() {
         enqueuedAt: new Date().getTime(),
       });
       setPendingSyncIds((prev) => new Set(prev).add(rejectedShipment.tracking_id));
+      setPendingSyncTypes((prev) => new Map(prev).set(rejectedShipment.tracking_id, "rejected"));
       closeSheets();
       setSubmitting(false);
       return;
@@ -608,11 +627,18 @@ function LastMileView() {
 
   // Limpiar cache de jornada al finalizar la ruta. Debe estar antes de cualquier
   // early return para cumplir las reglas de hooks de React.
+  //
+  // Solo se limpia con conexión Y sin acciones encoladas pendientes: offline, las
+  // entregas viven en el actionQueue y la ruta solo existe en routeCache. Si lo
+  // borráramos al completar la ruta offline, el siguiente remonte/recarga haría
+  // getRoute → falla de red → sin cache → noRoute → bounce a /driver/scan, perdiendo
+  // la pantalla de ruta completa sin posibilidad de recuperarla sin conexión. El
+  // cache se limpia recién cuando la cola se drena al reconectar (pendingSyncIds=0).
   useEffect(() => {
-    if (routeEffectivelyDone && user) {
+    if (routeEffectivelyDone && user && isOnline && pendingSyncIds.size === 0) {
       clearDayCache(user.id).catch(() => {});
     }
-  }, [routeEffectivelyDone, user?.id]);
+  }, [routeEffectivelyDone, user?.id, isOnline, pendingSyncIds.size]);
 
   // Gate de re-test en ruta: se activa tras una acción de entrega si el backend
   // detecta que pasaron más de 3h o hay más de 5 misfires acumulados.
@@ -652,7 +678,7 @@ function LastMileView() {
   const today = fmtDate(new Date().toISOString());
 
   if (routeEffectivelyDone) {
-    return <RouteCompletedView data={data} today={today} pendingSyncIds={pendingSyncIds} />;
+    return <RouteCompletedView data={data} today={today} pendingSyncIds={pendingSyncIds} pendingSyncTypes={pendingSyncTypes} />;
   }
 
   const canAct = routeStatus === "en_curso";
@@ -689,7 +715,7 @@ function LastMileView() {
     <div className="pb-16">
       {/* Banner offline */}
       {(!isOnline || syncing) && (
-        <div className={`fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 px-4 py-2 text-xs font-semibold ${syncing ? "bg-amber-400 text-amber-900" : "bg-slate-700 text-white"}`}>
+        <div className={`sticky top-[calc(3.5rem+env(safe-area-inset-top,0px))] z-40 -mx-4 md:-mx-6 flex items-center justify-between gap-2 px-4 py-2 text-xs font-semibold ${syncing ? "bg-amber-400 text-amber-900" : "bg-slate-700 text-white"}`}>
           <span className="flex items-center gap-1.5">
             {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <WifiOff className="w-3.5 h-3.5" />}
             {syncing ? "Sincronizando acciones pendientes…" : "Sin conexión — las acciones se guardan localmente"}
@@ -1947,10 +1973,20 @@ function ShipmentCard({
   );
 }
 
-function RouteCompletedView({ data, today, pendingSyncIds = new Set() }: { data: DriverRouteResponse; today: string; pendingSyncIds?: Set<string> }) {
+function RouteCompletedView({ data, today, pendingSyncIds = new Set(), pendingSyncTypes = new Map() }: { data: DriverRouteResponse; today: string; pendingSyncIds?: Set<string>; pendingSyncTypes?: Map<string, QueuedAction["type"]> }) {
   const navigate = useNavigate();
-  const done = data.shipments.filter((s) => s.status === "delivered" || pendingSyncIds.has(s.tracking_id)).length;
-  const failed = data.shipments.filter((s) => s.status === "delivery_failed" && !pendingSyncIds.has(s.tracking_id)).length;
+  // Resuelve el resultado efectivo de cada envío combinando el estado del backend
+  // con la acción optimista encolada (offline): un envío entregado offline sigue
+  // en out_for_delivery, pero su acción en cola dice "deliver".
+  const outcomeOf = (s: Shipment): "delivered" | "rejected" | "failed" | "other" => {
+    const t = pendingSyncTypes.get(s.tracking_id);
+    if (t === "deliver" || s.status === "delivered") return "delivered";
+    if (t === "rejected" || (s.status === "delivery_failed" && s.rejected_by_recipient)) return "rejected";
+    if (t === "delivery_failed" || s.status === "delivery_failed") return "failed";
+    return "other";
+  };
+  const done = data.shipments.filter((s) => outcomeOf(s) === "delivered").length;
+  const failed = data.shipments.filter((s) => { const o = outcomeOf(s); return o === "failed" || o === "rejected"; }).length;
 
   const [tripId, setTripId] = useState<string | null>(null);
   const [qrBase64, setQrBase64] = useState<string | null>(null);
@@ -2047,8 +2083,10 @@ function RouteCompletedView({ data, today, pendingSyncIds = new Set() }: { data:
       <div className="grid gap-2">
         {data.shipments.map((shipment) => {
           const { name } = recipientView(shipment);
-          const delivered = shipment.status === "delivered";
-          const rejected = shipment.status === "delivery_failed" && shipment.rejected_by_recipient;
+          const outcome = outcomeOf(shipment);
+          const delivered = outcome === "delivered";
+          const rejected = outcome === "rejected";
+          const pendingSync = pendingSyncIds.has(shipment.tracking_id);
           return (
             <Card
               key={shipment.tracking_id}
@@ -2075,6 +2113,9 @@ function RouteCompletedView({ data, today, pendingSyncIds = new Set() }: { data:
                 <code className="text-[11px] font-mono dark:text-gray-500 text-slate-400">{shipment.tracking_id}</code>
                 {rejected && (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">Rechazado por destinatario</p>
+                )}
+                {pendingSync && (
+                  <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium">Pendiente de sincronizar</p>
                 )}
               </div>
               <ChevronRight className="w-5 h-5 text-slate-300 dark:text-gray-500 shrink-0" />

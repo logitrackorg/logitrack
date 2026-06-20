@@ -19,12 +19,15 @@ export function DriverScanVehicle() {
   const [manualToken, setManualToken] = useState("");
   const qrRef = useRef<Html5Qrcode | null>(null);
   const mountedRef = useRef(true);
-  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
+  // Se resetea a true en el montaje (no solo false en el cleanup): bajo StrictMode
+  // el ciclo mount→cleanup→remount dejaría el ref en false y abortaría handleToken
+  // justo después del fetch, sin abrir el gate ni reclamar el vehículo.
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
-  // Gate de fatiga post-escaneo: se activa solo cuando el chofer ya completó
-  // al menos una ruta hoy (segunda ruta en adelante). Para la primera ruta del
-  // día el gate no aplica aquí. El token QR/patente se guarda para usarlo
-  // después de que el chofer pase el test.
+  // Gate de fatiga post-escaneo: se activa cuando el chofer todavía no tiene un
+  // check-in válido para hoy (primera ruta del día → incluye horas de sueño) o
+  // cuando el backend pide re-test (segunda ruta en adelante). El token QR/patente
+  // se guarda para usarlo después de que el chofer pase el test.
   const [showGate, setShowGate] = useState(false);
   const [requiresSleepData, setRequiresSleepData] = useState(false);
   const [pendingToken, setPendingToken] = useState<string | null>(null);
@@ -124,7 +127,7 @@ export function DriverScanVehicle() {
       if (user?.driver_type !== "intersucursal") {
         const gateStatus = await driverApi.getCheckinGateStatus();
         if (!mountedRef.current) return;
-        if (gateStatus.needs_test) {
+        if (gateStatus.needs_test || gateStatus.needs_checkin) {
           stopScanner();
           setPendingToken(token);
           setRequiresSleepData(gateStatus.requires_sleep_data);
@@ -179,9 +182,9 @@ export function DriverScanVehicle() {
     };
   }, []);
 
-  // Gate de fatiga post-escaneo: se muestra solo para la segunda ruta en
-  // adelante. requiresSleepData siempre es false aquí porque las horas de
-  // sueño ya fueron registradas durante el primer check-in del día.
+  // Gate de fatiga post-escaneo. requiresSleepData es true en la primera ruta del
+  // día (el chofer aún no registró horas de sueño) y false en el re-test posterior
+  // (ya quedaron registradas en el check-in matutino).
   if (showGate && user) {
     return (
       <KssCheckIn
