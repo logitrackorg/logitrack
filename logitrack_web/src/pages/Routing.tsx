@@ -968,7 +968,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                       />
                     )}
 
-                    {pendingLastMile.length > 0 && (
+                    {(pendingLastMile.length > 0 || plan.vehicle_loads.some((v) => v.mode === "ultima_milla")) && (
                       <LastMileSection
                         assignments={pendingLastMile}
                         excludedVehicleIds={inProgressLastMileIds}
@@ -1029,7 +1029,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                       />
                     )}
 
-                    {(pendingInterBranch.length > 0 || plan.vehicle_loads.length > 0) && (
+                    {(pendingInterBranch.length > 0 || plan.vehicle_loads.some((v) => v.mode === "inter_sucursal")) && (
                       <InterBranchSection
                         assignments={pendingInterBranch}
                         originBranchId={branchId}
