@@ -297,7 +297,7 @@ export function OrganizationConfig() {
                   setForm({ ...form, font_family: font });
                   const existing = document.getElementById("org-font-link");
                   if (existing) existing.remove();
-                  const url = getGoogleFontsUrl(font as any);
+                  const url = getGoogleFontsUrl(font as typeof ALLOWED_FONTS[number]);
                   if (url) {
                     const link = document.createElement("link");
                     link.id = "org-font-link";
