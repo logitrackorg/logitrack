@@ -208,7 +208,7 @@ function LastMileView() {
   // vez antes de redirigir a scan, para evitar el bounce-back post gate de fatiga.
   // El reintento delega en load(), que ante un fallo de red sirve la ruta cacheada
   // (clave para abrir la app sin conexión) antes de marcar noRoute.
-  const loadWithRetry = () => {
+  const loadWithRetry = (retriesLeft = 3) => {
     setLoading(true);
     driverApi
       .getRoute()
@@ -231,8 +231,17 @@ function LastMileView() {
       })
       .catch((err) => {
         const status = err?.response?.status;
-        // 404 definitivo: no reintentar, mostrar pantalla sin ruta.
+        // Un 404 inmediatamente después de reclamar el vehículo NO es definitivo:
+        // hay un read-after-write race, el backend tarda ~100-300ms en dejar la
+        // ruta visible tras el claim. Reintentar unas pocas veces antes de rebotar
+        // a /driver/scan — si no, expulsamos al chofer de una ruta que sí existe
+        // (la pantalla scan solo consulta al montar, así que no se recupera sola).
         if (status === 404) {
+          if (retriesLeft > 0) {
+            driverDebug("loadretry_404_retry", { driverId: user?.id, retriesLeft });
+            setTimeout(() => { loadWithRetry(retriesLeft - 1); }, 1200);
+            return;
+          }
           driverDebug("loadretry_404_definitive_bounce", { driverId: user?.id, status });
           setNoRoute(true);
           setLoading(false);
