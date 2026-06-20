@@ -1,0 +1,19 @@
+logitrack_core/cmd/server/main.go
+  s_a0a4a82466ee29::t_32c83f1bacb1fa 872-874
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "81ebf10b31570518161703ac2788b28163b9c414",
+  "prompts": {},
+  "sessions": {
+    "s_a0a4a82466ee29": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "771ecbb7-b8a4-410d-9b43-0833a4b7f2eb",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
