@@ -1,0 +1,21 @@
+logitrack_web/src/components/KssCheckIn.tsx
+  s_2afb0c06e51723::t_d4d740c4fb5d7b 174
+  s_2afb0c06e51723::t_a4d8737c44f6e8 109-112
+  s_2afb0c06e51723::t_de1058f598eeab 62-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "8fdc824ab525248aef29be5fdcd9cf729092ce36",
+  "prompts": {},
+  "sessions": {
+    "s_2afb0c06e51723": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "234132f5-e6c8-4ffe-a1b0-7dcb6c12c962",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
