@@ -26,12 +26,14 @@ func (r *postgresSystemConfigRepository) Get() model.SystemConfig {
 		SELECT max_delivery_attempts, draft_retention_days, draft_purge_days,
 		       pickup_deadline_days, email_notifications_enabled, whatsapp_notifications_enabled,
 		       max_reschedules, max_reschedule_days, two_fa_cooldown_minutes, max_coverage_area_km2,
-		       urgent_claims_cap_pct, claims_high_priority_threshold, claims_medium_priority_threshold
+		       urgent_claims_cap_pct, claims_high_priority_threshold, claims_medium_priority_threshold,
+		       claim_escalation_enabled, claim_escalation_baja_days, claim_escalation_media_days, claim_escalation_alta_days
 		FROM system_config WHERE id = 1`).
 		Scan(&cfg.MaxDeliveryAttempts, &cfg.DraftRetentionDays, &cfg.DraftPurgeDays,
 			&cfg.PickupDeadlineDays, &cfg.EmailNotificationsEnabled, &cfg.WhatsAppNotificationsEnabled,
 			&cfg.MaxReschedules, &cfg.MaxRescheduleDays, &cfg.TwoFACooldownMinutes, &cfg.MaxCoverageAreaKm2,
-			&cfg.UrgentClaimsCapPct, &cfg.ClaimsHighPriorityThreshold, &cfg.ClaimsMediumPriorityThreshold)
+			&cfg.UrgentClaimsCapPct, &cfg.ClaimsHighPriorityThreshold, &cfg.ClaimsMediumPriorityThreshold,
+			&cfg.ClaimEscalationEnabled, &cfg.ClaimEscalationBajaDays, &cfg.ClaimEscalationMediaDays, &cfg.ClaimEscalationAltaDays)
 	if err != nil {
 		log.Printf("❌ [REPO] Error leyendo config: %v", err)
 		return model.DefaultSystemConfig()
@@ -57,7 +59,11 @@ func (r *postgresSystemConfigRepository) Update(cfg model.SystemConfig) error {
 		     max_coverage_area_km2            = $10,
 		     urgent_claims_cap_pct            = $11,
 		     claims_high_priority_threshold   = $12,
-		     claims_medium_priority_threshold = $13
+		     claims_medium_priority_threshold = $13,
+		     claim_escalation_enabled         = $14,
+		     claim_escalation_baja_days       = $15,
+		     claim_escalation_media_days      = $16,
+		     claim_escalation_alta_days       = $17
 		 WHERE id = 1`,
 		cfg.MaxDeliveryAttempts,
 		cfg.DraftRetentionDays,
@@ -72,6 +78,10 @@ func (r *postgresSystemConfigRepository) Update(cfg model.SystemConfig) error {
 		cfg.UrgentClaimsCapPct,
 		cfg.ClaimsHighPriorityThreshold,
 		cfg.ClaimsMediumPriorityThreshold,
+		cfg.ClaimEscalationEnabled,
+		cfg.ClaimEscalationBajaDays,
+		cfg.ClaimEscalationMediaDays,
+		cfg.ClaimEscalationAltaDays,
 	)
 	if err != nil {
 		log.Printf("[ERROR] Update failed: %v", err)

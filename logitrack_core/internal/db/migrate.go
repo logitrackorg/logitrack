@@ -749,6 +749,27 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claims_high_priority_threshold NUMERIC NOT NULL DEFAULT 0.65;
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claims_medium_priority_threshold NUMERIC NOT NULL DEFAULT 0.35;
 
+		-- Escalado automático de prioridad de reclamos por inactividad.
+		-- Unidad: días enteros (1–5 desde el admin). Las columnas *_hours del
+		-- diseño previo (nunca llegaron a producción) se migran dividiendo por
+		-- 24 si existen y luego se eliminan, para dejar solo *_days.
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claim_escalation_enabled    BOOLEAN NOT NULL DEFAULT TRUE;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claim_escalation_baja_days  INTEGER NOT NULL DEFAULT 3;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claim_escalation_media_days INTEGER NOT NULL DEFAULT 2;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS claim_escalation_alta_days  INTEGER NOT NULL DEFAULT 1;
+		DO $migrate_escalation_units$
+		BEGIN
+			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'system_config' AND column_name = 'claim_escalation_baja_hours') THEN
+				UPDATE system_config SET claim_escalation_baja_days  = GREATEST(1, claim_escalation_baja_hours  / 24) WHERE id = 1;
+				UPDATE system_config SET claim_escalation_media_days = GREATEST(1, claim_escalation_media_hours / 24) WHERE id = 1;
+				UPDATE system_config SET claim_escalation_alta_days  = GREATEST(1, claim_escalation_alta_hours  / 24) WHERE id = 1;
+			END IF;
+		END
+		$migrate_escalation_units$;
+		ALTER TABLE system_config DROP COLUMN IF EXISTS claim_escalation_baja_hours;
+		ALTER TABLE system_config DROP COLUMN IF EXISTS claim_escalation_media_hours;
+		ALTER TABLE system_config DROP COLUMN IF EXISTS claim_escalation_alta_hours;
+
 		-- Permisos de pestañas del dashboard por rol (supervisor y manager).
 		-- El admin puede cambiar estos valores en tiempo real desde /admin/dashboard-config.
 		CREATE TABLE IF NOT EXISTS role_metric_permissions (

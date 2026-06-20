@@ -62,6 +62,20 @@ func (s *SystemConfigService) Update(cfg model.SystemConfig) (model.SystemConfig
 		return model.SystemConfig{}, fmt.Errorf("claims_medium_priority_threshold debe ser menor que claims_high_priority_threshold")
 	}
 
+	// Escalado automático de prioridad de reclamos: los días son umbrales de
+	// inactividad por nivel y deben ser estrictamente positivos. La UI los
+	// limita a 1–5; en backend dejamos solo el ≥ 1 para no romper migraciones
+	// previas con valores fuera de rango.
+	if cfg.ClaimEscalationBajaDays <= 0 {
+		return model.SystemConfig{}, fmt.Errorf("claim_escalation_baja_days debe ser mayor a 0")
+	}
+	if cfg.ClaimEscalationMediaDays <= 0 {
+		return model.SystemConfig{}, fmt.Errorf("claim_escalation_media_days debe ser mayor a 0")
+	}
+	if cfg.ClaimEscalationAltaDays <= 0 {
+		return model.SystemConfig{}, fmt.Errorf("claim_escalation_alta_days debe ser mayor a 0")
+	}
+
 	// CA01: Guardar configuración
 	if err := s.repo.Update(cfg); err != nil {
 		return model.SystemConfig{}, err
