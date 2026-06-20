@@ -410,12 +410,14 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 		}
 		// Geofence check: auto-report incident if driver is outside acceptable radius.
 		if user.Role == model.RoleDriver &&
-			(req.Status == model.StatusDelivered || req.Status == model.StatusDeliveryFailed) &&
+			(req.Status == model.StatusDelivered || req.Status == model.StatusDeliveryFailed || req.Status == model.StatusRechazado) &&
 			req.Latitude != nil && req.Longitude != nil {
 			if distM := geoDistanceM(req.Latitude, req.Longitude, current.Recipient.Address.Latitude, current.Recipient.Address.Longitude); distM > model.GeofenceRadiusMeters {
 				action := "Entrega"
 				if req.Status == model.StatusDeliveryFailed {
 					action = "Intento de entrega"
+				} else if req.Status == model.StatusRechazado {
+					action = "Rechazo"
 				}
 				h.maybeReportGeoIncident(trackingID, user.Username, current.ReceivingBranchID, action, distM)
 			}

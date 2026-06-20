@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   AlertCircle, AlertTriangle, Ban, CheckCircle2, ChevronLeft,
@@ -70,10 +70,8 @@ export function DriverShipmentDetail() {
   const waRef = useRef<HTMLDivElement>(null);
 
   const { speedKmh: gpsSpeedKmh, locationReady, requestLocation } = useCurrentSpeed();
-  const [simActive] = useState(false);
-  const routePoints = useMemo(() => [], []);
-  const { mode: simulationMode, position } = useGeolocation(routePoints, simActive ? "simulate" : undefined);
-  const simulationActive = simulationMode === "simulate";
+  const { mode: simulationMode, position } = useGeolocation([]);
+  const simulationActive = simulationMode === "simulate" || simulationMode === "fixed";
   const effectiveSpeed = simulationActive ? 0 : gpsSpeedKmh;
   const speedSource: "simulation" | "real_gps" = simulationActive ? "simulation" : "real_gps";
   const movingTooFast = effectiveSpeed > 5;
