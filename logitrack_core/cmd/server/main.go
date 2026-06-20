@@ -869,8 +869,9 @@ func main() {
 	protected.POST("/ml/config/regenerate", adminOnly, mlConfigHandler.Regenerate)
 	protected.POST("/ml/config/:id/activate", adminOnly, mlConfigHandler.Activate)
 	protected.GET("/admin/access-logs", adminOnly, accessLogHandler.List)
-	// Analytics — manager + admin
-	protected.GET("/analytics/chatbot", managerAdmin, analyticsHandler.GetChatbotStats)
+	// Analytics — supervisor + manager + admin (match metric_permissions seed)
+	analyticsRead := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
+	protected.GET("/analytics/chatbot", analyticsRead, analyticsHandler.GetChatbotStats)
 
 	// Public tracking — no auth required. Dedicated handlers return a redacted
 	// view (no personal data) and 404 on drafts.
