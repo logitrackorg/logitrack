@@ -1,0 +1,54 @@
+logitrack_core/cmd/server/main.go
+  s_103b87fecee3d9::t_7f102de3300a3f 664
+  s_103b87fecee3d9::t_b5bee0d301f8c2 93
+logitrack_core/internal/db/migrate.go
+  s_103b87fecee3d9::t_5f1f7d1faa1c32 803-804,817-819
+logitrack_core/internal/model/metric_permission.go
+  s_103b87fecee3d9::t_d0f77f2d61c38d 17-18,29
+logitrack_core/internal/handler/stats_extended.go
+  s_103b87fecee3d9::t_1528312334c997 319-350
+logitrack_web/src/api/reports.ts
+  s_103b87fecee3d9::t_8406afd1697aaf 145-173
+  s_103b87fecee3d9::t_62051ff6e231c2 199-200
+logitrack_web/src/pages/reports/ClaimsTab.tsx
+  s_103b87fecee3d9::t_bf44a5ffb84201 112-113
+  s_103b87fecee3d9::t_e380d8dd6963ba 351-352
+  s_103b87fecee3d9::t_e09da70a4be5b3 20
+  s_103b87fecee3d9::t_05effea303efbe 1-19,21-111,114-229,234-253,255-350,353-391
+  s_103b87fecee3d9::t_e3333a4c4beded 230-233
+  s_103b87fecee3d9::t_aaf33c35e703f4 254
+logitrack_web/src/pages/DashboardHost.tsx
+  s_103b87fecee3d9::t_90e781898b4dcb 57
+  s_103b87fecee3d9::t_bcc693b82ee888 361
+  s_103b87fecee3d9::t_b4345942a5d28d 23
+  s_103b87fecee3d9::t_c218008a89e209 40
+logitrack_core/internal/service/stats_extended.go
+  s_103b87fecee3d9::t_fff63597eeca7a 54-57
+logitrack_core/internal/model/stats.go
+  s_103b87fecee3d9::t_1d284709baebba 167-195
+logitrack_core/internal/repository/stats_extended.go
+  s_103b87fecee3d9::t_94bed835e69de8 816,822
+  s_103b87fecee3d9::t_aafb8e7475854a 21
+  s_103b87fecee3d9::t_567a70b4326ab8 694-722,726-728,732-815,817-821,823-849
+  s_103b87fecee3d9::t_e63e12485db71a 723-725,729-731
+logitrack_core/internal/seed/claim_seed.go
+  s_103b87fecee3d9::t_2b7fb072e5e688 1-9,12-17,22-23,26-27,29-36,39-41,43-48,51-53,55-62,65-67,69-76,79-81,83-88,91-93,95-101,104-105,154,168-180,193,196-206,209-218,221,273-285,288-297,300-311,314-322,363-370,372-376,389,392-397,399-401,428,442-454,457-465,468-479,521-524,526-527
+  s_103b87fecee3d9::t_d66496666980c1 10-11,19,24-25,28,38,42,54,68,78,82,94,106-153,155-167,194-195,207-208,219-220,222-272,286-287,298-299,312-313,323-362,371,377-378,390-391,398,402-427,429-441,455-456,466-467,480-520
+  s_103b87fecee3d9::t_d93d044a6dccec 18,20-21,37,49-50,63-64,77,89-90,102-103,181-192,379-388,525
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "b6e768f61f69187131d593bf44a294f3d00ff8f0",
+  "prompts": {},
+  "sessions": {
+    "s_103b87fecee3d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "455db590-931e-4755-a718-7403c614209c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
