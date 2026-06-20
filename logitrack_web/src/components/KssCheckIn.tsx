@@ -106,11 +106,12 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
     window.addEventListener("popstate", handlePopState);
     return () => {
       window.removeEventListener("popstate", handlePopState);
-      // Solo limpiar la entrada de historia si el wizard NO terminó normalmente.
-      // Si ya terminó, claimAndNavigate ya hizo navigate() y go(-1) lo desharía
-      // (race condition: go(-1) es async y se ejecuta después del navigate).
-      if (!wizardDoneRef.current && window.history.state?.fatigueGate) {
-        window.history.go(-1);
+      // Usar replaceState en vez de go(-1): elimina el estado fatigueGate sin
+      // triggerear un popstate asíncrono que compite con el navigate() del caller.
+      // go(-1) era la causa del bounce-back a /driver/scan post-skip porque se
+      // ejecutaba DESPUÉS de que navigate("/driver/route") ya había corrido.
+      if (window.history.state?.fatigueGate) {
+        window.history.replaceState(null, "");
       }
     };
   }, []);
