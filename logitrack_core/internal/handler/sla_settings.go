@@ -12,6 +12,8 @@ import (
 
 var validCalculationModes = map[string]bool{"periodic": true, "daily": true}
 
+var validDataWindows = map[int]bool{2: true, 6: true, 12: true, 18: true}
+
 var reHHMM = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
 
 // validCeilings is the set of priority levels the admin may choose as ceiling.
@@ -85,6 +87,13 @@ func (h *SLASettingsHandler) Update(c *gin.Context) {
 	}
 	if cfg.CalculationMode == "" {
 		cfg.CalculationMode = model.DefaultSLASettings().CalculationMode
+	}
+	if cfg.DataWindowMonths != 0 && !validDataWindows[cfg.DataWindowMonths] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "data_window_months debe ser 2, 6, 12 o 18"})
+		return
+	}
+	if cfg.DataWindowMonths == 0 {
+		cfg.DataWindowMonths = model.DefaultSLASettings().DataWindowMonths
 	}
 
 	if err := h.repo.Update(cfg); err != nil {

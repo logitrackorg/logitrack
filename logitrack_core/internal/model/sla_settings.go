@@ -40,6 +40,16 @@ type SLASettings struct {
 	//   "daily"    — runs once, immediately before the Executor at EscalationTime;
 	//                CacheIntervalMinutes is ignored in this mode.
 	CalculationMode string `json:"calculation_mode,omitempty"`
+
+	// DataWindowMonths is how far back the Collector looks in the events table
+	// when computing per-status average dwell times. Only events whose timestamp
+	// falls within the last N months are included in the average, so recent
+	// operational patterns dominate over stale historical data.
+	//
+	// Valid values: 2, 6, 12, 18. Default 12 (one year).
+	// Smaller windows react faster to network changes; larger windows are more
+	// stable but may reflect outdated performance baselines.
+	DataWindowMonths int `json:"data_window_months,omitempty"`
 }
 
 // MonitoredStatusCodes returns the canonical list of active status codes the
@@ -93,6 +103,7 @@ func DefaultSLASettings() SLASettings {
 		AutoEscalate:         boolPtr(true),
 		EscalationTime:       "23:00",
 		CalculationMode:      "periodic",
+		DataWindowMonths:     12,
 	}
 }
 
