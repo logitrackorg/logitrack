@@ -948,18 +948,49 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		candidates = filtered
 	}
 
-	// Final ranking: configurable via RankingMode.
-	//   "gap_area"   → sort by uncovered fragment area (fill largest voids first)
-	//   "population" → sort by absolute population (default, most under-served urban areas first)
-	if density.RankingMode == "gap_area" {
-		sort.Slice(candidates, func(i, j int) bool {
-			return candidates[i].GapAreaKm2 > candidates[j].GapAreaKm2
-		})
-	} else {
-		sort.Slice(candidates, func(i, j int) bool {
-			return candidates[i].Population > candidates[j].Population
-		})
+	// Terrain friction: always computed (local heuristic, no network call).
+	// Sets TerrainType on every candidate so the frontend can show badges.
+	for i := range candidates {
+		_, candidates[i].TerrainType = terrainFriction(candidates[i].Lat, candidates[i].Lng)
 	}
+
+	// Industrial zone detection: one Overpass call for all candidates when enabled.
+	if density.PrioritizeIndustrial {
+		industrial := s.detectIndustrialZones(candidates)
+		for i := range candidates {
+			candidates[i].HasIndustrialZone = industrial[i]
+		}
+	}
+
+	// Final ranking via composite score:
+	//   FinalScore = (BaseDensity × IndustrialMultiplier) / TerrainFriction
+	//
+	// BaseDensity  — pop. density (hab./km²) or gap area depending on RankingMode.
+	// IndustrialMultiplier — 1.3 when HasIndustrialZone && PrioritizeIndustrial.
+	// TerrainFriction      — 1.0 (Llano) … 1.5 (Montañoso) when enabled.
+	scoreOf := func(c model.SuggestedLocation) float64 {
+		var base float64
+		if density.RankingMode == "gap_area" {
+			base = c.GapAreaKm2
+		} else {
+			base = c.Density
+			if base <= 0 {
+				base = float64(c.Population)
+			}
+		}
+		mult := 1.0
+		if density.PrioritizeIndustrial && c.HasIndustrialZone {
+			mult = 1.3
+		}
+		friction := 1.0
+		if density.ApplyTerrainFriction {
+			friction, _ = terrainFriction(c.Lat, c.Lng)
+		}
+		return (base * mult) / friction
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return scoreOf(candidates[i]) > scoreOf(candidates[j])
+	})
 
 	if maxSuggestions > 0 && len(candidates) > maxSuggestions {
 		candidates = candidates[:maxSuggestions]

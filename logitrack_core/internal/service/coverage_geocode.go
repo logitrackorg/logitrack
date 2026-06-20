@@ -483,6 +483,98 @@ func bestFallbackCandidate(originLat, originLng, radiusKm float64, minPopulation
 	return best, found
 }
 
+// detectIndustrialZones queries Overpass for OSM "landuse=industrial" areas
+// near each snapped candidate and returns a parallel boolean slice. An entry is
+// true when at least one industrial polygon centroid lies within 10 km of that
+// candidate. Unsnapped entries are always false.
+//
+// A single Overpass request unions the search radii for all candidates; the
+// returned element centroids are then matched back to each candidate locally.
+// On any Overpass failure the function returns all-false (fail-open) so that
+// scoring degrades gracefully to plain density ranking.
+func (s *CoverageService) detectIndustrialZones(candidates []model.SuggestedLocation) []bool {
+	result := make([]bool, len(candidates))
+
+	// Collect indices of snapped candidates — only those need an Overpass lookup.
+	var snappedIdx []int
+	for i, c := range candidates {
+		if c.IsSnapped {
+			snappedIdx = append(snappedIdx, i)
+		}
+	}
+	if len(snappedIdx) == 0 {
+		return result
+	}
+
+	const industrialRadiusM = 10_000 // 10 km
+
+	var q strings.Builder
+	q.WriteString(`[out:json][timeout:12];(`)
+	for _, i := range snappedIdx {
+		c := candidates[i]
+		fmt.Fprintf(&q, `way["landuse"="industrial"](around:%d,%f,%f);`, industrialRadiusM, c.Lat, c.Lng)
+		fmt.Fprintf(&q, `relation["landuse"="industrial"](around:%d,%f,%f);`, industrialRadiusM, c.Lat, c.Lng)
+	}
+	q.WriteString(`);out ids center;`)
+
+	req, err := http.NewRequest(http.MethodGet, overpassAPIURL, nil)
+	if err != nil {
+		log.Printf("[IndustrialZone] http.NewRequest: %v", err)
+		return result
+	}
+	req.Header.Set("User-Agent", "LogiTrack-CoverageService/1.0 (industrial zone detection)")
+	qv := req.URL.Query()
+	qv.Set("data", q.String())
+	req.URL.RawQuery = qv.Encode()
+
+	client := s.httpClient
+	if client == nil {
+		client = &http.Client{Timeout: 14 * time.Second}
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[IndustrialZone] Overpass request failed: %v", err)
+		return result
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[IndustrialZone] Overpass returned HTTP %d", resp.StatusCode)
+		return result
+	}
+
+	var parsed overpassResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		log.Printf("[IndustrialZone] decode error: %v", err)
+		return result
+	}
+
+	// Normalize centroids (ways/relations carry coordinates in .Center).
+	for k := range parsed.Elements {
+		if parsed.Elements[k].Center.Lat != 0 || parsed.Elements[k].Center.Lon != 0 {
+			parsed.Elements[k].Lat = parsed.Elements[k].Center.Lat
+			parsed.Elements[k].Lon = parsed.Elements[k].Center.Lon
+		}
+	}
+
+	const matchKm = 10.0
+	for _, i := range snappedIdx {
+		c := candidates[i]
+		for _, el := range parsed.Elements {
+			if el.Lat == 0 && el.Lon == 0 {
+				continue
+			}
+			if ml.HaversineKm(c.Lat, c.Lng, el.Lat, el.Lon) <= matchKm {
+				result[i] = true
+				break
+			}
+		}
+	}
+	log.Printf("[IndustrialZone] %d elements found for %d candidates", len(parsed.Elements), len(snappedIdx))
+	return result
+}
+
 // snapMathSuggestionsInPlace auto-snaps each MathematicalSuggestion to the
 // nearest real populated place (Overpass → patagoniaFallback) within
 // math.Min(radiusKm/2, snapToCityMaxRadiusKm). Cities inside any dangerous

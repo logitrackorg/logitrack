@@ -100,6 +100,17 @@ type SuggestedLocation struct {
 	// inhabitants per km² of the Voronoi cell area. Only populated in
 	// "density" diagnostic mode.
 	Density float64 `json:"density,omitempty"`
+
+	// HasIndustrialZone is true when an OSM "landuse=industrial" area exists
+	// within ~10 km of this suggestion. Set by density-mode scoring when
+	// PrioritizeIndustrial is enabled; always false otherwise.
+	HasIndustrialZone bool `json:"has_industrial_zone,omitempty"`
+
+	// TerrainType is a human-readable label describing the topographic
+	// character of the suggestion's location (e.g. "Llano", "Serrano",
+	// "Montañoso"). Set by density-mode scoring when ApplyTerrainFriction is
+	// enabled; empty otherwise.
+	TerrainType string `json:"terrain_type,omitempty"`
 }
 
 // SimulationResult is the response of CoverageService.Diagnose: the per-branch
@@ -198,6 +209,18 @@ type DensityOptions struct {
 	// previous "Buscar más" rounds). Their coverage circles are subtracted
 	// from cell remainders before new candidates are computed.
 	AdditionalSites []LatLng `json:"additional_sites,omitempty"`
+
+	// PrioritizeIndustrial, when true, applies a 1.3× multiplier to the
+	// final score of candidates that have an OSM "landuse=industrial" area
+	// within 10 km, making them rank higher than equally-populated residential
+	// candidates.
+	PrioritizeIndustrial bool `json:"prioritize_industrial,omitempty"`
+
+	// ApplyTerrainFriction, when true, divides each candidate's score by a
+	// friction factor derived from its topographic position in Argentina
+	// (1.0 = flat Pampas, up to 1.5 = Andes). Candidates in difficult terrain
+	// rank lower even when their population density is high.
+	ApplyTerrainFriction bool `json:"apply_terrain_friction,omitempty"`
 }
 
 // DiagnoseRequest is the body of POST /coverage/diagnose: parameters for the

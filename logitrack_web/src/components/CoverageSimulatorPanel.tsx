@@ -59,6 +59,12 @@ interface CoverageSimulatorPanelProps {
   /** Minimum population density filter for density mode (hab./km²). */
   minDensity?: number;
   onMinDensityChange?: (v: number) => void;
+  /** When true, candidates near industrial OSM areas get a 1.3× score bonus. */
+  prioritizeIndustrial?: boolean;
+  onPrioritizeIndustrialChange?: (v: boolean) => void;
+  /** When true, mountainous terrain divides the score (discourages Andes candidates). */
+  applyTerrainFriction?: boolean;
+  onApplyTerrainFrictionChange?: (v: boolean) => void;
   /** true mientras el backend está calculando el diagnóstico — bloquea el panel y cambia el texto del botón. */
   isDiagnosing?: boolean;
   /**
@@ -96,6 +102,10 @@ export function CoverageSimulatorPanel({
   onRankingModeChange,
   minDensity = 0,
   onMinDensityChange,
+  prioritizeIndustrial = false,
+  onPrioritizeIndustrialChange,
+  applyTerrainFriction = false,
+  onApplyTerrainFrictionChange,
   isDiagnosing = false,
   zoneAreaKm2,
 }: CoverageSimulatorPanelProps) {
@@ -423,6 +433,41 @@ export function CoverageSimulatorPanel({
                   ? "Primero las zonas con mayor cantidad de habitantes sin cobertura."
                   : "Primero los huecos geográficos más grandes sin cobertura."}
               </p>
+            </div>
+
+            {/* Logistic scoring modifiers */}
+            <div className="mt-2 space-y-1.5">
+              <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Modificadores de puntuación</p>
+              <label className={`flex items-center gap-2 cursor-pointer select-none ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`}>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={prioritizeIndustrial}
+                  disabled={isDisabled}
+                  onClick={() => onPrioritizeIndustrialChange?.(!prioritizeIndustrial)}
+                  className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer disabled:cursor-not-allowed focus:outline-none ${
+                    prioritizeIndustrial ? "bg-amber-500" : "bg-slate-300 dark:bg-gray-600"
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${prioritizeIndustrial ? "translate-x-4" : "translate-x-0"}`} />
+                </button>
+                <span className="text-[11px] text-slate-600 dark:text-slate-300">🏭 Priorizar zonas industriales</span>
+              </label>
+              <label className={`flex items-center gap-2 cursor-pointer select-none ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`}>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={applyTerrainFriction}
+                  disabled={isDisabled}
+                  onClick={() => onApplyTerrainFrictionChange?.(!applyTerrainFriction)}
+                  className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer disabled:cursor-not-allowed focus:outline-none ${
+                    applyTerrainFriction ? "bg-slate-500 dark:bg-slate-400" : "bg-slate-300 dark:bg-gray-600"
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${applyTerrainFriction ? "translate-x-4" : "translate-x-0"}`} />
+                </button>
+                <span className="text-[11px] text-slate-600 dark:text-slate-300">⛰️ Considerar fricción de terreno</span>
+              </label>
             </div>
 
             {/* Minimum density filter */}

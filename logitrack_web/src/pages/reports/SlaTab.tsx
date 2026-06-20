@@ -1021,6 +1021,10 @@ export function CoberturaTab() {
   const rankingModeRef = useRef<"population" | "gap_area">("population");
   const [minDensity, setMinDensity] = useState(0);
   const minDensityRef = useRef(0);
+  const [prioritizeIndustrial, setPrioritizeIndustrial] = useState(false);
+  const prioritizeIndustrialRef = useRef(false);
+  const [applyTerrainFriction, setApplyTerrainFriction] = useState(false);
+  const applyTerrainFrictionRef = useRef(false);
 
   const simResultRef = useRef<SimulationResult | null>(null);
   const visualAreaRef = useRef(SIM_AREA_DEFAULT);
@@ -1066,6 +1070,8 @@ export function CoberturaTab() {
   useEffect(() => { diagnosisModeRef.current = diagnosisMode; }, [diagnosisMode]);
   useEffect(() => { rankingModeRef.current = rankingMode; }, [rankingMode]);
   useEffect(() => { minDensityRef.current = minDensity; }, [minDensity]);
+  useEffect(() => { prioritizeIndustrialRef.current = prioritizeIndustrial; }, [prioritizeIndustrial]);
+  useEffect(() => { applyTerrainFrictionRef.current = applyTerrainFriction; }, [applyTerrainFriction]);
 
   // Fetch all branches (including inactive) for the simulation panel.
   useEffect(() => { branchApi.list().then(setAllBranches).catch(() => {}); }, []);
@@ -1265,6 +1271,8 @@ export function CoberturaTab() {
               minPopulation: minPop > 0 ? minPop : undefined,
               minDensity: minDensityRef.current > 0 ? minDensityRef.current : undefined,
               rankingMode: rankingModeRef.current !== "population" ? rankingModeRef.current : undefined,
+              prioritizeIndustrial: prioritizeIndustrialRef.current || undefined,
+              applyTerrainFriction: applyTerrainFrictionRef.current || undefined,
             }
           : undefined,
       )
@@ -1361,6 +1369,8 @@ export function CoberturaTab() {
               rankingMode: rankingModeRef.current !== "population" ? rankingModeRef.current : undefined,
               excludedCities: newExcluded.length > 0 ? newExcluded : undefined,
               additionalSites: currentSuggestionSites.length > 0 ? currentSuggestionSites : undefined,
+              prioritizeIndustrial: prioritizeIndustrialRef.current || undefined,
+              applyTerrainFriction: applyTerrainFrictionRef.current || undefined,
             }
           : undefined,
       )
@@ -1814,6 +1824,10 @@ export function CoberturaTab() {
                 onRankingModeChange={setRankingMode}
                 minDensity={minDensity}
                 onMinDensityChange={setMinDensity}
+                prioritizeIndustrial={prioritizeIndustrial}
+                onPrioritizeIndustrialChange={setPrioritizeIndustrial}
+                applyTerrainFriction={applyTerrainFriction}
+                onApplyTerrainFrictionChange={setApplyTerrainFriction}
                 zoneAreaKm2={zoneAreaKm2}
               />
               {simResult !== null && (
@@ -2381,6 +2395,20 @@ function SuggestionCard({
         <p className="mt-1 text-xs font-semibold text-violet-600 dark:text-violet-400">
           {Math.round(loc.density!).toLocaleString("es-AR")} hab./km² en zona sin cobertura
         </p>
+      )}
+      {(loc.has_industrial_zone || (loc.terrain_type && loc.terrain_type !== "Llano")) && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {loc.has_industrial_zone && (
+            <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium">
+              🏭 Zona Industrial Cercana
+            </span>
+          )}
+          {loc.terrain_type && loc.terrain_type !== "Llano" && (
+            <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-gray-700 text-slate-600 dark:text-slate-300 font-medium">
+              ⛰️ {loc.terrain_type}
+            </span>
+          )}
+        </div>
       )}
       {(city.population ?? 0) > 0 && (
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">

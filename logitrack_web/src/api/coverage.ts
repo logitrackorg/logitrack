@@ -98,6 +98,10 @@ export interface SuggestedLocation {
   population?: number;
   /** Densidad poblacional (hab./km²) de la celda Voronoi — solo en modo "density". */
   density?: number;
+  /** true cuando hay zonas industriales OSM dentro de ~10 km (modo density + prioritize_industrial). */
+  has_industrial_zone?: boolean;
+  /** Tipo de terreno: "Llano", "Llano-Ventoso", "Semi-montañoso", "Serrano", "Montañoso". */
+  terrain_type?: string;
 }
 
 export interface SimulationResult {
@@ -192,6 +196,8 @@ export const coverageApi = {
       rankingMode?: "population" | "gap_area";
       excludedCities?: string[];
       additionalSites?: LatLng[];
+      prioritizeIndustrial?: boolean;
+      applyTerrainFriction?: boolean;
     },
   ) =>
     api
@@ -211,6 +217,8 @@ export const coverageApi = {
                 ...(density.rankingMode && density.rankingMode !== "population" ? { ranking_mode: density.rankingMode } : {}),
                 ...(density.excludedCities?.length ? { excluded_cities: density.excludedCities } : {}),
                 ...(density.additionalSites?.length ? { additional_sites: density.additionalSites } : {}),
+                ...(density.prioritizeIndustrial ? { prioritize_industrial: true } : {}),
+                ...(density.applyTerrainFriction ? { apply_terrain_friction: true } : {}),
               },
             }
           : {}),
