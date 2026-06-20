@@ -1,0 +1,34 @@
+logitrack_web/src/pages/reports/AnalyticsTab.tsx
+  s_93128310a48b25::t_fdab5e928d4c5b 98-99
+logitrack_web/src/pages/PublicTracking.tsx
+  s_93128310a48b25::t_6028250ec58e23 341-343,348-353
+logitrack_core/cmd/server/main.go
+  s_405d02ac1649b0::t_5ec7c070e07688 849-850
+logitrack_core/internal/handler/analytics_handler.go
+  s_93128310a48b25::t_3fbef6a71070aa 76-79
+  s_93128310a48b25::t_fbe52c9fad0fa7 102-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "e2a5f13c42806ec62a961dc67e290ffc73e5ca0e",
+  "prompts": {},
+  "sessions": {
+    "s_405d02ac1649b0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b1de86cc-ad01-4faa-95e3-c0ae27507fe7",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_93128310a48b25": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9ada64a6-6ba6-4393-8acd-e89db7e5ee43",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
