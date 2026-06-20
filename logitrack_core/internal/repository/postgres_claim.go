@@ -27,10 +27,14 @@ func (r *postgresClaimRepository) Create(claim model.Claim) error {
 	if claim.EvidenceUploadDate != nil {
 		evidenceUploadDate = *claim.EvidenceUploadDate
 	}
+	priority := claim.Priority
+	if priority == "" {
+		priority = model.ClaimPriorityBaja
+	}
 	_, err := r.db.Exec(
 		`INSERT INTO shipment_claims
-			(id, tracking_id, claim_type, status, description, created_by, claimant_dni, created_at, updated_at, assigned_category, resolution_type, is_automatic, evidence_file_name, evidence_file_path, evidence_mime_type, evidence_upload_date, assigned_branch_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+			(id, tracking_id, claim_type, status, description, created_by, claimant_dni, created_at, updated_at, assigned_category, resolution_type, is_automatic, evidence_file_name, evidence_file_path, evidence_mime_type, evidence_upload_date, assigned_branch_id, priority, priority_note)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
 		claim.ID,
 		claim.TrackingID,
 		string(claim.ClaimType),
@@ -48,8 +52,32 @@ func (r *postgresClaimRepository) Create(claim model.Claim) error {
 		claim.EvidenceMimeType,
 		evidenceUploadDate,
 		nullString(claim.AssignedBranchID),
+		string(priority),
+		nullString(claim.PriorityNote),
 	)
 	return err
+}
+
+// CountOpenAndUrgentByBranch devuelve el total de tickets abiertos (no resueltos
+// ni rechazados) y cuántos de ellos están en prioridad urgente, para una
+// sucursal. Se usa para aplicar el tope de urgentes en el creador de reclamos.
+// Considera el origin_branch_id del envío Y el assigned_branch_id del reclamo
+// (cuando hay derivación), para que la cuenta no cambie al transferir.
+func (r *postgresClaimRepository) CountOpenAndUrgentByBranch(branchID string) (totalOpen, urgentOpen int, err error) {
+	if strings.TrimSpace(branchID) == "" {
+		return 0, 0, nil
+	}
+	row := r.db.QueryRow(
+		`SELECT
+			COUNT(*) FILTER (WHERE c.status NOT LIKE 'resolved_%' AND c.status <> 'transfer_rejected')                                                     AS total_open,
+			COUNT(*) FILTER (WHERE c.status NOT LIKE 'resolved_%' AND c.status <> 'transfer_rejected' AND c.priority = 'urgente') AS urgent_open
+		 FROM shipment_claims c
+		 LEFT JOIN shipments s ON s.tracking_id = c.tracking_id
+		 WHERE c.assigned_branch_id = $1 OR s.origin_branch_id = $1`,
+		branchID,
+	)
+	err = row.Scan(&totalOpen, &urgentOpen)
+	return totalOpen, urgentOpen, err
 }
 
 func (r *postgresClaimRepository) Delete(id string) error {

@@ -4,9 +4,11 @@ import { BadgeCheck, BarChart3, ClipboardList, Clock3, Download, Paperclip, Refr
 import {
   claimsApi,
   CLAIM_EVENT_LABELS,
+  CLAIM_PRIORITY_LABELS,
   CLAIM_TYPE_LABELS,
   type Claim,
   type ClaimEvent,
+  type ClaimPriority,
   type ClaimResolutionType,
   type ClaimStatus,
 } from "../api/claims";
@@ -49,6 +51,15 @@ function formatChangedBy(changedBy: string): string {
   }
   return changedBy;
 }
+
+// Prioridad → color del badge. Matches the spec: urgente=rojo, alta=naranja,
+// media=amarillo, baja=gris.
+const PRIORITY_BADGE_CLASS: Record<ClaimPriority, string> = {
+  urgente: "bg-rose-600 text-white",
+  alta:    "bg-orange-500 text-white",
+  media:   "bg-amber-400 text-amber-950",
+  baja:    "bg-slate-300 text-slate-800",
+};
 
 function statusBadgeClass(status: ClaimStatus): string {
   switch (status) {
@@ -541,11 +552,30 @@ export function Claims() {
                         {CLAIM_TYPE_LABELS[claim.claim_type]}
                       </div>
                     </div>
-                    <span
-                      className={`px-3 py-1.5 rounded-full text-xs font-extrabold shadow-[0_1px_2px_rgba(15,23,42,0.08)] ${statusBadgeClass(claim.status)}`}
-                    >
-                      {CLAIM_STATUS_LABELS[claim.status]}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span
+                        className={`px-3 py-1.5 rounded-full text-xs font-extrabold shadow-[0_1px_2px_rgba(15,23,42,0.08)] ${statusBadgeClass(claim.status)}`}
+                      >
+                        {CLAIM_STATUS_LABELS[claim.status]}
+                      </span>
+                      {claim.priority && (
+                        <>
+                          <span
+                            // El priority_note se muestra en el tooltip nativo además del texto chico debajo
+                            // — así queda accesible sin abrir el detalle del reclamo.
+                            title={claim.priority_note || `Prioridad ${CLAIM_PRIORITY_LABELS[claim.priority]}`}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide ${PRIORITY_BADGE_CLASS[claim.priority]}`}
+                          >
+                            {CLAIM_PRIORITY_LABELS[claim.priority]}
+                          </span>
+                          {claim.priority_note && (
+                            <span className="text-[11px] dark:text-gray-400 text-slate-500 max-w-[260px] text-right leading-tight">
+                              {claim.priority_note}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </summary>
 

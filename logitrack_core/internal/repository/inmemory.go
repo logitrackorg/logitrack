@@ -766,6 +766,27 @@ func (r *inMemoryClaimRepository) ListByAssignedBranch(branchID string) ([]model
 	return result, nil
 }
 
+// CountOpenAndUrgentByBranch en memoria considera solo el assigned_branch_id
+// del reclamo (no resuelve el origin_branch_id del envío); suficiente para
+// tests, que pueden setear ese campo directamente.
+func (r *inMemoryClaimRepository) CountOpenAndUrgentByBranch(branchID string) (totalOpen, urgentOpen int, err error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, c := range r.claims {
+		if c.AssignedBranchID != branchID {
+			continue
+		}
+		if strings.HasPrefix(string(c.Status), "resolved_") || c.Status == model.ClaimStatusTransferRejected {
+			continue
+		}
+		totalOpen++
+		if c.Priority == model.ClaimPriorityUrgente {
+			urgentOpen++
+		}
+	}
+	return totalOpen, urgentOpen, nil
+}
+
 // ── InMemory ClaimEventRepository ─────────────────────────────────────────────
 
 type inMemoryClaimEventRepository struct {

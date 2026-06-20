@@ -54,6 +54,8 @@ export type ClaimCategory =
 
 export type ClaimResolutionType = "operativa" | "comercial" | "rrhh" | "improcedente";
 
+export type ClaimPriority = "baja" | "media" | "alta" | "urgente";
+
 export interface Claim {
   id: string;
   tracking_id: string;
@@ -70,6 +72,10 @@ export interface Claim {
   evidence_file_name?: string;
   evidence_mime_type?: string;
   evidence_upload_date?: string;
+  /** Prioridad calculada automáticamente al crear el reclamo. No editable por el cliente. */
+  priority: ClaimPriority;
+  /** Nota de justificación cuando la prioridad fue degradada (p. ej. tope de urgentes). */
+  priority_note?: string;
 }
 
 export type ClaimEventType =
@@ -110,6 +116,13 @@ export const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
   bad_treatment: "Maltrato",
   wrong_data:    "Datos incorrectos",
   other:         "Otro",
+};
+
+export const CLAIM_PRIORITY_LABELS: Record<ClaimPriority, string> = {
+  baja:    "Baja",
+  media:   "Media",
+  alta:    "Alta",
+  urgente: "Urgente",
 };
 
 export const CLAIM_EVENT_LABELS: Record<ClaimEventType, string> = {
