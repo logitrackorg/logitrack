@@ -1,0 +1,53 @@
+logitrack_web/src/pages/PublicTracking.tsx
+  s_4c49b3d4b7b541::t_3acc91284cb219 1
+  s_4c49b3d4b7b541::t_36523eaa03ad77 339-344,347-356
+  s_4c49b3d4b7b541::t_5a1a46e02898ba 345-346
+logitrack_web/src/pages/DriverShipmentDetail.tsx
+  s_1f0b6f8e2b91cb::t_34cbf88a4d496d 64-66
+  s_1f0b6f8e2b91cb::t_91a927bd3b8e61 5
+  s_1f0b6f8e2b91cb::t_55d9c7e4345d86 397-402,404-420
+  s_1f0b6f8e2b91cb::t_f58aa25a0f5231 1
+  s_1f0b6f8e2b91cb::t_8eae3cdbff3dc6 115-128
+  s_1f0b6f8e2b91cb::t_6dbb765cf1d36a 30
+logitrack_core/internal/handler/chatbot_handler.go
+  s_fa0c9b03d53a15::t_e2c65a0ae2b903 894-903
+  s_fa0c9b03d53a15::t_41e1d79e9200e1 639-643
+  s_fa0c9b03d53a15::t_00cb7e1e1c1f46 725-728
+  s_fa0c9b03d53a15::t_a8c92e88be70b6 297-300
+  s_fa0c9b03d53a15::t_0b2ceaa6d2e3ad 214-218
+  s_fa0c9b03d53a15::t_371d980d345884 498-502
+  s_fa0c9b03d53a15::t_e8bb4cccc79f90 670-673
+  s_fa0c9b03d53a15::t_f195c3b1cab88d 551-554
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "2412301b2a55d7d4421e340522d19288048d2be9",
+  "prompts": {},
+  "sessions": {
+    "s_1f0b6f8e2b91cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9d5da390-d01b-4f91-8b2e-d45dd8b1e472",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_4c49b3d4b7b541": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4f507992-c4d6-445e-b58b-c6835d408954",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_fa0c9b03d53a15": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3381e67-3087-4250-83e3-3842294651ec",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
