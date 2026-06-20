@@ -1,0 +1,33 @@
+logitrack_web/src/pages/DriverRoute.tsx
+  s_35ba9fbb5bd060::t_125704b132598d 568
+  s_35ba9fbb5bd060::t_6eff25607a03f3 166-169
+  s_35ba9fbb5bd060::t_25aa518dac3e92 521
+  s_35ba9fbb5bd060::t_bf2fc81f87e76e 612
+  s_35ba9fbb5bd060::t_12f70a5843c500 495
+  s_35ba9fbb5bd060::t_5f8dd99db76a81 373,376,379,385,388,391,397,400,403
+  s_35ba9fbb5bd060::t_85d293230db724 420
+CLAUDE.md
+  s_35ba9fbb5bd060::t_5b72b3d53cd2fd 190-191
+logitrack_web/src/pages/DriverShipmentDetail.tsx
+  s_35ba9fbb5bd060::t_6e3444b4d0d05d 286
+  s_35ba9fbb5bd060::t_00f90c07284696 270-271
+  s_35ba9fbb5bd060::t_e17b3102f346b0 245-246
+  s_35ba9fbb5bd060::t_26e3abee242e47 63-65
+  s_35ba9fbb5bd060::t_29697c9cccfbeb 214,217,219-220
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "9e8e3cee484a3b95d78392e684407cbeafa78f2f",
+  "prompts": {},
+  "sessions": {
+    "s_35ba9fbb5bd060": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0d485359-a932-49f6-bbd6-f0ba85f209d0",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
