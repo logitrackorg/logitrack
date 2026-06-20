@@ -56,6 +56,7 @@ export function DriverShipmentDetail() {
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [deliveryPhoto, setDeliveryPhoto] = useState<Blob | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | undefined>();
   const [cameraOpen, setCameraOpen] = useState(false);
   // Aviso de geofence: el chofer está a > GEOFENCE_RADIUS_M del domicilio.
   const [geoWarning, setGeoWarning] = useState<{ distanceM: number; onConfirm: () => void } | null>(null);
@@ -132,6 +133,13 @@ export function DriverShipmentDetail() {
     setOfflineKeywordAttempts(0);
     getKeywordAttempts(shipment.tracking_id).then(setOfflineKeywordAttempts).catch(() => {});
   }, [deliverOpen, shipment?.tracking_id]);
+
+  useEffect(() => {
+    if (!deliveryPhoto) { setPhotoPreviewUrl(undefined); return; }
+    const url = URL.createObjectURL(deliveryPhoto);
+    setPhotoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [deliveryPhoto]);
 
   const handleDeliver = async () => {
     if (!shipment) return;
@@ -445,7 +453,6 @@ export function DriverShipmentDetail() {
           onCapture={(blob) => {
             setDeliveryPhoto(blob);
             setCameraOpen(false);
-            setDeliverOpen(true);
           }}
           onClose={() => setCameraOpen(false)}
         />
@@ -455,7 +462,7 @@ export function DriverShipmentDetail() {
     {canAct && (
       <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
         <div className="flex flex-col gap-2 max-w-2xl mx-auto">
-          <Button onClick={() => withGeofence(() => { if (shipment.delivery_method === "ultima_milla") { setCameraOpen(true); } else { setDeliverOpen(true); } })} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
+          <Button onClick={() => withGeofence(() => setDeliverOpen(true))} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
             <CheckCircle2 className="w-5 h-5" />Entregar
           </Button>
           <div className="flex gap-2">
@@ -470,7 +477,7 @@ export function DriverShipmentDetail() {
       </div>
     )}
 
-    <DeliveryActionSheet mode="deliver" open={deliverOpen} onClose={() => { setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); }} shipment={shipment} keyword={deliveryKeyword} onKeywordChange={setDeliveryKeyword} useContingency={useContingency} onUseContingency={setUseContingency} dni={recipientDni} onDniChange={setRecipientDni} submitting={submitting} onConfirm={handleDeliver} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} offlineKeywordAttempts={offlineKeywordAttempts} />
+    <DeliveryActionSheet mode="deliver" open={deliverOpen && !cameraOpen} onClose={() => { setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); setDeliveryPhoto(null); }} shipment={shipment} keyword={deliveryKeyword} onKeywordChange={setDeliveryKeyword} useContingency={useContingency} onUseContingency={setUseContingency} dni={recipientDni} onDniChange={setRecipientDni} submitting={submitting} onConfirm={handleDeliver} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} offlineKeywordAttempts={offlineKeywordAttempts} hasPhoto={!!deliveryPhoto} photoPreviewUrl={photoPreviewUrl} onTakePhoto={() => setCameraOpen(true)} />
     <DeliveryActionSheet mode="failed" open={failedOpen} onClose={() => { setFailedOpen(false); setFailedReason(""); setFailedNotes(""); }} shipment={shipment} reason={failedReason} onReasonChange={setFailedReason} notes={failedNotes} onNotesChange={setFailedNotes} submitting={submitting} onConfirm={handleFailed} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
     <DeliveryActionSheet mode="rejected" open={rejectedOpen} onClose={() => { setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); }} shipment={shipment} reason={rejectedReason} onReasonChange={setRejectedReason} notes={rejectedNotes} onNotesChange={setRejectedNotes} submitting={submitting} onConfirm={handleRejected} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
 
