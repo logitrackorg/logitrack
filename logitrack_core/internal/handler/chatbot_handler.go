@@ -12,6 +12,7 @@ import (
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/service"
 	"github.com/logitrack/core/internal/clock"
+	"github.com/logitrack/core/internal/analytics"
 )
 
 // formatAddress convierte un Address struct a string legible
@@ -45,6 +46,7 @@ type ChatbotHandler struct {
 	shipmentSvc  *service.ShipmentService
 	sysConfigSvc *service.SystemConfigService
 	claimSvc     *service.ClaimService
+	analytics    *analytics.Client
 }
 
 func NewChatbotHandler(
@@ -54,6 +56,7 @@ func NewChatbotHandler(
 	shipmentSvc *service.ShipmentService,
 	sysConfigSvc *service.SystemConfigService,
 	claimSvc *service.ClaimService,
+ 	analyticsClient *analytics.Client,
 ) *ChatbotHandler {
 	return &ChatbotHandler{
 		shipmentRepo: shipmentRepo,
@@ -62,6 +65,7 @@ func NewChatbotHandler(
 		shipmentSvc:  shipmentSvc,
 		sysConfigSvc: sysConfigSvc,
 		claimSvc:     claimSvc,
+		analytics:           analyticsClient,
 	}
 }
 

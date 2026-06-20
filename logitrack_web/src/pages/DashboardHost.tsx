@@ -19,6 +19,7 @@ import {
   Settings2,
   RotateCcw,
   X,
+  Globe,
 } from "lucide-react";
 import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
@@ -45,6 +46,7 @@ const ExitoTab = lazy(() => import("./reports/ExitoTab").then(m => ({ default: m
 const FatigaTab = lazy(() => import("./reports/FatigaTab").then(m => ({ default: m.FatigaTab })));
 const SlaTab = lazy(() => import("./reports/SlaTab"));
 const EmpleadoMesTab = lazy(() => import("./reports/EmpleadoMesTab").then(m => ({ default: m.EmpleadoMesTab })));
+const AnalyticsTab = lazy(() => import("./reports/AnalyticsTab").then(m => ({ default: m.AnalyticsTab })));
 
 const tabs = [
   { id: "resumen", label: "Resumen", icon: LayoutDashboard },
@@ -60,6 +62,7 @@ const tabs = [
   { id: "fatiga", label: "Fatiga", icon: Activity },
   { id: "sla", label: "SLA", icon: ShieldAlert },
   { id: "empleado-mes", label: "Empleado del Mes", icon: Trophy },
+  { id: "analytics", label: "Analytics", icon: Globe },
 ];
 
 const tabById = Object.fromEntries(tabs.map((t) => [t.id, t]));
@@ -362,6 +365,7 @@ export function DashboardHost() {
             {activeTab === "fatiga" && <FatigaTab branchId={effectiveBranch} />}
             {activeTab === "sla" && <SlaTab branchId={effectiveBranch} />}
             {activeTab === "empleado-mes" && <EmpleadoMesTab branchId={effectiveBranch} />}
+            {activeTab === "analytics" && <AnalyticsTab />}
           </Suspense>
         </div>
       </div>

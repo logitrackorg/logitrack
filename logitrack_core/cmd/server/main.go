@@ -27,6 +27,7 @@ import (
 	"github.com/logitrack/core/internal/seed"
 	"github.com/logitrack/core/internal/service"
 	"github.com/logitrack/core/internal/sse"
+	"github.com/logitrack/core/internal/analytics"
 )
 
 func getenv(key, fallback string) string {
@@ -110,6 +111,8 @@ func main() {
 			}
 		}
 	}
+	analyticsClient := analytics.NewPostHogClient()
+    defer analyticsClient.Close()
 
 	// Services & handlers
 	modelPath := os.Getenv("ML_MODEL_PATH")
@@ -271,7 +274,8 @@ func main() {
 	branchSvc.SetBranchZoneService(branchZoneSvc)
 	branchHandler := handler.NewBranchHandler(branchSvc)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc, claimSvc)
-	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc, shipmentSvc, sysConfigSvc, claimSvc)
+	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc, shipmentSvc, sysConfigSvc, claimSvc,  analyticsClient,)
+	analyticsHandler := handler.NewAnalyticsHandler()
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
@@ -848,6 +852,8 @@ func main() {
 	protected.POST("/ml/config/regenerate", adminOnly, mlConfigHandler.Regenerate)
 	protected.POST("/ml/config/:id/activate", adminOnly, mlConfigHandler.Activate)
 	protected.GET("/admin/access-logs", adminOnly, accessLogHandler.List)
+	// Analytics — manager + admin
+	protected.GET("/analytics/chatbot", managerAdmin, analyticsHandler.GetChatbotStats)
 
 	// Public tracking — no auth required. Dedicated handlers return a redacted
 	// view (no personal data) and 404 on drafts.
