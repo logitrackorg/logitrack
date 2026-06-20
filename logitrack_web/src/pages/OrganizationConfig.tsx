@@ -4,6 +4,8 @@ import { organizationApi, type OrganizationConfig as OrganizationConfigType } fr
 import { useOrganizationTheme } from "../context/OrganizationThemeContext";
 import { fmtDateTime } from "../utils/date";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
+import { ThemePreview } from "../components/ThemePreview";
+import { PALETTES } from "../data/palettes";
 
 const inputClass =
   "w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-500";
@@ -173,27 +175,11 @@ export function OrganizationConfig() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
-            {/* Color preview strip */}
-            <div className="flex gap-2 h-8 rounded-lg overflow-hidden">
-              <div
-                className="flex-1 flex items-center justify-center text-[10px] font-bold text-white"
-                style={{ background: form.primary_color || "#2563eb" }}
-              >
-                Primario
-              </div>
-              <div
-                className="flex-1 flex items-center justify-center text-[10px] font-bold text-white"
-                style={{ background: form.accent_color || "#f97316" }}
-              >
-                Acento
-              </div>
-              <div
-                className="flex-1 flex items-center justify-center text-[10px] font-bold text-white"
-                style={{ background: form.sidebar_color || "var(--sidebar-bg)" }}
-              >
-                Sidebar
-              </div>
-            </div>
+            <ThemePreview
+              primaryColor={form.primary_color || undefined}
+              accentColor={form.accent_color || undefined}
+              sidebarColor={form.sidebar_color || undefined}
+            />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-1.5">
@@ -255,6 +241,46 @@ export function OrganizationConfig() {
                   />
                 </div>
                 <p className="text-xs text-slate-400 dark:text-slate-500">Fondo de la barra lateral. Default: azul oscuro #1e3a5f</p>
+            </div>
+
+            {/* Palette selector */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Paletas sugeridas
+              </label>
+              <div className="flex flex-wrap gap-3">
+                {PALETTES.map((palette) => {
+                  const isActive =
+                    form.primary_color === palette.primary_color &&
+                    form.accent_color === palette.accent_color &&
+                    form.sidebar_color === palette.sidebar_color;
+                  return (
+                    <button
+                      key={palette.name}
+                      type="button"
+                      onClick={() => setForm({
+                        ...form,
+                        primary_color: palette.primary_color,
+                        accent_color: palette.accent_color,
+                        sidebar_color: palette.sidebar_color,
+                      })}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                        isActive
+                          ? 'ring-2 ring-offset-1 ring-blue-500 border-blue-500'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                      }`}
+                      title={palette.name}
+                    >
+                      <span className="flex -space-x-1">
+                        <span className="w-5 h-5 rounded-full border border-white" style={{ background: palette.primary_color }} />
+                        <span className="w-5 h-5 rounded-full border border-white" style={{ background: palette.accent_color }} />
+                        <span className="w-5 h-5 rounded-full border border-white" style={{ background: palette.sidebar_color }} />
+                      </span>
+                      <span className="text-xs text-gray-600 dark:text-gray-400">{palette.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="grid gap-1.5">
