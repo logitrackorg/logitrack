@@ -53,14 +53,22 @@ export function DriverScanVehicle() {
     });
 
     interBranchTripsApi.getMyTrip().then((trip) => {
+      // Solo los viajes inter-sucursal van a /driver/trip. getMyTrip
+      // (GetActiveByDriver en el backend) NO filtra por kind, así que para un
+      // chofer de última milla devuelve su trip last_mile en_transito. Sin este
+      // guard lo mandábamos a la pantalla inter-sucursal, en conflicto con la
+      // navegación a /driver/route del getRoute de arriba → rebote a /driver/scan.
+      const isInterBranchActive =
+        trip.kind === "inter_branch" &&
+        (trip.status === "pendiente" || trip.status === "en_transito");
       driverDebug("scan_mount_getmytrip_ok", {
         driverId: user?.id,
         driverType: user?.driver_type,
         tripStatus: trip.status,
         tripKind: trip.kind,
-        willRedirect: trip.status === "pendiente" || trip.status === "en_transito" ? "/driver/trip" : "none",
+        willRedirect: isInterBranchActive ? "/driver/trip" : "none",
       });
-      if (trip.status === "pendiente" || trip.status === "en_transito") {
+      if (isInterBranchActive) {
         navigate("/driver/trip", { replace: true });
       }
     }).catch((err) => {
