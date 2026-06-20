@@ -1,0 +1,19 @@
+logitrack_web/src/pages/DriverRoute.tsx
+  s_2afb0c06e51723::t_b4f89c849a8f14 211,234-238,240-244
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "499b82a931b532a4084862aa6421fa34e3e6b706",
+  "prompts": {},
+  "sessions": {
+    "s_2afb0c06e51723": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "234132f5-e6c8-4ffe-a1b0-7dcb6c12c962",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
