@@ -1062,6 +1062,7 @@ export function CoberturaTab() {
   const [pendingRegionBoundary, setPendingRegionBoundary] = useState<[number, number][] | null>(null);
   const [savingRegionName, setSavingRegionName] = useState("");
   const [savingRegion, setSavingRegion] = useState(false);
+  const [regionSaveError, setRegionSaveError] = useState<string | null>(null);
   // Edición de zona: id de la zona que se está editando (null = creando una
   // nueva). `redrawReference` es la forma original que se dibuja de fondo en
   // tono claro mientras el usuario la re-dibuja, como referencia.
@@ -1152,6 +1153,7 @@ export function CoberturaTab() {
     setCustomBoundary(pts);
     setIsDrawingBoundary(false);
     setRedrawReference(null);
+    setRegionSaveError(null);
     setPendingRegionBoundary(pts);
     // Al editar, precargamos el nombre actual para que el usuario pueda
     // mantenerlo o cambiarlo en el mismo paso de confirmación.
@@ -1194,14 +1196,33 @@ export function CoberturaTab() {
   }, []);
 
   const handleStartEditBoundary = useCallback(() => {
+    setRegionSaveError(null);
     setIsEditingBoundary(true);
   }, []);
 
-  const handleBoundaryEdited = useCallback((pts: [number, number][]) => {
+  const handleBoundaryEdited = useCallback(async (pts: [number, number][]) => {
     setCustomBoundary(pts);
     setIsEditingBoundary(false);
     resetDiagnosis();
-  }, [resetDiagnosis]);
+    // If the active boundary belongs to a saved custom region, persist the new
+    // shape immediately so it survives a page refresh.
+    if (selectedRegionId !== "national") {
+      const region = regions.find((r) => r.id === selectedRegionId && r.type === "custom");
+      if (region) {
+        try {
+          setRegionSaveError(null);
+          await regionsApi.update(region.id, {
+            name: region.name,
+            coordinates: pts.map(([lat, lng]) => ({ lat, lng })),
+          });
+          const updated = await regionsApi.list();
+          setRegions(updated);
+        } catch {
+          setRegionSaveError("No se pudieron guardar los cambios de la zona. Verificá tu conexión e intentá de nuevo.");
+        }
+      }
+    }
+  }, [resetDiagnosis, selectedRegionId, regions]);
 
   const handleBoundaryEditCancel = useCallback(() => {
     setIsEditingBoundary(false);
@@ -1210,6 +1231,7 @@ export function CoberturaTab() {
   const handleSaveNewRegion = useCallback(async () => {
     if (!pendingRegionBoundary || !savingRegionName.trim()) return;
     setSavingRegion(true);
+    setRegionSaveError(null);
     try {
       const coordinates = pendingRegionBoundary.map(([lat, lng]) => ({ lat, lng }));
       const name = savingRegionName.trim();
@@ -1221,12 +1243,16 @@ export function CoberturaTab() {
       setSelectedRegionId(saved.id);
       setCustomBoundary(pendingRegionBoundary);
       setTerritoryMode("custom");
-    } finally {
-      setSavingRegion(false);
+      // Close and clean up only on success.
       setShowSaveRegionModal(false);
       setSavingRegionName("");
       setPendingRegionBoundary(null);
       setEditingRegionId(null);
+    } catch {
+      // Keep the modal open so the user can retry — don't silently discard.
+      setRegionSaveError("No se pudo guardar la zona. Verificá tu conexión e intentá de nuevo.");
+    } finally {
+      setSavingRegion(false);
     }
   }, [pendingRegionBoundary, savingRegionName, editingRegionId]);
 
@@ -1921,6 +1947,11 @@ export function CoberturaTab() {
               {simError && (
                 <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{simError}</p>
               )}
+              {regionSaveError && (
+                <p className="mt-2 text-xs text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 rounded-lg px-3 py-2">
+                  {regionSaveError}
+                </p>
+              )}
               {simResult && simResult.suggested_locations.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-slate-200 dark:border-gray-700">
                   {pendingSnapIndexes.length > 0 ? (
@@ -2243,6 +2274,11 @@ export function CoberturaTab() {
               maxLength={60}
               className="w-full text-sm px-3 py-2 rounded-lg border border-slate-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {regionSaveError && (
+              <p className="text-xs text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 rounded-lg px-3 py-2">
+                {regionSaveError}
+              </p>
+            )}
             <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"
