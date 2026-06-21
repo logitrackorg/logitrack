@@ -1005,6 +1005,7 @@ export function PublicTracking() {
                         values={claimForm}
                         onChange={patchClaimForm}
                         disabled={claimSubmitting}
+                        shipmentDelivered={shipment?.status === "delivered"}
                       />
 
                       {claimError && (
