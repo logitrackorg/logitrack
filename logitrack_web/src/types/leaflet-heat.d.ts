@@ -1,3 +1,5 @@
+export {};
+
 declare module "leaflet" {
   interface HeatLayerOptions {
     minOpacity?: number;
