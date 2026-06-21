@@ -104,10 +104,11 @@ const ORG_TOKEN_KEYS = [
   "--accent-500", "--accent-600", "--accent-700", "--accent-800", "--accent-900", "--accent-950",
   "--accent", "--accent-hover", "--accent-tint", "--accent-tint-border", "--accent-foreground",
   "--sidebar-bg", "--sidebar-hover", "--sidebar-border",
-  "--text-heading",
+  "--text-heading", "--brand-heading",
   "--ring",
   "--fc-button-bg-color", "--fc-button-border-color",
   "--fc-button-hover-bg-color", "--fc-button-active-bg-color", "--fc-highlight-color",
+  "--font-family",
 ];
 
 function clearOrgTokens(root: HTMLElement) {
@@ -149,8 +150,7 @@ function injectThemeTokens(config: OrganizationBranding | null) {
     root.style.setProperty("--fc-button-active-bg-color", palette["700"] || brandHex);
     root.style.setProperty("--fc-highlight-color", `${brandHex}1a`);
 
-    // Heading text → brand-800 tone
-    root.style.setProperty("--text-heading", palette["800"] || brandHex);
+    root.style.setProperty("--brand-heading", palette["800"] || brandHex);
   }
 
   // --accent palette
@@ -178,6 +178,14 @@ function injectThemeTokens(config: OrganizationBranding | null) {
         hslToHex(sidebarHSL.h, sidebarHSL.s, Math.max(sidebarHSL.l - 10, 0))
       );
     }
+  }
+
+  // Inject font family
+  if (config.font_family && config.font_family !== '') {
+    const family = config.font_family === 'System UI'
+      ? 'system-ui, -apple-system, sans-serif'
+      : `'${config.font_family}', system-ui, sans-serif`;
+    root.style.setProperty('--font-family', family);
   }
 }
 

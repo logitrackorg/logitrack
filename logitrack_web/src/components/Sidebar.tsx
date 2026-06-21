@@ -257,7 +257,7 @@ export function Sidebar() {
                 className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white/10"
               />
             ) : (
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-extrabold text-sm shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--brand)] to-[var(--sidebar-bg)] flex items-center justify-center text-white font-extrabold text-sm shrink-0">
                 {orgName.slice(0, 2).toUpperCase()}
               </div>
             )}
