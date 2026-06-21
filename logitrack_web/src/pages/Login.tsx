@@ -570,14 +570,14 @@ export function Login() {
                 <Truck className="w-4 h-4 text-white" />
               </div>
             )}
-            <span className="font-bold text-blue-900 text-base">{orgName}</span>
+            <span className="font-bold text-[var(--text-heading)] text-base">{orgName}</span>
           </div>
 
           {/* ─── Login ─── */}
           {resetStep === "idle" && (
             <>
               <div className="space-y-1.5">
-                <h2 className="text-2xl font-bold dark:text-gray-100 text-gray-900 tracking-tight">Bienvenido</h2>
+                <h2 className="text-2xl font-bold text-[var(--text-heading)] tracking-tight">Bienvenido</h2>
                 <p className="text-sm dark:text-gray-400 text-gray-500">Ingresá tus credenciales para continuar</p>
               </div>
 
@@ -692,7 +692,7 @@ export function Login() {
           {resetStep === "username" && (
             <div className="space-y-6">
               <div className="space-y-1.5">
-                <h2 className="text-2xl font-bold dark:text-gray-100 text-gray-900 tracking-tight">Recuperar contraseña</h2>
+                <h2 className="text-2xl font-bold text-[var(--text-heading)] tracking-tight">Recuperar contraseña</h2>
                 <p className="text-sm dark:text-gray-400 text-gray-500">Ingresá tu nombre de usuario</p>
               </div>
 
@@ -749,7 +749,7 @@ export function Login() {
           {resetStep === "otp" && (
             <div className="space-y-5">
               <div className="space-y-1.5">
-                <h2 className="text-2xl font-bold dark:text-gray-100 text-gray-900 tracking-tight">Ingresá el código</h2>
+                <h2 className="text-2xl font-bold text-[var(--text-heading)] tracking-tight">Ingresá el código</h2>
                 <p className="text-sm dark:text-gray-400 text-gray-500">
                   Revisá tu casilla de correo
                 </p>

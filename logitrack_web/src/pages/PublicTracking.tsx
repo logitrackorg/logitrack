@@ -654,7 +654,7 @@ export function PublicTracking() {
         {!shipment && !error && !loading && (
           <div className="flex flex-col items-center gap-3 py-16 text-center">
             <PackageSearch className="w-16 h-16 text-slate-300 dark:text-slate-600" />
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mt-4">
+            <h3 className="text-lg font-semibold text-[var(--text-heading)] mt-4">
               Ingresá tu número de seguimiento
             </h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -680,7 +680,7 @@ export function PublicTracking() {
                     <StatusBadge status={shipment.status} label={shipmentStatusLabelOverride(shipment)} />
                     {shipmentPriority && <PriorityBadge priority={shipmentPriority} />}
                   </div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">{hero.title}</h2>
+                  <h2 className="text-lg font-bold text-[var(--text-heading)]">{hero.title}</h2>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{hero.subtitle}</p>
                 </div>
               </CardContent>
@@ -735,7 +735,7 @@ export function PublicTracking() {
             {!isFailed && (
               <Card variant="default" className="cursor-default">
                 <CardHeader>
-                  <CardTitle>Progreso del envío</CardTitle>
+                  <CardTitle className="text-[var(--text-heading)]">Progreso del envío</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center gap-1">
@@ -901,7 +901,7 @@ export function PublicTracking() {
             {chronological.length > 0 && (
               <Card variant="default" className="cursor-default">
                 <CardHeader>
-                  <CardTitle>Historial</CardTitle>
+                  <CardTitle className="text-[var(--text-heading)]">Historial</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ol className="relative list-none p-0 m-0
@@ -964,7 +964,7 @@ export function PublicTracking() {
             {/* 🛡️ Claim card */}
             <Card variant="default" className="cursor-default">
               <CardHeader>
-                <CardTitle>¿Algún problema?</CardTitle>
+                <CardTitle className="text-[var(--text-heading)]">¿Algún problema?</CardTitle>
                 <CardDescription>Hacé tu reclamo y te damos seguimiento.</CardDescription>
               </CardHeader>
               <CardContent>
