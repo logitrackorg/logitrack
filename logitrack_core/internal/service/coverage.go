@@ -679,26 +679,13 @@ const densityModeMinFragAreaKm2 = 50.0
 
 // computeDensitySuggestions implements the "density" diagnostic mode.
 //
-// Unlike area mode (which ranks suggestions by Voronoi gap area), density mode
-// answers "where are the most people that the current network does NOT reach?"
-// by reusing the same DIFFERENCE geometry (cell − coverage circle) as area
-// mode but ranking results by the absolute population of the nearest city
-// found inside each uncovered fragment.
-//
-// Steps:
-//  1. For every Voronoi cell with polygon geometry, compute the uncovered zone
-//     (cell − simulated coverage circle) — identical to area-mode "crítico"
-//     suggestions but applied to ALL cells, not just crítico ones.
-//  2. Place one candidate per uncovered fragment at its Pole of Inaccessibility:
-//     guaranteed to lie on Argentine land and outside existing coverage circles.
-//  3. Pre-sort by fragment area descending, cap at densityModeMaxCandidates to
-//     bound Overpass API calls.
-//  4. Snap each candidate to the nearest real city using a LOCAL search radius
-//     (proportional to the simulation radius, not the national 150 km default)
-//     so the snap finds cities INSIDE the uncovered zone rather than pulling in
-//     distant megacities that already have branches.
-//  5. Rank by Population descending and set Density = population / fragment_area
-//     (hab./km² of uncovered zone) — a meaningful logistics metric.
+// Exhaustive locality scan: iterates every locality in the embedded INDEC/Georef
+// dataset (geo.Localities, 2 134 entries), keeps those that are uncovered by the
+// existing branch network and satisfy the user's filters, sorts by population
+// descending and applies a greedy minimum-separation pass. No geometric PoI or
+// snap step — every candidate is already a real city. Buscar-más rounds exclude
+// already-suggested cities via density.AdditionalSites (treated as covered) and
+// density.ExcludedCities (name blacklist), guaranteeing different results each time.
 func (s *CoverageService) computeDensitySuggestions(coverageCells []model.CoverageCell, customBoundary []model.LatLng, simulatedAreaKm2 float64, dangerousZones [][]model.LatLng, maxSuggestions int, density model.DensityOptions) ([]model.SuggestedLocation, []model.RejectedLocation) {
 	if simulatedAreaKm2 <= 0 || len(coverageCells) == 0 {
 		return nil, nil
@@ -706,279 +693,155 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 
 	var rejected []model.RejectedLocation
 
-	// rejectedScore computes the Logistics Viability Index for a candidate at
-	// rejection time. Industrial-zone presence defaults to false because zone
-	// detection (an Overpass call) only runs for candidates that survive to the
-	// final scoring stage. Terrain is always cheap to compute.
 	rejectedScore := func(c model.SuggestedLocation, usefulArea float64) int {
 		f, _ := terrainFriction(c.Lat, c.Lng)
 		return CalculateViabilityScore(c.Population, c.Density, usefulArea, false, f)
 	}
 
 	radiusKm := math.Sqrt(simulatedAreaKm2 / math.Pi)
-	circle := toPolyclip(circlePolygon(radiusKm, coverageSuggestionCircleVertices))
 
-	var minSepKm float64
-	var perFragCap int
-	if len(customBoundary) >= 3 {
-		minSepKm = math.Max(radiusKm*2, 20.0)
-		if maxSuggestions > 0 {
-			perFragCap = maxSuggestions
-		} else {
-			perFragCap = 12
-		}
-	} else {
-		minSepKm = math.Max(radiusKm, coverageSuggestionMinSeparationKm)
-		perFragCap = coverageSuggestionMaxPerFragment
-	}
-	// Operator override: an explicit minimum separation replaces the automatic
-	// value above (in both scopes), letting the user pack suggestions closer
-	// together (more suggestions) or spread them out.
+	// minSepKm: density mode always uses a small default so every dense metro
+	// area surfaces independently. The 150 km national constant
+	// (coverageSuggestionMinSeparationKm) is for area mode only — applying it
+	// here collapsed all of GBA/Rosario/Córdoba into one slot and surfaced only
+	// remote tiny towns. User override via the slider wins in both scopes.
+	minSepKm := math.Max(radiusKm*2, 20.0)
 	if density.MinSeparationKm > 0 {
 		minSepKm = density.MinSeparationKm
 	}
 
-	branchSites := make([]model.LatLng, len(coverageCells))
-	for i, c := range coverageCells {
-		branchSites[i] = c.Site
+	// Build the union of "already covered" centres: existing branches + cities
+	// already suggested in previous Buscar-más rounds.
+	type covSite struct{ lat, lng float64 }
+	covered := make([]covSite, 0, len(coverageCells)+len(density.AdditionalSites))
+	for _, c := range coverageCells {
+		covered = append(covered, covSite{c.Site.Lat, c.Site.Lng})
+	}
+	for _, a := range density.AdditionalSites {
+		covered = append(covered, covSite{a.Lat, a.Lng})
+	}
+	isCovered := func(lat, lng float64) bool {
+		for _, o := range covered {
+			if ml.HaversineKm(lat, lng, o.lat, o.lng) <= radiusKm {
+				return true
+			}
+		}
+		return false
 	}
 
-	var candidates []model.SuggestedLocation
+	// Nearest branch by haversine = Voronoi cell owner (equivalent to the
+	// point-assignment rule used everywhere else).
+	nearestCell := func(lat, lng float64) model.CoverageCell {
+		best := coverageCells[0]
+		bestD := ml.HaversineKm(lat, lng, best.Site.Lat, best.Site.Lng)
+		for _, c := range coverageCells[1:] {
+			if d := ml.HaversineKm(lat, lng, c.Site.Lat, c.Site.Lng); d < bestD {
+				best, bestD = c, d
+			}
+		}
+		return best
+	}
 
-	for _, c := range coverageCells {
-		if len(c.Polygon) == 0 {
+	// ── Step 1: scan all localities ──────────────────────────────────────────
+	var candidates []model.SuggestedLocation
+	for _, loc := range geo.Localities() {
+		if len(customBoundary) >= 3 && !latLngInPolygon(loc.Lat, loc.Lng, customBoundary) {
 			continue
 		}
-		proj := newProjector(c.Site.Lat, c.Site.Lng)
-		cellPoly := projectRings(c.Polygon, proj)
-		countryLocal := computeTierraFertil(customBoundary, dangerousZones, proj)
-		otherCellsLocal := projectCellsLocal(coverageCells, proj)
-
-		sites := make([]geometry.Point, len(branchSites))
-		for i, site := range branchSites {
-			sites[i] = proj.project(site.Lat, site.Lng)
+		if isInAnyDangerousZone(loc.Lat, loc.Lng, dangerousZones) {
+			continue
+		}
+		if isCovered(loc.Lat, loc.Lng) {
+			continue
+		}
+		if density.MinPopulation > 0 && loc.Poblacion < density.MinPopulation {
+			continue
+		}
+		if isBlacklisted(loc.Nombre, density.ExcludedCities) {
+			continue
 		}
 
-		// Start with cell − branch's own coverage circle.
-		remainderPoly := cellPoly.Construct(polyclip.DIFFERENCE, circle)
-		// Subtract already-placed suggestions so new candidates only cover
-		// genuinely uncovered territory (fixes overlap in "Buscar más" rounds).
-		for _, site := range density.AdditionalSites {
-			if len(remainderPoly) == 0 {
-				break
-			}
-			pt := proj.project(site.Lat, site.Lng)
-			addCircle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), pt))
-			remainderPoly = remainderPoly.Construct(polyclip.DIFFERENCE, addCircle)
-		}
-		remainder := fromPolyclip(remainderPoly)
-		for _, frag := range remainder {
-			if frag.Area() < densityModeMinFragAreaKm2 {
-				continue
-			}
-			for _, f := range fillFragmentIteratively(c, proj, frag, radiusKm, &sites, countryLocal, otherCellsLocal, densityModeMinFragAreaKm2, perFragCap) {
-				if !tooCloseToExisting(f, candidates, minSepKm) {
-					candidates = append(candidates, f)
-				}
-			}
-		}
+		cell := nearestCell(loc.Lat, loc.Lng)
+		candidates = append(candidates, model.SuggestedLocation{
+			LatLng:           model.LatLng{Lat: loc.Lat, Lng: loc.Lng},
+			BranchID:         cell.BranchID,
+			BranchName:       cell.BranchName,
+			CityName:         loc.Nombre,
+			IsSnapped:        true,
+			Population:       loc.Poblacion,
+			AffectedBranches: []string{},
+		})
 	}
 
 	if len(candidates) == 0 {
 		return nil, nil
 	}
 
-	// Pre-sort by uncovered fragment area descending: larger fragments are more
-	// likely to contain real cities, so they get priority if we must cap.
+	// ── Step 2: sort by population descending ────────────────────────────────
 	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].GapAreaKm2 > candidates[j].GapAreaKm2
+		return candidates[i].Population > candidates[j].Population
 	})
-	if len(candidates) > densityModeMaxCandidates {
-		candidates = candidates[:densityModeMaxCandidates]
-	}
 
-	// Local snap radius: keeps the Overpass query within the fragment's
-	// neighbourhood so we find the best city INSIDE the uncovered zone,
-	// not a distant megacity that may already have a branch.
-	// snapMathSuggestionsInPlace uses min(passedKm/2, 150) as actual radius.
-	desiredSearchKm := math.Min(math.Max(radiusKm*0.5, 20.0), 60.0)
-	s.snapMathSuggestionsInPlace(candidates, desiredSearchKm*2, density.MinPopulation, dangerousZones, density.ExcludedCities)
-
-	// Post-snap dedup: two geometric candidates > minSepKm apart can both snap
-	// to the same city (e.g. Buenos Aires within range of both). Deduplicate by
-	// city name after snapping so the same city never appears twice.
-	deduped := candidates[:0]
-	seenCity := make(map[string]bool, len(candidates))
+	// ── Step 3: greedy spatial dedup (minSepKm) ──────────────────────────────
+	deduped := make([]model.SuggestedLocation, 0, len(candidates))
 	for _, c := range candidates {
-		key := c.CityName
-		if key == "" || !c.IsSnapped {
-			if !tooCloseToExisting(c, deduped, minSepKm) {
-				deduped = append(deduped, c)
-			}
-			continue
-		}
-		if !seenCity[key] {
-			seenCity[key] = true
+		if !tooCloseToExisting(c, deduped, minSepKm) {
 			deduped = append(deduped, c)
-		} else {
-			rejected = append(rejected, model.RejectedLocation{
-				CityName:     c.CityName,
-				Lat:          c.Lat,
-				Lng:          c.Lng,
-				RejectReason: c.CityName + " ya fue seleccionada como candidata (ciudad duplicada)",
-				Score:        rejectedScore(c, c.GapAreaKm2),
-			})
 		}
 	}
 	candidates = deduped
 
-	// Remove snapped cities outside the custom boundary: the snap search radius
-	// can extend beyond the drawn polygon and find cities in adjacent zones.
-	if len(customBoundary) >= 3 {
-		inBounds := candidates[:0]
-		for _, c := range candidates {
-			if !c.IsSnapped || latLngInPolygon(c.Lat, c.Lng, customBoundary) {
-				inBounds = append(inBounds, c)
-			} else {
-				rejected = append(rejected, model.RejectedLocation{
-					CityName:     c.CityName,
-					Lat:          c.Lat,
-					Lng:          c.Lng,
-					RejectReason: "Ciudad fuera de la zona de análisis seleccionada",
-					Score:        rejectedScore(c, c.GapAreaKm2),
-				})
-			}
-		}
-		candidates = inBounds
+	// Cap before expensive polyclip work.
+	if len(candidates) > densityModeMaxCandidates {
+		candidates = candidates[:densityModeMaxCandidates]
 	}
 
-	// Remove snapped candidates whose city falls within minSepKm of an EXISTING
-	// branch site.  Without this filter, density mode can suggest Buenos Aires or
-	// Bahía Blanca even when CDBA-01 / BAHB-01 are already located there — the
-	// geometric PoI may be far from the branch, but the snap pulls the candidate
-	// to the nearest large city, which may already host a branch.
-	{
-		branchLocs := make([]model.SuggestedLocation, len(coverageCells))
-		for i, cell := range coverageCells {
-			branchLocs[i].Lat = cell.Site.Lat
-			branchLocs[i].Lng = cell.Site.Lng
-		}
-		notNearBranch := candidates[:0]
-		for _, c := range candidates {
-			if !tooCloseToExisting(c, branchLocs, minSepKm) {
-				notNearBranch = append(notNearBranch, c)
-			} else {
-				rejected = append(rejected, model.RejectedLocation{
-					CityName:     c.CityName,
-					Lat:          c.Lat,
-					Lng:          c.Lng,
-					RejectReason: fmt.Sprintf("Demasiado cerca de una sucursal existente (< %.0f km)", minSepKm),
-					Score:        rejectedScore(c, c.GapAreaKm2),
-				})
-			}
-		}
-		candidates = notNearBranch
-	}
-
-	// Post-snap geographic dedup: two different city names can still be within
-	// minSepKm of each other after snapping (the snap radius pulls candidates
-	// toward nearby cities that may already be covered by another suggestion's
-	// circle).  Re-running the distance check on the snapped coordinates
-	// guarantees that no two coverage circles overlap regardless of city name.
-	geoDeduped := make([]model.SuggestedLocation, 0, len(candidates))
-	for _, c := range candidates {
-		if !tooCloseToExisting(c, geoDeduped, minSepKm) {
-			geoDeduped = append(geoDeduped, c)
-		} else {
-			rejected = append(rejected, model.RejectedLocation{
-				CityName:     c.CityName,
-				Lat:          c.Lat,
-				Lng:          c.Lng,
-				RejectReason: fmt.Sprintf("Demasiado cerca de otra sugerencia seleccionada (< %.0f km)", minSepKm),
-				Score:        rejectedScore(c, c.GapAreaKm2),
-			})
-		}
-	}
-	candidates = geoDeduped
-
-	// Density mode only surfaces real cities. Drop any geometric PoI candidates
-	// that the snapper could not resolve (Overpass timeout or no city within the
-	// search radius). Keeping them would produce 0-population / 0-density entries
-	// that pass any MinDensity filter and show a misleading "0% → 0%" projection
-	// on the frontend — especially common on large zones without a custom boundary.
-	{
-		snapped := candidates[:0]
-		for _, c := range candidates {
-			if c.IsSnapped {
-				snapped = append(snapped, c)
-			} else {
-				reason := "Sin ciudad en el radio de búsqueda"
-				if density.MinPopulation > 0 {
-					reason = fmt.Sprintf("Sin ciudad con ≥ %d hab. en el radio de búsqueda", density.MinPopulation)
-				}
-				rejected = append(rejected, model.RejectedLocation{
-					CityName:     fmt.Sprintf("(%.3f°, %.3f°)", c.Lat, c.Lng),
-					Lat:          c.Lat,
-					Lng:          c.Lng,
-					RejectReason: reason,
-					Score:        1, // no city found — minimum viability
-				})
-			}
-		}
-		candidates = snapped
-	}
-
-	// Recompute ActualAddedKm2 at the snapped city's real coordinates and subtract
-	// every existing-branch coverage circle so the figure reflects genuine NET new
-	// coverage — not just "circle is fully within the zone".  Without this, a
-	// suggestion next to an existing branch still reports the full circle area.
+	// ── Step 4: net coverage area (polyclip) ─────────────────────────────────
 	for i := range candidates {
-		if !candidates[i].IsSnapped {
-			continue
-		}
 		cProj := newProjector(candidates[i].Lat, candidates[i].Lng)
-		// City circle centred at local origin (the city itself).
 		remainder := toPolyclip(circlePolygon(radiusKm, coverageSuggestionCircleVertices))
 
-		// Clip to the custom boundary when one is active.  For national scope we
-		// skip this because calling computeTierraFertil with the full Argentina
-		// outline for every candidate is expensive and the circle is almost always
-		// contained within the country anyway.
 		if len(customBoundary) >= 3 {
 			tierra := computeTierraFertil(customBoundary, dangerousZones, cProj)
-			remainder = remainder.Construct(polyclip.INTERSECTION, tierra)
-			if len(remainder) == 0 {
-				candidates[i].ActualAddedKm2 = 0
-				continue
-			}
+			cur := remainder
+			remainder = safePolyclipOp(func() polyclip.Polygon {
+				return cur.Construct(polyclip.INTERSECTION, tierra)
+			})
 		}
-
-		// Subtract each existing branch's coverage circle.
 		for _, cell := range coverageCells {
 			if len(remainder) == 0 {
 				break
 			}
-			branchPt := cProj.project(cell.Site.Lat, cell.Site.Lng)
-			branchCircle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), branchPt))
-			remainder = remainder.Construct(polyclip.DIFFERENCE, branchCircle)
+			pt := cProj.project(cell.Site.Lat, cell.Site.Lng)
+			sub := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), pt))
+			cur := remainder
+			remainder = safePolyclipOp(func() polyclip.Polygon {
+				return cur.Construct(polyclip.DIFFERENCE, sub)
+			})
 		}
-
-		// Subtract already-placed suggestions from earlier "Buscar más" rounds.
 		for _, site := range density.AdditionalSites {
 			if len(remainder) == 0 {
 				break
 			}
-			sitePt := cProj.project(site.Lat, site.Lng)
-			siteCircle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), sitePt))
-			remainder = remainder.Construct(polyclip.DIFFERENCE, siteCircle)
+			pt := cProj.project(site.Lat, site.Lng)
+			sub := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), pt))
+			cur := remainder
+			remainder = safePolyclipOp(func() polyclip.Polygon {
+				return cur.Construct(polyclip.DIFFERENCE, sub)
+			})
 		}
-
 		candidates[i].ActualAddedKm2 = sumArea(fromPolyclip(remainder))
+		candidates[i].GapAreaKm2 = candidates[i].ActualAddedKm2
+
+		// AffectedBranches: branches whose site is within 2×radiusKm.
+		for _, cell := range coverageCells {
+			if ml.HaversineKm(candidates[i].Lat, candidates[i].Lng, cell.Site.Lat, cell.Site.Lng) <= radiusKm*2 {
+				candidates[i].AffectedBranches = append(candidates[i].AffectedBranches, cell.BranchName)
+			}
+		}
 	}
 
-	// Drop candidates whose net new coverage is negligible (e.g. a city sitting
-	// right on the edge of an existing branch circle may contribute only 1 km²).
-	// Require at least 5 % of the simulated circle area as a useful contribution.
+	// ── Step 5: drop negligible-coverage candidates ───────────────────────────
 	{
 		minUsefulKm2 := math.Max(5.0, simulatedAreaKm2*0.05)
 		useful := candidates[:0]
@@ -998,14 +861,14 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		candidates = useful
 	}
 
-	// Density = population / uncovered-fragment area (hab./km²).
+	// ── Step 6: density = population / net coverage area ─────────────────────
 	for i := range candidates {
-		if candidates[i].IsSnapped && candidates[i].GapAreaKm2 > 0 {
-			candidates[i].Density = float64(candidates[i].Population) / candidates[i].GapAreaKm2
+		if candidates[i].ActualAddedKm2 > 0 {
+			candidates[i].Density = float64(candidates[i].Population) / candidates[i].ActualAddedKm2
 		}
 	}
 
-	// Optional minimum-density filter.
+	// ── Step 7: optional minimum-density filter ───────────────────────────────
 	if density.MinDensity > 0 {
 		filtered := candidates[:0]
 		for _, c := range candidates {
@@ -1024,13 +887,12 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		candidates = filtered
 	}
 
-	// Terrain friction: always computed (local heuristic, no network call).
-	// Sets TerrainType on every candidate so the frontend can show badges.
+	// ── Step 8: terrain type ──────────────────────────────────────────────────
 	for i := range candidates {
 		_, candidates[i].TerrainType = terrainFriction(candidates[i].Lat, candidates[i].Lng)
 	}
 
-	// Industrial zone detection: one Overpass call for all candidates when enabled.
+	// ── Step 9: industrial zones (optional) ──────────────────────────────────
 	if density.PrioritizeIndustrial {
 		industrial := s.detectIndustrialZones(candidates)
 		for i := range candidates {
@@ -1038,8 +900,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		}
 	}
 
-	// Viability Score: full signal (population + density + area + industry + terrain)
-	// now that all attributes are set for surviving candidates.
+	// ── Step 10: viability score ──────────────────────────────────────────────
 	for i := range candidates {
 		f, _ := terrainFriction(candidates[i].Lat, candidates[i].Lng)
 		candidates[i].Score = CalculateViabilityScore(
@@ -1051,9 +912,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		)
 	}
 
-	// Min-score filter: drop candidates whose Logistics Viability Index is below
-	// the threshold set by the operator. Applied after the full score is computed
-	// so terrain friction and industrial bonus are already factored in.
+	// ── Step 11: min-score filter ─────────────────────────────────────────────
 	if density.MinScore > 0 {
 		qualified := candidates[:0]
 		for _, c := range candidates {
@@ -1072,12 +931,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		candidates = qualified
 	}
 
-	// Final ranking via composite score:
-	//   FinalScore = (BaseDensity × IndustrialMultiplier) / TerrainFriction
-	//
-	// BaseDensity  — pop. density (hab./km²) or gap area depending on RankingMode.
-	// IndustrialMultiplier — 1.3 when HasIndustrialZone && PrioritizeIndustrial.
-	// TerrainFriction      — 1.0 (Llano) … 1.5 (Montañoso) when enabled.
+	// ── Step 12: final sort ───────────────────────────────────────────────────
 	scoreOf := func(c model.SuggestedLocation) float64 {
 		var base float64
 		if density.RankingMode == "gap_area" {

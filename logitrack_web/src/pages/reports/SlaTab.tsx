@@ -1398,9 +1398,9 @@ export function CoberturaTab() {
       territoryMode === "custom" && boundary && boundary.length >= 3
         ? boundary.map(([lat, lng]) => ({ lat, lng }))
         : undefined;
-    // Pass current suggestion coordinates as additionalSites so the backend
-    // subtracts their coverage circles from fragments before searching — new
-    // candidates only land in genuinely uncovered territory.
+    // Pass currently active suggestion coordinates as additionalSites so the
+    // backend treats those cities as already covered — Buscar-más rounds find
+    // different cities in genuinely uncovered areas.
     const currentSuggestionSites = simResultRef.current?.suggested_locations.map(
       (s) => ({ lat: s.lat, lng: s.lng }),
     ) ?? [];
@@ -2117,8 +2117,8 @@ export function CoberturaTab() {
                                       {(loc.actual_added_km2 ?? 0) > 0 && (
                                         <>Aportará ~{formatKm2(loc.actual_added_km2)} de cobertura neta. </>
                                       )}
-                                      {loc.affected_branches.length > 0 && (
-                                        <>Descomprimirá las zonas de: {loc.affected_branches.join(", ")}.</>
+                                      {(loc.affected_branches ?? []).length > 0 && (
+                                        <>Descomprimirá las zonas de: {(loc.affected_branches ?? []).join(", ")}.</>
                                       )}
                                     </p>
                                   </li>
@@ -2490,7 +2490,7 @@ type ScoreBreakdown = { popPts: number; densPts: number; areaPts: number; indust
 function computeScoreBreakdown(loc: SuggestedLocation): ScoreBreakdown {
   const pop = loc.population ?? 0;
   const density = loc.density ?? 0;
-  const area = loc.gap_area_km2 ?? 0;
+  const area = loc.actual_added_km2 ?? loc.gap_area_km2 ?? 0;
   const frictionMap: Record<string, number> = {
     "Llano": 1.0, "Llano-Ventoso": 1.1, "Semi-montañoso": 1.25, "Serrano": 1.35, "Montañoso": 1.5,
   };
@@ -2642,15 +2642,15 @@ function SuggestionCard({
         {(loc.actual_added_km2 ?? 0) > 0 && (
           <>Aportará ~{formatKm2(loc.actual_added_km2)} de cobertura neta. </>
         )}
-        {loc.affected_branches.length > 0 && (
-          <>Descomprimirá las zonas de: {loc.affected_branches.join(", ")}.</>
+        {(loc.affected_branches ?? []).length > 0 && (
+          <>Descomprimirá las zonas de: {(loc.affected_branches ?? []).join(", ")}.</>
         )}
       </p>
       {(loc.density ?? 0) > 0 && (
         <p className="mt-1 text-xs font-semibold text-violet-600 dark:text-violet-400">
           {loc.density! >= 1
             ? Math.round(loc.density!).toLocaleString("es-AR")
-            : "< 1"} hab./km² en zona sin cobertura
+            : "< 1"} hab./km² de nueva cobertura
         </p>
       )}
       {(loc.has_industrial_zone || (loc.terrain_type && loc.terrain_type !== "Llano")) && (
