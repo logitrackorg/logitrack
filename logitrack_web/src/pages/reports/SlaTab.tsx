@@ -1041,6 +1041,7 @@ export function CoberturaTab() {
   const [showRejectedOnMap, setShowRejectedOnMap] = useState(true);
 
   const simResultRef = useRef<SimulationResult | null>(null);
+  const diagramRef = useRef<CoverageDiagram | null>(null);
   const visualAreaRef = useRef(SIM_AREA_DEFAULT);
   const customBoundaryRef = useRef<[number, number][] | null>(null);
   const territoryModeRef = useRef<"national" | "custom">("national");
@@ -1055,6 +1056,7 @@ export function CoberturaTab() {
   const handleFlyToLocation = useCallback((lat: number, lng: number, zoom = 8) => {
     coverageMapRef.current?.flyTo(lat, lng, zoom);
   }, []);
+
 
   // Feature: Área de simulación personalizada — el usuario dibuja un polígono
   // en el mapa para restringir el diagnóstico a esa zona (ej. AMBA, Patagonia).
@@ -1084,6 +1086,7 @@ export function CoberturaTab() {
 
   // Sync refs used by diagnoseCore (stable callback, reads values without closures).
   useEffect(() => { simResultRef.current = simResult; }, [simResult]);
+  useEffect(() => { diagramRef.current = diagram; }, [diagram]);
   useEffect(() => { visualAreaRef.current = visualArea; }, [visualArea]);
   useEffect(() => { maxSuggestionsRef.current = maxSuggestions; }, [maxSuggestions]);
   useEffect(() => { customBoundaryRef.current = customBoundary; }, [customBoundary]);
@@ -1572,7 +1575,35 @@ export function CoberturaTab() {
           blacklistedCities.length > 0 ? blacklistedCities : undefined,
         );
 
-        if (snapResult.is_snapped) {
+        // En modo cobertura geográfica: rechazar ciudades que ya están dentro
+        // del radio de cobertura de una sucursal existente (aportarían 0 km² netos).
+        const isCoveredByExistingBranch = snapResult.is_snapped
+          && diagnosisModeRef.current === "area"
+          && (() => {
+            const cells = diagramRef.current?.cells ?? [];
+            return cells.some((cell) => {
+              const dLat = (snapResult.lat - cell.site.lat) * Math.PI / 180;
+              const dLng = (snapResult.lng - cell.site.lng) * Math.PI / 180;
+              const a = Math.sin(dLat / 2) ** 2 + Math.cos(cell.site.lat * Math.PI / 180) * Math.cos(snapResult.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+              return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) < radiusKm;
+            });
+          })();
+
+        if (isCoveredByExistingBranch) {
+          // Sugerencia inútil en modo área: ya cubierta por una sucursal existente.
+          setRejectedLocations((prev) => [...prev, {
+            city_name: snapResult.city_name,
+            lat: snapResult.lat,
+            lng: snapResult.lng,
+            reject_reason: "Ya cubierta por una sucursal existente",
+            score: 1,
+          }]);
+          setSimResult((prev) => prev
+            ? { ...prev, suggested_locations: prev.suggested_locations.filter((_, i) => i !== currentIndex) }
+            : prev);
+          setSnappedCities((prev) => prev ? prev.filter((_, i) => i !== currentIndex) : prev);
+          removedSoFar++;
+        } else if (snapResult.is_snapped) {
           // Turn the grey marker green immediately.
           setSnappedCities((prev) => {
             const updated = prev ? [...prev] : Array(result.suggested_locations.length).fill({ lat: 0, lng: 0, city_name: "", is_snapped: false });
@@ -2120,8 +2151,8 @@ export function CoberturaTab() {
                               .map((c, i) => ({ city: c, index: i }))
                               .filter(({ city }) => city.is_snapped)
                               .sort((a, b) =>
-                                computeWeightedScore(simResult.suggested_locations[b.index], effectiveWeights) -
-                                computeWeightedScore(simResult.suggested_locations[a.index], effectiveWeights)
+                                computeWeightedScore(simResult.suggested_locations[b.index], effectiveWeights, simResult.simulated_area_km2) -
+                                computeWeightedScore(simResult.suggested_locations[a.index], effectiveWeights, simResult.simulated_area_km2)
                               )
                               .map(({ city, index }) => (
                                 <SuggestionCard
@@ -2133,6 +2164,7 @@ export function CoberturaTab() {
                                   onBlacklist={(name) => blacklistCity(index, name)}
                                   onFlyTo={handleFlyToLocation}
                                   weights={effectiveWeights}
+                                  simulationAreaKm2={simResult.simulated_area_km2}
                                 />
                               ))}
                           </ul>
@@ -2177,7 +2209,7 @@ export function CoberturaTab() {
                                     </div>
                                     <button
                                       type="button"
-                                      onClick={() => handleFlyToLocation(loc.lat, loc.lng)}
+                                      onClick={() => handleFlyToLocation(loc.lat, loc.lng, simResult ? zoomForSimulationArea(simResult.simulated_area_km2) : undefined)}
                                       title="Centrar mapa en esta sugerencia"
                                       className="text-sm font-semibold text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors text-left"
                                     >
@@ -2679,23 +2711,37 @@ const TERRAIN_FACTORS: Record<string, number> = {
   "Llano": 0, "Llano-Ventoso": 0.2, "Semi-montañoso": 0.5, "Serrano": 0.7, "Montañoso": 1.0,
 };
 
+/** Nivel de zoom de Leaflet que muestra el círculo de simulación completo con algo de contexto. */
+function zoomForSimulationArea(areaKm2: number): number {
+  const radiusKm = Math.sqrt(areaKm2 / Math.PI);
+  // z = log2(13358 / radiusKm): derivado de 256px × resolución_Leaflet = 2 × radio × 3 (contexto)
+  return Math.min(18, Math.max(4, Math.round(Math.log2(13358 / radiusKm))));
+}
+
 type ScoreBreakdown = { popPts: number; densPts: number; areaPts: number; industryPts: number; terrainPenalty: number };
 
-function computeScoreBreakdown(loc: SuggestedLocation, w: ScoreWeightsConfig = DEFAULT_SCORE_WEIGHTS): ScoreBreakdown {
+function computeScoreBreakdown(loc: SuggestedLocation, w: ScoreWeightsConfig = DEFAULT_SCORE_WEIGHTS, simulationAreaKm2?: number): ScoreBreakdown {
   const pop = loc.population ?? 0;
   const density = loc.density ?? 0;
   const area = loc.actual_added_km2 ?? loc.gap_area_km2 ?? 0;
   const terrainFactor = TERRAIN_FACTORS[loc.terrain_type ?? ""] ?? 0;
   const popPts = pop > 0 ? Math.min(w.pop, Math.log10(pop) / Math.log10(3_000_000) * w.pop) : 0;
   const densPts = density > 0 ? Math.min(w.density, density / 300 * w.density) : 0;
-  const areaPts = area > 0 ? Math.min(w.area, Math.log10(area + 1) / Math.log10(300_001) * w.area) : 0;
+  // Área: fracción del círculo de simulación que es territorio genuinamente nuevo.
+  // Independiente del radio elegido: 100 % nuevo → peso completo; 50 % nuevo → mitad; etc.
+  // Fallback a escala log absoluta cuando no hay área de simulación disponible.
+  const areaPts = area > 0
+    ? simulationAreaKm2 && simulationAreaKm2 > 0
+      ? Math.min(w.area, (area / simulationAreaKm2) * w.area)
+      : Math.min(w.area, Math.log10(area + 1) / Math.log10(300_001) * w.area)
+    : 0;
   const industryPts = (loc.has_industrial_zone ?? false) ? w.industry : 0;
   const terrainPenalty = terrainFactor * w.terrain;
   return { popPts, densPts, areaPts, industryPts, terrainPenalty };
 }
 
-function computeWeightedScore(loc: SuggestedLocation, w: ScoreWeightsConfig): number {
-  const b = computeScoreBreakdown(loc, w);
+function computeWeightedScore(loc: SuggestedLocation, w: ScoreWeightsConfig, simulationAreaKm2?: number): number {
+  const b = computeScoreBreakdown(loc, w, simulationAreaKm2);
   const totalMax = w.pop + w.density + w.area + w.industry;
   if (totalMax <= 0) return 1;
   const normalized = (b.popPts + b.densPts + b.areaPts + b.industryPts) * (100 / totalMax);
@@ -2704,10 +2750,10 @@ function computeWeightedScore(loc: SuggestedLocation, w: ScoreWeightsConfig): nu
 
 /** Compact circular badge that shows the Logistics Viability Index.
  *  When `loc` is provided, hovering shows a breakdown of how the score was computed. */
-function ScoreBadge({ score, size = "md", loc, weights = DEFAULT_SCORE_WEIGHTS }: { score: number; size?: "sm" | "md"; loc?: SuggestedLocation; weights?: ScoreWeightsConfig }) {
+function ScoreBadge({ score, size = "md", loc, weights = DEFAULT_SCORE_WEIGHTS, simulationAreaKm2 }: { score: number; size?: "sm" | "md"; loc?: SuggestedLocation; weights?: ScoreWeightsConfig; simulationAreaKm2?: number }) {
   const [hovered, setHovered] = useState(false);
-  const breakdown = loc ? computeScoreBreakdown(loc, weights) : null;
-  const displayScore = breakdown ? computeWeightedScore(loc!, weights) : score;
+  const breakdown = loc ? computeScoreBreakdown(loc, weights, simulationAreaKm2) : null;
+  const displayScore = breakdown ? computeWeightedScore(loc!, weights, simulationAreaKm2) : score;
   const { ring, bg, text } = scoreColor(displayScore);
   const dim = size === "sm" ? "w-8 h-8 text-[10px]" : "w-10 h-10 text-xs";
   return (
@@ -2776,14 +2822,16 @@ function SuggestionCard({
   onBlacklist,
   onFlyTo,
   weights = DEFAULT_SCORE_WEIGHTS,
+  simulationAreaKm2,
 }: {
   city: SnappedCity;
   loc: SuggestedLocation;
   onRemove: () => void;
   onTogglePause: () => void;
   onBlacklist: (cityName: string) => void;
-  onFlyTo: (lat: number, lng: number) => void;
+  onFlyTo: (lat: number, lng: number, zoom?: number) => void;
   weights?: ScoreWeightsConfig;
+  simulationAreaKm2?: number;
 }) {
   const [blacklistChecked, setBlacklistChecked] = useState(false);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${city.lat},${city.lng}`;
@@ -2821,11 +2869,11 @@ function SuggestionCard({
         </button>
       </div>
       <div className="flex items-start gap-2">
-        {(loc.score ?? 0) > 0 && <ScoreBadge score={loc.score!} loc={loc} weights={weights} />}
+        {(loc.score ?? 0) > 0 && <ScoreBadge score={loc.score!} loc={loc} weights={weights} simulationAreaKm2={simulationAreaKm2} />}
         <div className="min-w-0">
           <button
             type="button"
-            onClick={() => onFlyTo(city.lat, city.lng)}
+            onClick={() => onFlyTo(city.lat, city.lng, simulationAreaKm2 ? zoomForSimulationArea(simulationAreaKm2) : undefined)}
             title="Centrar mapa en esta ciudad"
             className="text-sm font-semibold text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors text-left"
           >
