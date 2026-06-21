@@ -1,7 +1,6 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import "leaflet.heat";
 import {
   coverageApi,
   type CoverageCell,
@@ -79,12 +78,17 @@ interface VoronoiCoverageMapProps {
   onBoundaryEdited?: (pts: [number, number][]) => void;
   /** Llamado cuando el usuario presiona Esc durante la edición. */
   onBoundaryEditCancel?: () => void;
-  /**
-   * Cuando true, superpone un mapa de calor de zonas industriales OSM sobre
-   * la vista actual. Se actualiza automáticamente en cada paneo/zoom (moveend).
-   * Solo activo a partir del zoom 7 (vista regional); se borra al deshabilitar.
-   */
+  /** Cuando true, superpone polígonos OSM landuse=industrial sobre el mapa. */
   showIndustrialHeatmap?: boolean;
+  /**
+   * Bounding box de la zona de análisis activa: "minLon,minLat,maxLon,maxLat".
+   * Si se proporciona, se carga la capa para esa zona y se refresca solo cuando
+   * cambia. Si es undefined (sin zona personalizada) se usa el viewport actual
+   * con actualización en moveend, respetando el límite de 5°.
+   */
+  heatmapBbox?: string;
+  /** Llamado cuando la carga de zonas industriales termina. count = polígonos dibujados, error = true si Overpass falló. */
+  onIndustrialHeatmapLoaded?: (count: number, error?: boolean) => void;
   /** Ciudades descartadas por el filtro de densidad: se dibujan como círculos grises semitransparentes. */
   rejectedLocations?: RejectedLocation[];
 }
@@ -135,6 +139,8 @@ function VoronoiCoverageMap({
   onBoundaryEdited,
   onBoundaryEditCancel,
   showIndustrialHeatmap = false,
+  heatmapBbox,
+  onIndustrialHeatmapLoaded,
   rejectedLocations,
 }: VoronoiCoverageMapProps, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -158,7 +164,7 @@ function VoronoiCoverageMap({
   const referenceLayer = useRef<L.LayerGroup | null>(null);
   const drawLayer = useRef<L.LayerGroup | null>(null);
   const editLayer = useRef<L.LayerGroup | null>(null);
-  const heatmapLayerRef = useRef<L.HeatLayer | null>(null);
+  const industrialLayer = useRef<L.LayerGroup | null>(null);
   const rejectedLayer = useRef<L.LayerGroup | null>(null);
 
   // Refs para manejar el estado de dibujo sin stale closures en los event handlers.
@@ -170,6 +176,7 @@ function VoronoiCoverageMap({
   const editVerticesRef = useRef<[number, number][]>([]);
   const onBoundaryEditedRef = useRef(onBoundaryEdited);
   const onBoundaryEditCancelRef = useRef(onBoundaryEditCancel);
+  const onIndustrialHeatmapLoadedRef = useRef(onIndustrialHeatmapLoaded);
 
   useEffect(() => { isDrawingRef.current = isDrawingBoundary; }, [isDrawingBoundary]);
   useEffect(() => { onBoundaryCompleteRef.current = onBoundaryComplete; }, [onBoundaryComplete]);
@@ -177,6 +184,7 @@ function VoronoiCoverageMap({
   useEffect(() => { onSelectRef.current = onSelectBranch; }, [onSelectBranch]);
   useEffect(() => { onBoundaryEditedRef.current = onBoundaryEdited; }, [onBoundaryEdited]);
   useEffect(() => { onBoundaryEditCancelRef.current = onBoundaryEditCancel; }, [onBoundaryEditCancel]);
+  useEffect(() => { onIndustrialHeatmapLoadedRef.current = onIndustrialHeatmapLoaded; }, [onIndustrialHeatmapLoaded]);
 
   const suggestionMarkersRef = useRef<
     { marker: L.Marker; circle: L.Circle | null; loc: SuggestedLocation }[]
@@ -204,13 +212,9 @@ function VoronoiCoverageMap({
       {},
       { position: "topright" },
     ).addTo(map);
-    heatmapLayerRef.current = L.heatLayer([], {
-      radius: 25,
-      blur: 20,
-      gradient: { 0.3: "#fef3c7", 0.6: "#f59e0b", 1.0: "#b45309" },
-    }).addTo(map);
     mapRef.current = map;
     cellsLayer.current = L.layerGroup().addTo(map);
+    industrialLayer.current = L.layerGroup().addTo(map);
     markersLayer.current = L.layerGroup().addTo(map);
     simLayer.current = L.layerGroup().addTo(map);
     suggestionsLayer.current = L.layerGroup().addTo(map);
@@ -633,37 +637,86 @@ function VoronoiCoverageMap({
     });
   }, [snappedCities]);
 
-  // Mapa de calor industrial: suscribe al evento moveend, fetcha Overpass por bbox
-  // y actualiza la heatLayer. Solo activo cuando showIndustrialHeatmap es true.
+  // Zonas industriales: carga los polígonos OSM (geometría real de cada way
+  // landuse=industrial). Cuando hay zona de análisis usa heatmapBbox; en modo
+  // nacional cae al viewport actual y se recarga en moveend.
   useEffect(() => {
+    const layer = industrialLayer.current;
     const map = mapRef.current;
-    const heat = heatmapLayerRef.current;
-    if (!map || !heat) return;
+    if (!layer || !map) return;
 
-    let cancelled = false;
+    layer.clearLayers();
+    if (!showIndustrialHeatmap) {
+      onIndustrialHeatmapLoadedRef.current?.(0);
+      return;
+    }
 
-    const fetchHeatmap = () => {
-      if (!showIndustrialHeatmap || map.getZoom() < 7) {
-        heat.setLatLngs([]);
-        return;
+    const drawPolygons = (rings: [number, number][][]) => {
+      layer.clearLayers();
+      for (const ring of rings) {
+        L.polygon(ring, {
+          color: "#b45309",
+          weight: 1.5,
+          fillColor: "#fbbf24",
+          fillOpacity: 0.4,
+        })
+          .bindTooltip("🏭 Zona Industrial", { sticky: true })
+          .addTo(layer);
       }
-      const b = map.getBounds();
-      const bbox = `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
+    };
+
+    const fetchBbox = (bbox: string) => {
+      let cancelled = false;
       coverageApi
         .getIndustrialHeatmap(bbox)
-        .then((pts) => { if (!cancelled) heat.setLatLngs(pts as [number, number][]); })
-        .catch(() => {});
+        .then((rings) => {
+          if (cancelled) return;
+          const typed = rings as [number, number][][];
+          drawPolygons(typed);
+          onIndustrialHeatmapLoadedRef.current?.(typed.length);
+        })
+        .catch(() => {
+          if (!cancelled) onIndustrialHeatmapLoadedRef.current?.(0, true);
+        });
+      return () => { cancelled = true; };
     };
 
-    map.on("moveend", fetchHeatmap);
-    if (showIndustrialHeatmap) fetchHeatmap();
+    // Zona de análisis activa: bbox fijo, sin listener de moveend.
+    if (heatmapBbox) {
+      return fetchBbox(heatmapBbox);
+    }
+
+    // Fallback al viewport (modo nacional o sin zona personalizada).
+    // El backend rechaza bboxes > 5°, así que solo pedimos si la vista es suficientemente pequeña.
+    const bboxFromBounds = (): string | null => {
+      const b = map.getBounds();
+      const minLng = b.getWest(), maxLng = b.getEast();
+      const minLat = b.getSouth(), maxLat = b.getNorth();
+      if (maxLng - minLng > 5 || maxLat - minLat > 5) return null;
+      return `${minLng},${minLat},${maxLng},${maxLat}`;
+    };
+
+    let cancelCurrent: (() => void) | undefined;
+
+    const refresh = () => {
+      cancelCurrent?.();
+      const bbox = bboxFromBounds();
+      if (!bbox) {
+        layer.clearLayers();
+        onIndustrialHeatmapLoadedRef.current?.(0);
+        return;
+      }
+      cancelCurrent = fetchBbox(bbox);
+    };
+
+    refresh();
+    map.on("moveend", refresh);
 
     return () => {
-      cancelled = true;
-      map.off("moveend", fetchHeatmap);
-      heat.setLatLngs([]);
+      cancelCurrent?.();
+      map.off("moveend", refresh);
     };
-  }, [showIndustrialHeatmap]);
+  }, [showIndustrialHeatmap, heatmapBbox]);
 
   // Rejected locations: grey semi-transparent circles with a tooltip showing the reject reason.
   useEffect(() => {

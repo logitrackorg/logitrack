@@ -1052,6 +1052,8 @@ export function CoberturaTab() {
   const [isDrawingBoundary, setIsDrawingBoundary] = useState(false);
   const [isEditingBoundary, setIsEditingBoundary] = useState(false);
   const [showIndustrialHeatmap, setShowIndustrialHeatmap] = useState(false);
+  const [industrialHeatmapLoading, setIndustrialHeatmapLoading] = useState(false);
+  const [industrialZoneResult, setIndustrialZoneResult] = useState<{ count: number; error: boolean } | null>(null);
   const [rejectedLocations, setRejectedLocations] = useState<RejectedLocation[]>([]);
 
   // Zonas guardadas (predefinidas + zonas del usuario).
@@ -1369,9 +1371,17 @@ export function CoberturaTab() {
     const currentCityNames = snappedCities
       ?.filter((c) => c.is_snapped && c.city_name)
       .map((c) => c.city_name) ?? [];
+    // Also exclude cities that were evaluated and rejected in previous rounds
+    // (they would be rejected again by the same filters — no point re-querying).
+    // Names starting with "(" are coordinate placeholders, not real city names.
+    const rejectedCityNames = rejectedLocations
+      .map((r) => r.city_name)
+      .filter((n) => n && !n.startsWith("("));
+    const seen = new Set(excludedCitiesForMore);
     const newExcluded = [
       ...excludedCitiesForMore,
-      ...currentCityNames.filter((n) => !excludedCitiesForMore.includes(n)),
+      ...currentCityNames.filter((n) => !seen.has(n)),
+      ...rejectedCityNames.filter((n) => !seen.has(n)),
     ];
     setExcludedCitiesForMore(newExcluded);
     setIsFindingMore(true);
@@ -1442,7 +1452,7 @@ export function CoberturaTab() {
         setSimError("No se pudo buscar más sugerencias en este momento.");
       })
       .finally(() => setIsFindingMore(false));
-  }, [isFindingMore, isDiagnosing, snappedCities, excludedCitiesForMore]);
+  }, [isFindingMore, isDiagnosing, snappedCities, excludedCitiesForMore, rejectedLocations]);
 
   // Sugerencias que todavía no aterrizaron en una ciudad real: solo estas se
   // vuelven a enviar al backend en cada click (evita re-consultar Overpass
@@ -1703,6 +1713,23 @@ export function CoberturaTab() {
     return diagram?.total_area_km2 ?? SIM_AREA_MAX;
   }, [isZoneActive, customBoundary, diagram]);
 
+  // Bounding box de la zona activa para el calor industrial.
+  // Devuelve undefined cuando no hay zona personalizada o cuando la zona es
+  // demasiado grande (> 5°), que es el límite que el backend acepta sin
+  // devolver vacío.
+  const heatmapBbox = useMemo<string | undefined>(() => {
+    if (!customBoundary || customBoundary.length < 3) return undefined;
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const [lat, lng] of customBoundary) {
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+    if (maxLng - minLng > 5 || maxLat - minLat > 5) return undefined;
+    return `${minLng},${minLat},${maxLng},${maxLat}`;
+  }, [customBoundary]);
+
   // Clamp the coverage-radius slider whenever the zone area changes.
   useEffect(() => {
     const minA = Math.max(SIM_AREA_MIN, Math.round(zoneAreaKm2 * 0.001));
@@ -1871,6 +1898,11 @@ export function CoberturaTab() {
               onBoundaryEdited={handleBoundaryEdited}
               onBoundaryEditCancel={handleBoundaryEditCancel}
               showIndustrialHeatmap={showIndustrialHeatmap}
+              heatmapBbox={heatmapBbox}
+              onIndustrialHeatmapLoaded={(count, error) => {
+                setIndustrialHeatmapLoading(false);
+                setIndustrialZoneResult({ count, error: error ?? false });
+              }}
               rejectedLocations={showRejectedOnMap && rejectedLocations.length > 0 ? rejectedLocations : undefined}
             />
           </div>
@@ -1926,7 +1958,14 @@ export function CoberturaTab() {
                 onShowRejectedOnMapChange={setShowRejectedOnMap}
                 zoneAreaKm2={zoneAreaKm2}
                 showIndustrialHeatmap={showIndustrialHeatmap}
-                onIndustrialHeatmapChange={setShowIndustrialHeatmap}
+                onIndustrialHeatmapChange={(v) => {
+                  setShowIndustrialHeatmap(v);
+                  setIndustrialZoneResult(null);
+                  if (v) setIndustrialHeatmapLoading(true);
+                  else setIndustrialHeatmapLoading(false);
+                }}
+                industrialHeatmapLoading={industrialHeatmapLoading}
+                industrialZoneResult={industrialZoneResult}
               />
               {simResult !== null && (
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -2443,17 +2482,75 @@ function scoreColor(score: number): { ring: string; bg: string; text: string } {
   return               { ring: "ring-rose-400",    bg: "bg-rose-50 dark:bg-rose-900/30",     text: "text-rose-700 dark:text-rose-400"     };
 }
 
-/** Compact circular badge that shows the Logistics Viability Index. */
-function ScoreBadge({ score, size = "md" }: { score: number; size?: "sm" | "md" }) {
+type ScoreBreakdown = { popPts: number; densPts: number; areaPts: number; industryPts: number; friction: number };
+
+function computeScoreBreakdown(loc: SuggestedLocation): ScoreBreakdown {
+  const pop = loc.population ?? 0;
+  const density = loc.density ?? 0;
+  const area = loc.gap_area_km2 ?? 0;
+  const frictionMap: Record<string, number> = {
+    "Llano": 1.0, "Llano-Ventoso": 1.1, "Semi-montañoso": 1.25, "Serrano": 1.35, "Montañoso": 1.5,
+  };
+  const friction = frictionMap[loc.terrain_type ?? ""] ?? 1.0;
+  const popPts = pop > 0 ? Math.min(20, Math.log10(pop) / Math.log10(3_000_000) * 20) : 0;
+  const densPts = density > 0 ? Math.min(20, density / 300 * 20) : 0;
+  const areaPts = area > 0 ? Math.min(35, Math.log10(area + 1) / Math.log10(300_001) * 35) : 0;
+  const industryPts = (loc.has_industrial_zone ?? false) ? 15 : 0;
+  return { popPts, densPts, areaPts, industryPts, friction };
+}
+
+/** Compact circular badge that shows the Logistics Viability Index.
+ *  When `loc` is provided, hovering shows a breakdown of how the score was computed. */
+function ScoreBadge({ score, size = "md", loc }: { score: number; size?: "sm" | "md"; loc?: SuggestedLocation }) {
+  const [hovered, setHovered] = useState(false);
   const { ring, bg, text } = scoreColor(score);
   const dim = size === "sm" ? "w-8 h-8 text-[10px]" : "w-10 h-10 text-xs";
+  const breakdown = loc ? computeScoreBreakdown(loc) : null;
   return (
     <div
-      title={`Índice de Viabilidad Logística: ${score}/100`}
-      className={`shrink-0 flex flex-col items-center justify-center rounded-full ring-2 font-bold leading-none ${dim} ${ring} ${bg} ${text}`}
+      className="relative shrink-0"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      <span>{score}</span>
-      <span className="text-[8px] font-normal opacity-70">/100</span>
+      <div
+        className={`flex flex-col items-center justify-center rounded-full ring-2 font-bold leading-none cursor-help ${dim} ${ring} ${bg} ${text}`}
+      >
+        <span>{score}</span>
+        <span className="text-[8px] font-normal opacity-70">/100</span>
+      </div>
+      {hovered && breakdown && (
+        <div className="absolute left-full top-0 ml-2 z-50 w-56 rounded-lg shadow-xl border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-2.5 pointer-events-none">
+          <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-2">
+            Índice de Viabilidad: {score}/100
+          </p>
+          <div className="space-y-1 text-[10px]">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 dark:text-slate-400">👥 Población</span>
+              <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.popPts.toFixed(1)}<span className="text-slate-400">/20</span></span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 dark:text-slate-400">🏙 Densidad</span>
+              <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.densPts.toFixed(1)}<span className="text-slate-400">/20</span></span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 dark:text-slate-400">📦 Área útil</span>
+              <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.areaPts.toFixed(1)}<span className="text-slate-400">/35</span></span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 dark:text-slate-400">🏭 Industrial</span>
+              <span className={`font-medium tabular-nums ${breakdown.industryPts > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-400"}`}>
+                {breakdown.industryPts.toFixed(0)}<span className="text-slate-400">/15</span>
+              </span>
+            </div>
+            {breakdown.friction > 1 && (
+              <div className="flex justify-between items-center border-t border-slate-100 dark:border-gray-700 pt-1 mt-1 text-rose-500 dark:text-rose-400">
+                <span>⛰️ {loc!.terrain_type}</span>
+                <span className="font-medium tabular-nums">÷{breakdown.friction.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2518,7 +2615,7 @@ function SuggestionCard({
         </button>
       </div>
       <div className="flex items-start gap-2">
-        {(loc.score ?? 0) > 0 && <ScoreBadge score={loc.score!} />}
+        {(loc.score ?? 0) > 0 && <ScoreBadge score={loc.score!} loc={loc} />}
         <div className="min-w-0">
           <button
             type="button"

@@ -73,9 +73,13 @@ interface CoverageSimulatorPanelProps {
   onApplyTerrainFrictionChange?: (v: boolean) => void;
   /** true mientras el backend está calculando el diagnóstico — bloquea el panel y cambia el texto del botón. */
   isDiagnosing?: boolean;
-  /** Toggles the industrial heatmap overlay on the map (leaflet.heat). */
+  /** Toggles the industrial zones overlay on the map. */
   showIndustrialHeatmap?: boolean;
   onIndustrialHeatmapChange?: (v: boolean) => void;
+  /** true while the map is fetching industrial zone polygons from Overpass. */
+  industrialHeatmapLoading?: boolean;
+  /** Result of the last industrial zones fetch. null = not yet loaded. */
+  industrialZoneResult?: { count: number; error: boolean } | null;
   /** Toggles visibility of rejected (discarded) city markers on the map. */
   showRejectedOnMap?: boolean;
   onShowRejectedOnMapChange?: (v: boolean) => void;
@@ -128,6 +132,8 @@ export function CoverageSimulatorPanel({
   zoneAreaKm2,
   showIndustrialHeatmap = false,
   onIndustrialHeatmapChange,
+  industrialHeatmapLoading = false,
+  industrialZoneResult = null,
   showRejectedOnMap = true,
   onShowRejectedOnMapChange,
   maxDistFromNetwork = 0,
@@ -669,15 +675,18 @@ export function CoverageSimulatorPanel({
         <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
           Capas del mapa
         </p>
-        <label className="flex items-center gap-2 cursor-pointer select-none">
+        <label className={`flex items-center gap-2 select-none ${industrialHeatmapLoading ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}>
           <button
             type="button"
             role="switch"
             aria-checked={showIndustrialHeatmap}
+            disabled={industrialHeatmapLoading}
             onClick={() => onIndustrialHeatmapChange?.(!showIndustrialHeatmap)}
-            className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer focus:outline-none ${
-              showIndustrialHeatmap ? "bg-amber-500" : "bg-slate-300 dark:bg-gray-600"
-            }`}
+            className={`relative w-8 h-4 rounded-full transition-colors focus:outline-none ${
+              industrialHeatmapLoading
+                ? "cursor-not-allowed"
+                : "cursor-pointer"
+            } ${showIndustrialHeatmap ? "bg-amber-500" : "bg-slate-300 dark:bg-gray-600"}`}
           >
             <span
               className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
@@ -685,11 +694,21 @@ export function CoverageSimulatorPanel({
               }`}
             />
           </button>
-          <span className="text-[11px] text-slate-600 dark:text-slate-300">🏭 Calor industrial</span>
+          <span className="text-[11px] text-slate-600 dark:text-slate-300">🏭 Zonas industriales</span>
         </label>
-        {showIndustrialHeatmap && (
-          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 leading-tight">
-            Zonas industriales OSM. Se actualiza al mover el mapa. Activo desde zoom regional (nivel 7+).
+        {industrialHeatmapLoading && (
+          <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 leading-tight flex items-center gap-1">
+            <span className="inline-block w-2.5 h-2.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+            Calculando zonas industriales…
+          </p>
+        )}
+        {showIndustrialHeatmap && !industrialHeatmapLoading && industrialZoneResult && (
+          <p className={`text-[10px] mt-1 leading-tight ${industrialZoneResult.error ? "text-rose-500 dark:text-rose-400" : industrialZoneResult.count === 0 ? "text-slate-400 dark:text-slate-500" : "text-emerald-600 dark:text-emerald-400"}`}>
+            {industrialZoneResult.error
+              ? "⚠ Error al consultar Overpass API."
+              : industrialZoneResult.count === 0
+                ? "Sin zonas industriales en esta área. Zoom in o cambia la zona."
+                : `✓ ${industrialZoneResult.count} zona${industrialZoneResult.count !== 1 ? "s" : ""} industrial${industrialZoneResult.count !== 1 ? "es" : ""} encontrada${industrialZoneResult.count !== 1 ? "s" : ""}. Zoom in para ver el detalle.`}
           </p>
         )}
         <label className="flex items-center gap-2 cursor-pointer select-none mt-1.5">

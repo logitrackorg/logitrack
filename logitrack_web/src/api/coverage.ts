@@ -283,9 +283,14 @@ export const coverageApi = {
    * too large or Overpass is unreachable. Results are cached 15 min server-side.
    * bbox format: "minLon,minLat,maxLon,maxLat" (Leaflet getBounds order).
    */
+  /**
+   * Returns OSM landuse=industrial polygon rings inside the bbox as
+   * [lat, lng][][] — one ring per way element. Empty when bbox > 5° or
+   * Overpass is unreachable.
+   */
   getIndustrialHeatmap: (bbox: string) =>
     api
-      .get<[number, number][]>("/coverage/industrial-heatmap", { params: { bbox } })
+      .get<[number, number][][]>("/coverage/industrial-heatmap", { params: { bbox } })
       .then((r) => r.data),
 };
 
