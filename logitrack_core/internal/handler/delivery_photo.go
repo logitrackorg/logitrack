@@ -26,6 +26,15 @@ func (h *ShipmentHandler) GetDeliveryPhoto(c *gin.Context) {
 		return
 	}
 
+	if shipment.PhotoPurgedAt != nil {
+		c.JSON(http.StatusGone, gin.H{"error": "la foto de entrega fue eliminada permanentemente por política de retención de datos"})
+		return
+	}
+	if shipment.PhotoExpiredAt != nil {
+		c.JSON(http.StatusGone, gin.H{"error": "la foto de entrega no está disponible: venció el período de retención configurado"})
+		return
+	}
+
 	events, err := h.svc.GetEvents(trackingID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo obtener el historial del envío"})

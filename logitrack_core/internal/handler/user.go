@@ -72,6 +72,10 @@ func (h *UserHandler) GetMe(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al obtener el perfil"})
 		return
 	}
+	if h.eomSvc != nil {
+		awards, _ := h.eomSvc.GetUserAwards(u.ID)
+		profile.Awards = awards
+	}
 	c.JSON(http.StatusOK, profile)
 }
 

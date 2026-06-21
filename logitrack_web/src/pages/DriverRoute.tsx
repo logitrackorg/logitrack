@@ -701,6 +701,15 @@ function LastMileView() {
   const movingTooFast = effectiveSpeed > 5;
   // Ubicación faltante solo aplica en modo real (la simulación siempre "conoce" la posición).
   const locationMissing = !simulationActive && !locationReady;
+
+  // Navega al detalle del envío. En modo simulación inyecta la posición actual
+  // como ?gps=lat,lng para que DriverShipmentDetail pueda validar el geofence.
+  const toDetail = (trackingId: string) => {
+    if (simulationActive && userLocation) {
+      return `/driver/shipments/${trackingId}?gps=${userLocation.lat},${userLocation.lng}`;
+    }
+    return `/driver/shipments/${trackingId}`;
+  };
   const deliveryBlocked = movingTooFast || locationMissing;
   const blockMessage = movingTooFast
     ? "Detenga el vehículo para entregar"
@@ -713,8 +722,7 @@ function LastMileView() {
     ? ((data.route.status === "finalizada" || data.route.status === "en_curso") &&
         data.shipments.filter(
           (s) => s.status === "out_for_delivery" && !pendingSyncIds.has(s.tracking_id),
-        ).length === 0 &&
-        data.shipments.length > 0)
+        ).length === 0)
     : false;
 
   // Limpiar cache de jornada al finalizar la ruta. Debe estar antes de cualquier
@@ -925,7 +933,7 @@ function LastMileView() {
               zones={zones}
               dangerZones={activeDangerZones}
               onRouteInfoChange={setRouteInfo}
-              onWaypointClick={(trackingId) => navigate(`/driver/shipments/${trackingId}`)}
+              onWaypointClick={(trackingId) => navigate(toDetail(trackingId))}
             />
             <ZoneAlert zones={activeDangerZones} onDismissedChange={setIsDangerDismissed} />
           </>
@@ -958,7 +966,7 @@ function LastMileView() {
                     <ShipmentCard
                       shipment={shipment}
                       order={tab === "pendientes" ? idx + 1 : undefined}
-                      onOpen={() => navigate(`/driver/shipments/${shipment.tracking_id}`)}
+                      onOpen={() => navigate(toDetail(shipment.tracking_id))}
                     />
                     {pendingSyncIds.has(shipment.tracking_id) && (
                       <div className="flex items-center gap-1.5 mt-1 px-3 py-1.5 rounded-b-lg bg-amber-50 border border-t-0 border-amber-200 text-xs text-amber-700 font-medium">

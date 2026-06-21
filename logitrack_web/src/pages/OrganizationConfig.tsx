@@ -4,20 +4,20 @@ import { organizationApi, type OrganizationConfig as OrganizationConfigType } fr
 import { useOrganizationTheme } from "../context/OrganizationThemeContext";
 import { fmtDateTime } from "../utils/date";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
+import { ThemePreview } from "../components/ThemePreview";
+import { PALETTES } from "../data/palettes";
+import { ALLOWED_FONTS, getGoogleFontsUrl } from "../utils/fonts";
 
 const inputClass =
   "w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-500";
 
 const labelClass = "text-sm font-semibold text-slate-700 dark:text-slate-300";
 
-const colorPickerClass =
-  "w-full h-10 px-2 rounded-lg border border-slate-200 bg-white cursor-pointer dark:bg-slate-800 dark:border-slate-600";
-
 export function OrganizationConfig() {
   const [config, setConfig] = useState<OrganizationConfigType | null>(null);
   const [form, setForm] = useState({
     name: "", cuit: "", address: "", phone: "", email: "", track_url: "",
-    primary_color: "", accent_color: "", sidebar_color: "", logo_url: "",
+    primary_color: "", accent_color: "", sidebar_color: "", logo_url: "", font_family: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -39,6 +39,7 @@ export function OrganizationConfig() {
         accent_color: cfg.accent_color ?? "",
         sidebar_color: cfg.sidebar_color ?? "",
         logo_url: cfg.logo_url ?? "",
+        font_family: cfg.font_family || "",
       });
     }).catch(() => {
       setError("No se pudo cargar la configuración de la organización.");
@@ -173,88 +174,114 @@ export function OrganizationConfig() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
-            {/* Color preview strip */}
-            <div className="flex gap-2 h-8 rounded-lg overflow-hidden">
-              <div
-                className="flex-1 flex items-center justify-center text-[10px] font-bold text-white"
-                style={{ background: form.primary_color || "#2563eb" }}
-              >
-                Primario
-              </div>
-              <div
-                className="flex-1 flex items-center justify-center text-[10px] font-bold text-white"
-                style={{ background: form.accent_color || "#f97316" }}
-              >
-                Acento
-              </div>
-              <div
-                className="flex-1 flex items-center justify-center text-[10px] font-bold text-white"
-                style={{ background: form.sidebar_color || "var(--sidebar-bg)" }}
-              >
-                Sidebar
-              </div>
-            </div>
+            <ThemePreview
+              primaryColor={form.primary_color || undefined}
+              accentColor={form.accent_color || undefined}
+              sidebarColor={form.sidebar_color || undefined}
+            />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="grid gap-1.5">
                 <label className={labelClass}>Color primario</label>
-                <div className="flex gap-2">
-                  <input
-                    type="color"
-                    className={`${colorPickerClass} w-12 shrink-0`}
-                    value={form.primary_color || "#2563eb"}
-                    onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
-                  />
-                  <input
-                    className={inputClass}
-                    value={form.primary_color}
-                    onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
-                    placeholder="#2563eb"
-                    maxLength={7}
-                  />
-                </div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Botones, links, focus rings. Default: azul #2563eb</p>
+                <input
+                  type="color"
+                  className="w-full h-10 rounded-lg border border-slate-200 bg-white cursor-pointer dark:bg-slate-800 dark:border-slate-600"
+                  value={form.primary_color || "#2563eb"}
+                  onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
+                />
+                <p className="text-xs text-slate-400 dark:text-slate-500">Botones, links, focus rings</p>
               </div>
 
               <div className="grid gap-1.5">
                 <label className={labelClass}>Color de acento</label>
-                <div className="flex gap-2">
-                  <input
-                    type="color"
-                    className={`${colorPickerClass} w-12 shrink-0`}
-                    value={form.accent_color || "#f97316"}
-                    onChange={(e) => setForm({ ...form, accent_color: e.target.value })}
-                  />
-                  <input
-                    className={inputClass}
-                    value={form.accent_color}
-                    onChange={(e) => setForm({ ...form, accent_color: e.target.value })}
-                    placeholder="#f97316"
-                    maxLength={7}
-                  />
-                </div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Badges de prioridad, indicadores. Default: naranja #f97316</p>
+                <input
+                  type="color"
+                  className="w-full h-10 rounded-lg border border-slate-200 bg-white cursor-pointer dark:bg-slate-800 dark:border-slate-600"
+                  value={form.accent_color || "#f97316"}
+                  onChange={(e) => setForm({ ...form, accent_color: e.target.value })}
+                />
+                <p className="text-xs text-slate-400 dark:text-slate-500">Badges, indicadores</p>
+              </div>
+
+              <div className="grid gap-1.5">
+                <label className={labelClass}>Color del sidebar</label>
+                <input
+                  type="color"
+                  className="w-full h-10 rounded-lg border border-slate-200 bg-white cursor-pointer dark:bg-slate-800 dark:border-slate-600"
+                  value={form.sidebar_color || "#1e3a5f"}
+                  onChange={(e) => setForm({ ...form, sidebar_color: e.target.value })}
+                />
+                <p className="text-xs text-slate-400 dark:text-slate-500">Fondo de la barra lateral</p>
               </div>
             </div>
 
-            <div className="grid gap-1.5">
-              <label className={labelClass}>Color del sidebar</label>
-              <div className="flex gap-2">
-                <input
-                  type="color"
-                  className={`${colorPickerClass} w-12 shrink-0`}
-                    value={form.sidebar_color || "#1e3a5f"}
-                    onChange={(e) => setForm({ ...form, sidebar_color: e.target.value })}
-                  />
-                  <input
-                    className={inputClass}
-                    value={form.sidebar_color}
-                    onChange={(e) => setForm({ ...form, sidebar_color: e.target.value })}
-                    placeholder="#1e3a5f"
-                    maxLength={7}
-                  />
-                </div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Fondo de la barra lateral. Default: azul oscuro #1e3a5f</p>
+            {/* Palette selector */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Paletas sugeridas
+              </label>
+              <div className="flex flex-wrap gap-3">
+                {PALETTES.map((palette) => {
+                  const isActive =
+                    form.primary_color === palette.primary_color &&
+                    form.accent_color === palette.accent_color &&
+                    form.sidebar_color === palette.sidebar_color;
+                  return (
+                    <button
+                      key={palette.name}
+                      type="button"
+                      onClick={() => setForm({
+                        ...form,
+                        primary_color: palette.primary_color,
+                        accent_color: palette.accent_color,
+                        sidebar_color: palette.sidebar_color,
+                      })}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                        isActive
+                          ? 'ring-2 ring-offset-1 ring-blue-500 border-blue-500'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                      }`}
+                      title={palette.name}
+                    >
+                      <span className="flex -space-x-1">
+                        <span className="w-5 h-5 rounded-full border border-white" style={{ background: palette.primary_color }} />
+                        <span className="w-5 h-5 rounded-full border border-white" style={{ background: palette.accent_color }} />
+                        <span className="w-5 h-5 rounded-full border border-white" style={{ background: palette.sidebar_color }} />
+                      </span>
+                      <span className="text-xs text-gray-600 dark:text-gray-400">{palette.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="font_family" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Familia tipográfica
+              </label>
+              <select
+                id="font_family"
+                value={form.font_family || "Inter"}
+                onChange={(e) => {
+                  const font = e.target.value;
+                  setForm({ ...form, font_family: font });
+                  const existing = document.getElementById("org-font-link");
+                  if (existing) existing.remove();
+                  const url = getGoogleFontsUrl(font as typeof ALLOWED_FONTS[number]);
+                  if (url) {
+                    const link = document.createElement("link");
+                    link.id = "org-font-link";
+                    link.rel = "stylesheet";
+                    link.href = url;
+                    document.head.appendChild(link);
+                  }
+                }}
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+              >
+                {ALLOWED_FONTS.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
             </div>
 
             <div className="grid gap-1.5">
@@ -272,8 +299,10 @@ export function OrganizationConfig() {
               <button
                 type="button"
                 onClick={() => {
-                  setForm({ ...form, primary_color: "", accent_color: "", sidebar_color: "" });
+                  setForm({ ...form, primary_color: "", accent_color: "", sidebar_color: "", font_family: "" });
                   resetTheme();
+                  const existingLink = document.getElementById("org-font-link");
+                  if (existingLink) existingLink.remove();
                   setSuccess("Colores restablecidos a los valores por defecto de LogiTrack.");
                   setTimeout(() => setSuccess(null), 3000);
                 }}

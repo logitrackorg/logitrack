@@ -348,8 +348,8 @@ export function PublicTracking() {
     script.dataset.autoTrack = "false";
     script.onload = () => {
       console.info("[umami] script cargado");
-      (window as unknown as Record<string, unknown>).umami &&
-        ((window as unknown as { umami: { track: (event: string) => void } }).umami.track("pageview"));
+      const w = window as unknown as { umami?: { track: (event: string) => void } };
+      w.umami?.track("pageview");
     };
     script.onerror = () => console.warn("[umami] no se pudo cargar (¿adblocker?)");
     document.head.appendChild(script);
@@ -523,7 +523,7 @@ export function PublicTracking() {
       {/* ═══════════════════════════════════════════════════════════
           HEADER — branded strip like Login left panel
           ═══════════════════════════════════════════════════════════ */}
-      <header className="relative bg-blue-950 overflow-hidden px-4 pb-10 pt-8">
+      <header className="relative bg-[var(--sidebar-bg)] overflow-hidden px-4 pb-10 pt-8">
         {/* Theme toggle — top right */}
         <div className="absolute top-3 right-3 z-10">
           <ThemeToggle />
@@ -532,8 +532,8 @@ export function PublicTracking() {
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:48px_48px]" />
 
         {/* Círculos de fondo */}
-        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full bg-blue-500/5 -translate-x-1/2 translate-y-1/2" />
-        <div className="absolute top-0 right-0 w-[300px] h-[300px] rounded-full bg-orange-500/5 translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full bg-[var(--brand)]/5 -translate-x-1/2 translate-y-1/2" />
+        <div className="absolute top-0 right-0 w-[300px] h-[300px] rounded-full bg-[var(--accent)]/5 translate-x-1/2 -translate-y-1/2" />
 
         <div className="relative max-w-3xl mx-auto">
           {/* Logo + branding */}
@@ -654,7 +654,7 @@ export function PublicTracking() {
         {!shipment && !error && !loading && (
           <div className="flex flex-col items-center gap-3 py-16 text-center">
             <PackageSearch className="w-16 h-16 text-slate-300 dark:text-slate-600" />
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mt-4">
+            <h3 className="text-lg font-semibold text-[var(--text-heading)] mt-4">
               Ingresá tu número de seguimiento
             </h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -680,7 +680,7 @@ export function PublicTracking() {
                     <StatusBadge status={shipment.status} label={shipmentStatusLabelOverride(shipment)} />
                     {shipmentPriority && <PriorityBadge priority={shipmentPriority} />}
                   </div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">{hero.title}</h2>
+                  <h2 className="text-lg font-bold text-[var(--text-heading)]">{hero.title}</h2>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{hero.subtitle}</p>
                 </div>
               </CardContent>
@@ -735,7 +735,7 @@ export function PublicTracking() {
             {!isFailed && (
               <Card variant="default" className="cursor-default">
                 <CardHeader>
-                  <CardTitle>Progreso del envío</CardTitle>
+                  <CardTitle className="text-[var(--text-heading)]">Progreso del envío</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center gap-1">
@@ -901,7 +901,7 @@ export function PublicTracking() {
             {chronological.length > 0 && (
               <Card variant="default" className="cursor-default">
                 <CardHeader>
-                  <CardTitle>Historial</CardTitle>
+                  <CardTitle className="text-[var(--text-heading)]">Historial</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ol className="relative list-none p-0 m-0
@@ -964,7 +964,7 @@ export function PublicTracking() {
             {/* 🛡️ Claim card */}
             <Card variant="default" className="cursor-default">
               <CardHeader>
-                <CardTitle>¿Algún problema?</CardTitle>
+                <CardTitle className="text-[var(--text-heading)]">¿Algún problema?</CardTitle>
                 <CardDescription>Hacé tu reclamo y te damos seguimiento.</CardDescription>
               </CardHeader>
               <CardContent>

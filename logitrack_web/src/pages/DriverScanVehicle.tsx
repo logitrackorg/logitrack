@@ -168,6 +168,11 @@ export function DriverScanVehicle() {
             await goToRoute("Ruta en curso.");
             return;
           }
+          if (routeMsg.includes("ya finalizó")) {
+            setError("No tenés envíos asignados para una nueva ruta. Consultá con el operador.");
+            setLoading(false);
+            return;
+          }
         }
       }
       setError(msg || "No se pudo reclamar el vehículo.");

@@ -60,6 +60,15 @@ type SystemConfig struct {
 	ClaimEscalationBajaDays  int  `json:"claim_escalation_baja_days" db:"claim_escalation_baja_days"`
 	ClaimEscalationMediaDays int  `json:"claim_escalation_media_days" db:"claim_escalation_media_days"`
 	ClaimEscalationAltaDays  int  `json:"claim_escalation_alta_days" db:"claim_escalation_alta_days"`
+
+	// PhotoRetentionDays is the number of days after delivery that a delivery evidence
+	// photo remains accessible via the API. After this period the endpoint returns 410 Gone.
+	// Default: 365. Range: 1–3650.
+	PhotoRetentionDays int `json:"photo_retention_days" db:"photo_retention_days"`
+
+	// PhotoPurgeDays is the number of days after expiry before the photo file is
+	// physically deleted from disk. Default: 30. Range: 1–1825.
+	PhotoPurgeDays int `json:"photo_purge_days" db:"photo_purge_days"`
 }
 
 func DefaultSystemConfig() SystemConfig {
@@ -81,5 +90,7 @@ func DefaultSystemConfig() SystemConfig {
 		ClaimEscalationBajaDays:       3,
 		ClaimEscalationMediaDays:      2,
 		ClaimEscalationAltaDays:       1,
+		PhotoRetentionDays:            365,
+		PhotoPurgeDays:                30,
 	}
 }

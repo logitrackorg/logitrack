@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Trophy, User } from "lucide-react";
+import { Trophy, User, ChevronLeft, ChevronRight, PowerOff } from "lucide-react";
 import { eomApi, categoryLabel, type EOMWinner, type EOMCategory } from "../../api/employeeOfMonth";
 import { usersApi, type UserProfile } from "../../api/users";
 import { branchApi, type Branch } from "../../api/branches";
@@ -121,42 +121,73 @@ function CategorySection({
   );
 }
 
+function periodLabel(period: string): string {
+  if (!period) return "";
+  const [y, m] = period.split("-").map(Number);
+  return new Date(y, m - 1).toLocaleDateString("es-AR", { year: "numeric", month: "long" });
+}
+
+function currentYearMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function prevMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function nextMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export function EmpleadoMesTab({ branchId }: Props) {
   const [winners, setWinners] = useState<EOMWinner[]>([]);
-  const [period, setPeriod] = useState<string>("");
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>(currentYearMonth());
 
   useEffect(() => {
     branchApi.list().then(setBranches).catch(() => null);
   }, []);
 
+  const currentBranch = branchId ? branches.find((b) => b.id === branchId) : null;
+  const featureDisabled = currentBranch != null && !currentBranch.employee_of_month_enabled;
+
+  // When the feature is disabled, lock navigation to past months only.
+  const today = currentYearMonth();
+  const isCurrentPeriod = selectedPeriod === today;
+  const canGoNext = !featureDisabled && selectedPeriod < today;
+
+  // If feature just became disabled and user was on current month, shift back one month.
+  useEffect(() => {
+    if (featureDisabled && selectedPeriod === today) {
+      setSelectedPeriod(prevMonth(today));
+    }
+  }, [featureDisabled, selectedPeriod, today]);
+
   useEffect(() => {
     setLoading(true);
     setError(null);
     eomApi
-      .getWinners(undefined, branchId || undefined)
+      .getWinners(selectedPeriod, branchId || undefined)
       .then((data) => {
         setWinners(data.winners ?? []);
-        setPeriod(data.period);
       })
       .catch(() => setError("No se pudo cargar el Empleado del Mes."))
       .finally(() => setLoading(false));
-  }, [branchId]);
+  }, [branchId, selectedPeriod]);
 
   const branchNameById = (id: string): string => {
     if (!id) return "Red";
     return branches.find((b) => b.id === id)?.name ?? id;
   };
 
-  if (loading) {
-    return <div className="p-8 text-center text-[var(--text-muted,#64748b)] text-sm">Cargando...</div>;
-  }
-
-  if (error) {
-    return <div className="p-8 text-center text-red-500 text-sm">{error}</div>;
-  }
+  const showBranch = !branchId;
 
   const byCategory = new Map<EOMCategory, EOMWinner[]>();
   for (const cat of CATEGORIES) byCategory.set(cat, []);
@@ -164,29 +195,72 @@ export function EmpleadoMesTab({ branchId }: Props) {
     byCategory.get(w.category)?.push(w);
   }
 
-  const showBranch = !branchId;
-
-  const periodLabel = (() => {
-    if (!period) return "";
-    const [y, m] = period.split("-").map(Number);
-    return new Date(y, m - 1).toLocaleDateString("es-AR", { year: "numeric", month: "long" });
-  })();
-
   return (
     <div className="pb-4">
-      <div className="flex items-center gap-2.5 mb-5">
-        <Trophy size={22} color="#f59e0b" />
-        <h2 className="m-0 font-bold text-lg">
-          Empleado del Mes
-          {periodLabel && (
-            <span className="font-normal text-sm text-[var(--text-muted,#64748b)] ml-2">
-              ({periodLabel})
-            </span>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <Trophy size={22} color="#f59e0b" />
+          <h2 className="m-0 font-bold text-lg">Empleado del Mes</h2>
+        </div>
+
+        {/* Period navigator */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setSelectedPeriod(prevMonth(selectedPeriod))}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+            aria-label="Mes anterior"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span className="text-sm font-medium text-slate-700 dark:text-gray-200 min-w-[130px] text-center capitalize">
+            {periodLabel(selectedPeriod)}
+          </span>
+          <button
+            onClick={() => setSelectedPeriod(nextMonth(selectedPeriod))}
+            disabled={!canGoNext}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
+              canGoNext
+                ? "text-slate-500 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-700 cursor-pointer"
+                : "text-slate-300 dark:text-gray-600 cursor-not-allowed"
+            }`}
+            aria-label="Mes siguiente"
+          >
+            <ChevronRight size={16} />
+          </button>
+          {!featureDisabled && !isCurrentPeriod && (
+            <button
+              onClick={() => setSelectedPeriod(today)}
+              className="ml-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+            >
+              Hoy
+            </button>
           )}
-        </h2>
+        </div>
       </div>
 
-      {winners.length === 0 ? (
+      {/* Disabled banner */}
+      {featureDisabled && (
+        <div className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/60 px-4 py-3 mb-5">
+          <PowerOff size={18} className="text-slate-400 dark:text-gray-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-slate-700 dark:text-gray-200">
+              Funcionalidad no disponible en esta sucursal
+            </p>
+            <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
+              La sucursal <strong>{currentBranch.name}</strong> no tiene habilitado el programa de Empleado del Mes.
+              A continuación podés consultar el historial de períodos anteriores.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Content */}
+      {loading ? (
+        <div className="p-8 text-center text-[var(--text-muted,#64748b)] text-sm">Cargando...</div>
+      ) : error ? (
+        <div className="p-8 text-center text-red-500 text-sm">{error}</div>
+      ) : winners.length === 0 ? (
         <p className="text-sm text-[var(--text-muted,#64748b)]">
           No hay resultados para este período.
         </p>

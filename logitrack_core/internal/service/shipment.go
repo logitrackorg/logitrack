@@ -361,12 +361,35 @@ func (s *ShipmentService) MaxDeliveryAttempts() int {
 	return s.maxDeliveryAttempts()
 }
 
-// FinalizeLastMileTripReturn auto-transitions a delivery_failed shipment when the
-// last-mile driver returns to the branch. Called by InterBranchTripService.finishTrip.
-// For rechazado: chains rechazado → at_hub so the routing algorithm can dispatch the return.
+// FinalizeLastMileTripReturn auto-transitions a shipment when the last-mile driver
+// returns to the branch. Called by InterBranchTripService.finishTrip.
+// Handles two cases:
+//   - delivery_failed: resolves to rechazado/ready_for_pickup/redelivery_scheduled.
+//   - rechazado (direct path out_for_delivery→rechazado): chains directly to at_hub
+//     so the routing algorithm can dispatch the return inter-branch trip.
 func (s *ShipmentService) FinalizeLastMileTripReturn(shipmentID, operatorUserID string) error {
 	sh, err := s.GetByTrackingID(shipmentID)
-	if err != nil || sh.Status != model.StatusDeliveryFailed {
+	if err != nil {
+		return nil
+	}
+
+	// Direct rechazado path (out_for_delivery → rechazado): chain to at_hub immediately.
+	if sh.Status == model.StatusRechazado {
+		branchCity := sh.ReceivingBranchID
+		if b, ok := s.branchRepo.GetByID(sh.ReceivingBranchID); ok {
+			branchCity = b.Address.City
+		}
+		_, err = s.UpdateStatus(shipmentID, model.UpdateStatusRequest{
+			Status:           model.StatusAtHub,
+			ChangedBy:        operatorUserID,
+			Location:         branchCity,
+			Notes:            "Paquete rechazado disponible para despacho de retorno.",
+			SystemTransition: true,
+		})
+		return err
+	}
+
+	if sh.Status != model.StatusDeliveryFailed {
 		return nil
 	}
 	var targetStatus model.Status

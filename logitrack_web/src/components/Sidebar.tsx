@@ -119,7 +119,7 @@ const ROLE_LABELS: Record<string, string> = {
   driver: "Chofer",
 };
 
-// Returns the most recent award for the current month-1 period (the last winner cycle).
+// Returns the award only if it corresponds to the previous calendar month.
 function useMostRecentAward(userId: string | undefined): Award | null {
   const [award, setAward] = useState<Award | null>(null);
   useEffect(() => {
@@ -127,8 +127,16 @@ function useMostRecentAward(userId: string | undefined): Award | null {
     usersApi.getById(userId).then((p) => {
       const awards = p.awards;
       if (!awards || awards.length === 0) return;
-      // Show only the most recent one (already sorted DESC by backend).
-      setAward(awards[0]);
+      // Awards are sorted DESC by backend; take the most recent one.
+      const latest = awards[0];
+      // Only show the badge if the award period is exactly last month.
+      // Parse year/month directly from the ISO string to avoid UTC→local shift.
+      const now = new Date();
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const [ay, am] = latest.period.substring(0, 7).split("-").map(Number);
+      if (ay === lastMonth.getFullYear() && am - 1 === lastMonth.getMonth()) {
+        setAward(latest);
+      }
     }).catch(() => null);
   }, [userId]);
   return award;
@@ -257,7 +265,7 @@ export function Sidebar() {
                 className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white/10"
               />
             ) : (
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-extrabold text-sm shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--brand)] to-[var(--sidebar-bg)] flex items-center justify-center text-white font-extrabold text-sm shrink-0">
                 {orgName.slice(0, 2).toUpperCase()}
               </div>
             )}

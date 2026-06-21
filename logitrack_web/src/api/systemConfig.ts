@@ -41,6 +41,10 @@ export interface SystemConfig {
   claim_escalation_media_days: number;
   /** Días de inactividad para escalar alta → urgente. Rango UI 1–5. Default 1. */
   claim_escalation_alta_days: number;
+  /** Días desde la entrega hasta que la foto de evidencia deja de ser accesible (410 Gone). Default 365. Rango 1–3650. */
+  photo_retention_days: number;
+  /** Días después de la expiración hasta que el archivo de foto es eliminado físicamente. Default 30. Rango 1–1825. */
+  photo_purge_days: number;
 }
 
 export const systemConfigApi = {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 
 	"github.com/logitrack/core/internal/model"
@@ -39,6 +40,13 @@ func (s *OrganizationService) Update(cfg model.OrganizationConfig, updatedBy str
 		if c.value != "" && !hexColorRe.MatchString(c.value) {
 			return nil, errors.New("el " + c.label + " debe ser un color hexadecimal válido (ej: #2563eb)")
 		}
+	}
+	allowedFonts := map[string]bool{
+		"Inter": true, "IBM Plex Sans": true, "Source Sans 3": true,
+		"Roboto": true, "Open Sans": true, "System UI": true, "": true,
+	}
+	if !allowedFonts[cfg.FontFamily] {
+		return nil, fmt.Errorf("font_family inválida: %s. Valores permitidos: Inter, IBM Plex Sans, Source Sans 3, Roboto, Open Sans, System UI", cfg.FontFamily)
 	}
 	cfg.UpdatedBy = updatedBy
 	return s.repo.Upsert(cfg)
