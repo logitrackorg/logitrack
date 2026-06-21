@@ -348,8 +348,8 @@ export function PublicTracking() {
     script.dataset.autoTrack = "false";
     script.onload = () => {
       console.info("[umami] script cargado");
-      (window as unknown as Record<string, unknown>).umami &&
-        ((window as unknown as { umami: { track: (event: string) => void } }).umami.track("pageview"));
+      const w = window as unknown as { umami?: { track: (event: string) => void } };
+      w.umami?.track("pageview");
     };
     script.onerror = () => console.warn("[umami] no se pudo cargar (¿adblocker?)");
     document.head.appendChild(script);
