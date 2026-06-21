@@ -564,9 +564,9 @@ export function NotificationBell() {
 
       {/* Dropdown panel */}
       {open && (
-        <div className="absolute top-[calc(100%+8px)] right-0 w-[380px] max-sm:w-[calc(100vw-32px)] max-sm:right-0 bg-[#0f2744] border border-[var(--sidebar-bg)] rounded-[10px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50 overflow-hidden">
+        <div className="absolute top-[calc(100%+8px)] right-0 w-[380px] max-sm:w-[calc(100vw-32px)] max-sm:right-0 bg-[#0f2744] border border-[#1e3a5f] rounded-[10px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50 overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--sidebar-bg)]">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e3a5f]">
             <span className="text-[#e2e8f0] font-bold text-sm">Notificaciones</span>
             <div className="flex gap-2 items-center">
               {unreadCount > 0 && (
@@ -597,7 +597,7 @@ export function NotificationBell() {
           </div>
 
           {/* Footer */}
-          <div className="px-4 py-2.5 border-t border-[var(--sidebar-bg)] text-center">
+          <div className="px-4 py-2.5 border-t border-[#1e3a5f] text-center">
             <Button variant="ghost" onClick={() => { navigate("/notifications"); setOpen(false); }} className="text-blue-400 text-[13px] font-medium">
               Ver todas
             </Button>
