@@ -615,7 +615,8 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 
   /* Texto */
   --text-primary:   #111827;
-  --text-heading:   #1e3a8f;
+  --text-heading:   var(--brand-heading, #1e3a8f);
+  --brand-heading:  #1e3a8f;
   --text-strong:    #374151;
   --text-secondary: #6b7280;
   --text-muted:     #64748B;

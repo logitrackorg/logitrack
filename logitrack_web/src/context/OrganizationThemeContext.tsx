@@ -104,7 +104,7 @@ const ORG_TOKEN_KEYS = [
   "--accent-500", "--accent-600", "--accent-700", "--accent-800", "--accent-900", "--accent-950",
   "--accent", "--accent-hover", "--accent-tint", "--accent-tint-border", "--accent-foreground",
   "--sidebar-bg", "--sidebar-hover", "--sidebar-border",
-  "--text-heading",
+  "--text-heading", "--brand-heading",
   "--ring",
   "--fc-button-bg-color", "--fc-button-border-color",
   "--fc-button-hover-bg-color", "--fc-button-active-bg-color", "--fc-highlight-color",
@@ -150,8 +150,7 @@ function injectThemeTokens(config: OrganizationBranding | null) {
     root.style.setProperty("--fc-button-active-bg-color", palette["700"] || brandHex);
     root.style.setProperty("--fc-highlight-color", `${brandHex}1a`);
 
-    const isDark = document.documentElement.classList.contains("dark");
-    root.style.setProperty("--text-heading", isDark ? "#f1f5fb" : (palette["800"] || brandHex));
+    root.style.setProperty("--brand-heading", palette["800"] || brandHex);
   }
 
   // --accent palette
