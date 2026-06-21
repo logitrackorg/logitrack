@@ -2308,7 +2308,7 @@ export function CoberturaTab() {
       {showScoreSettings && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowScoreSettings(false)}>
           <div
-            className="w-full max-w-sm mx-4 rounded-xl bg-white dark:bg-gray-900 shadow-2xl border border-slate-200 dark:border-gray-700 p-6 space-y-5"
+            className="w-full max-w-md mx-4 rounded-xl bg-white dark:bg-gray-900 shadow-2xl border border-slate-200 dark:border-gray-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -2321,21 +2321,44 @@ export function CoberturaTab() {
               </button>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Ajustá la importancia de cada factor. El score final se normaliza automáticamente a 100.
+              Ajustá la importancia de cada factor positivo. El subtotal se normaliza automáticamente a 100 antes de aplicar la penalización de terreno.
             </p>
+
+            {/* ── Factores positivos ── */}
             {(
               [
-                { key: "pop",      label: "👥 Población",   max: 60 },
-                { key: "density",  label: "🏙 Densidad",    max: 60 },
-                { key: "area",     label: "📦 Área útil",   max: 60 },
-                { key: "industry", label: "🏭 Industrial",  max: 40 },
-              ] as { key: keyof ScoreWeightsConfig; label: string; max: number }[]
-            ).map(({ key, label, max }) => (
-              <div key={key} className="space-y-1">
+                {
+                  key: "pop" as const,
+                  label: "👥 Población",
+                  desc: "Escala logarítmica sobre la población de la ciudad. 3 000 000 hab. = máximo.",
+                  max: 60,
+                },
+                {
+                  key: "density" as const,
+                  label: "🏙 Densidad",
+                  desc: "Escala lineal. 300 hab./km² de nueva cobertura = máximo. Favorece ciudades densas.",
+                  max: 60,
+                },
+                {
+                  key: "area" as const,
+                  label: "📦 Área útil",
+                  desc: "Escala logarítmica. Km² netos que el círculo de cobertura aporta sobre territorio argentino no cubierto.",
+                  max: 60,
+                },
+                {
+                  key: "industry" as const,
+                  label: "🏭 Industrial",
+                  desc: "Bonus fijo si hay zonas industriales IGN a menos de ~10 km. Premia la cercanía a parques logísticos.",
+                  max: 40,
+                },
+              ]
+            ).map(({ key, label, desc, max }) => (
+              <div key={key} className="space-y-0.5">
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-600 dark:text-slate-300 font-medium">{label}</span>
+                  <span className="text-slate-700 dark:text-slate-200 font-medium">{label}</span>
                   <span className="tabular-nums font-semibold text-violet-600 dark:text-violet-400">{scoreWeights[key]} pts</span>
                 </div>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">{desc}</p>
                 <input
                   type="range"
                   min={0}
@@ -2343,16 +2366,40 @@ export function CoberturaTab() {
                   step={1}
                   value={scoreWeights[key]}
                   onChange={(e) => setScoreWeights((prev) => ({ ...prev, [key]: Number(e.target.value) }))}
-                  className="w-full accent-violet-600"
+                  className="w-full accent-violet-600 mt-1"
                 />
                 <div className="flex justify-between text-[9px] text-slate-400">
                   <span>0</span><span>{max}</span>
                 </div>
               </div>
             ))}
+
+            {/* ── Penalización de terreno ── */}
+            <div className="pt-3 border-t border-slate-100 dark:border-gray-700 space-y-0.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-700 dark:text-slate-200 font-medium">⛰️ Penalización de terreno</span>
+                <span className="tabular-nums font-semibold text-rose-500 dark:text-rose-400">−{scoreWeights.terrain} pts máx.</span>
+              </div>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
+                Puntos que se <strong>restan</strong> al score final según la dificultad orográfica. Se aplica en proporción: Llano −0, Llano-Ventoso −{(0.25 * scoreWeights.terrain).toFixed(0)}, Semi-montañoso −{(0.5 * scoreWeights.terrain).toFixed(0)}, Serrano −{(0.75 * scoreWeights.terrain).toFixed(0)}, Montañoso −{scoreWeights.terrain}.
+              </p>
+              <input
+                type="range"
+                min={0}
+                max={50}
+                step={1}
+                value={scoreWeights.terrain}
+                onChange={(e) => setScoreWeights((prev) => ({ ...prev, terrain: Number(e.target.value) }))}
+                className="w-full accent-rose-500 mt-1"
+              />
+              <div className="flex justify-between text-[9px] text-slate-400">
+                <span>0 (sin penalización)</span><span>50</span>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-gray-700">
               <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                Total: <strong className="text-slate-700 dark:text-slate-200">{scoreWeights.pop + scoreWeights.density + scoreWeights.area + scoreWeights.industry} pts</strong>
+                Base máx.: <strong className="text-slate-700 dark:text-slate-200">{scoreWeights.pop + scoreWeights.density + scoreWeights.area + scoreWeights.industry} pts</strong>
               </span>
               <button
                 onClick={() => setScoreWeights(DEFAULT_SCORE_WEIGHTS)}
@@ -2549,8 +2596,8 @@ function SeverityPill({
   );
 }
 
-type ScoreWeightsConfig = { pop: number; density: number; area: number; industry: number };
-const DEFAULT_SCORE_WEIGHTS: ScoreWeightsConfig = { pop: 20, density: 20, area: 35, industry: 15 };
+type ScoreWeightsConfig = { pop: number; density: number; area: number; industry: number; terrain: number };
+const DEFAULT_SCORE_WEIGHTS: ScoreWeightsConfig = { pop: 20, density: 20, area: 35, industry: 15, terrain: 20 };
 
 /** Returns Tailwind color classes based on the 1–100 Logistics Viability Score. */
 function scoreColor(score: number): { ring: string; bg: string; text: string } {
@@ -2559,29 +2606,32 @@ function scoreColor(score: number): { ring: string; bg: string; text: string } {
   return               { ring: "ring-rose-400",    bg: "bg-rose-50 dark:bg-rose-900/30",     text: "text-rose-700 dark:text-rose-400"     };
 }
 
-type ScoreBreakdown = { popPts: number; densPts: number; areaPts: number; industryPts: number; friction: number };
+// terrainFactor: 0 (Llano) → 1.0 (Montañoso), proportional penalty scale.
+const TERRAIN_FACTORS: Record<string, number> = {
+  "Llano": 0, "Llano-Ventoso": 0.2, "Semi-montañoso": 0.5, "Serrano": 0.7, "Montañoso": 1.0,
+};
+
+type ScoreBreakdown = { popPts: number; densPts: number; areaPts: number; industryPts: number; terrainPenalty: number };
 
 function computeScoreBreakdown(loc: SuggestedLocation, w: ScoreWeightsConfig = DEFAULT_SCORE_WEIGHTS): ScoreBreakdown {
   const pop = loc.population ?? 0;
   const density = loc.density ?? 0;
   const area = loc.actual_added_km2 ?? loc.gap_area_km2 ?? 0;
-  const frictionMap: Record<string, number> = {
-    "Llano": 1.0, "Llano-Ventoso": 1.1, "Semi-montañoso": 1.25, "Serrano": 1.35, "Montañoso": 1.5,
-  };
-  const friction = frictionMap[loc.terrain_type ?? ""] ?? 1.0;
+  const terrainFactor = TERRAIN_FACTORS[loc.terrain_type ?? ""] ?? 0;
   const popPts = pop > 0 ? Math.min(w.pop, Math.log10(pop) / Math.log10(3_000_000) * w.pop) : 0;
   const densPts = density > 0 ? Math.min(w.density, density / 300 * w.density) : 0;
   const areaPts = area > 0 ? Math.min(w.area, Math.log10(area + 1) / Math.log10(300_001) * w.area) : 0;
   const industryPts = (loc.has_industrial_zone ?? false) ? w.industry : 0;
-  return { popPts, densPts, areaPts, industryPts, friction };
+  const terrainPenalty = terrainFactor * w.terrain;
+  return { popPts, densPts, areaPts, industryPts, terrainPenalty };
 }
 
 function computeWeightedScore(loc: SuggestedLocation, w: ScoreWeightsConfig): number {
   const b = computeScoreBreakdown(loc, w);
   const totalMax = w.pop + w.density + w.area + w.industry;
   if (totalMax <= 0) return 1;
-  const raw = (b.popPts + b.densPts + b.areaPts + b.industryPts) / b.friction;
-  return Math.round(Math.min(100, Math.max(1, raw * (100 / totalMax))));
+  const normalized = (b.popPts + b.densPts + b.areaPts + b.industryPts) * (100 / totalMax);
+  return Math.round(Math.min(100, Math.max(1, normalized - b.terrainPenalty)));
 }
 
 /** Compact circular badge that shows the Logistics Viability Index.
@@ -2628,10 +2678,10 @@ function ScoreBadge({ score, size = "md", loc, weights = DEFAULT_SCORE_WEIGHTS }
                 {breakdown.industryPts.toFixed(0)}<span className="text-slate-400">/{weights.industry}</span>
               </span>
             </div>
-            {breakdown.friction > 1 && (
+            {breakdown.terrainPenalty > 0 && (
               <div className="flex justify-between items-center border-t border-slate-100 dark:border-gray-700 pt-1 mt-1 text-rose-500 dark:text-rose-400">
-                <span>⛰️ {loc!.terrain_type}</span>
-                <span className="font-medium tabular-nums">÷{breakdown.friction.toFixed(2)}</span>
+                <span>⛰️ {loc!.terrain_type ?? "Terreno difícil"}</span>
+                <span className="font-medium tabular-nums">−{breakdown.terrainPenalty.toFixed(1)} pts</span>
               </div>
             )}
           </div>
