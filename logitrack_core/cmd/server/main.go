@@ -299,6 +299,7 @@ func main() {
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc, claimSvc)
 	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc, shipmentSvc, sysConfigSvc, claimSvc,  analyticsClient,)
 	analyticsHandler := handler.NewAnalyticsHandler()
+	umamiHandler := handler.NewUmamiHandler()
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
@@ -888,6 +889,9 @@ func main() {
 	// Analytics — supervisor + manager + admin (match metric_permissions seed)
 	analyticsRead := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
 	protected.GET("/analytics/chatbot", analyticsRead, analyticsHandler.GetChatbotStats)
+	protected.GET("/analytics/umami/stats", analyticsRead, umamiHandler.GetStats)
+	protected.GET("/analytics/umami/pageviews", analyticsRead, umamiHandler.GetPageviews)
+	
 
 	// Public tracking — no auth required. Dedicated handlers return a redacted
 	// view (no personal data) and 404 on drafts.
