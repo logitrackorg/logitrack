@@ -996,6 +996,39 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		candidates = useful
 	}
 
+	// Max-distance-from-network filter: reject candidates that are farther than
+	// MaxDistFromNetworkKm from every existing branch AND every additional site
+	// (suggestions placed in prior "Buscar más" rounds). This prevents isolated
+	// outposts far from the current delivery network.
+	if density.MaxDistFromNetworkKm > 0 {
+		inRange := candidates[:0]
+		for _, c := range candidates {
+			minDist := math.MaxFloat64
+			for _, cell := range coverageCells {
+				if d := ml.HaversineKm(c.Lat, c.Lng, cell.Site.Lat, cell.Site.Lng); d < minDist {
+					minDist = d
+				}
+			}
+			for _, site := range density.AdditionalSites {
+				if d := ml.HaversineKm(c.Lat, c.Lng, site.Lat, site.Lng); d < minDist {
+					minDist = d
+				}
+			}
+			if minDist <= density.MaxDistFromNetworkKm {
+				inRange = append(inRange, c)
+			} else {
+				rejected = append(rejected, model.RejectedLocation{
+					CityName:     c.CityName,
+					Lat:          c.Lat,
+					Lng:          c.Lng,
+					RejectReason: fmt.Sprintf("Demasiado lejos de la red: %.0f km de la sucursal más cercana (máximo: %.0f km)", minDist, density.MaxDistFromNetworkKm),
+					Score:        rejectedScore(c, c.ActualAddedKm2),
+				})
+			}
+		}
+		candidates = inRange
+	}
+
 	// Density = population / uncovered-fragment area (hab./km²).
 	for i := range candidates {
 		if candidates[i].IsSnapped && candidates[i].GapAreaKm2 > 0 {
@@ -1047,6 +1080,27 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 			candidates[i].HasIndustrialZone,
 			f,
 		)
+	}
+
+	// Min-score filter: drop candidates whose Logistics Viability Index is below
+	// the threshold set by the operator. Applied after the full score is computed
+	// so terrain friction and industrial bonus are already factored in.
+	if density.MinScore > 0 {
+		qualified := candidates[:0]
+		for _, c := range candidates {
+			if c.Score >= density.MinScore {
+				qualified = append(qualified, c)
+			} else {
+				rejected = append(rejected, model.RejectedLocation{
+					CityName:     c.CityName,
+					Lat:          c.Lat,
+					Lng:          c.Lng,
+					RejectReason: fmt.Sprintf("Puntuación insuficiente: %d/100 (mínimo: %d/100)", c.Score, density.MinScore),
+					Score:        c.Score,
+				})
+			}
+		}
+		candidates = qualified
 	}
 
 	// Final ranking via composite score:

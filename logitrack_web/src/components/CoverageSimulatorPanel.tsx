@@ -14,6 +14,12 @@ const MIN_POP_DEFAULT = 0;
 const MIN_DENSITY_MAX = 5_000;
 const MIN_DENSITY_STEP = 50;
 
+const MAX_DIST_NETWORK_MAX = 2_000;
+const MAX_DIST_NETWORK_STEP = 50;
+
+const MIN_SCORE_MAX = 100;
+const MIN_SCORE_STEP = 5;
+
 const MAX_SUGG_MAX = 20;
 const MAX_SUGG_STEP = 1;
 
@@ -70,6 +76,15 @@ interface CoverageSimulatorPanelProps {
   /** Toggles the industrial heatmap overlay on the map (leaflet.heat). */
   showIndustrialHeatmap?: boolean;
   onIndustrialHeatmapChange?: (v: boolean) => void;
+  /** Toggles visibility of rejected (discarded) city markers on the map. */
+  showRejectedOnMap?: boolean;
+  onShowRejectedOnMapChange?: (v: boolean) => void;
+  /** Max distance (km) a suggestion can be from the nearest existing branch. 0 = no limit. */
+  maxDistFromNetwork?: number;
+  onMaxDistFromNetworkChange?: (v: number) => void;
+  /** Minimum Logistics Viability Score (1–100) a candidate must reach. 0 = no filter. */
+  minScore?: number;
+  onMinScoreChange?: (v: number) => void;
   /**
    * Total area of the active analysis zone in km² — used to compute adaptive
    * slider bounds (min = 0.1 % of zone, max = 25 % of zone).  Defaults to the
@@ -113,6 +128,12 @@ export function CoverageSimulatorPanel({
   zoneAreaKm2,
   showIndustrialHeatmap = false,
   onIndustrialHeatmapChange,
+  showRejectedOnMap = true,
+  onShowRejectedOnMapChange,
+  maxDistFromNetwork = 0,
+  onMaxDistFromNetworkChange,
+  minScore = 0,
+  onMinScoreChange,
 }: CoverageSimulatorPanelProps) {
   const isDisabled = disabled || isDiagnosing;
 
@@ -124,6 +145,8 @@ export function CoverageSimulatorPanel({
 
   const [minPopulation, setMinPopulation] = useState(MIN_POP_DEFAULT);
   const [densityInput, setDensityInput] = useState("0");
+  const [distInput, setDistInput] = useState("0");
+  const [scoreInput, setScoreInput] = useState("0");
 
   // Draft strings for the number inputs — decoupled from the controlled slider
   // values so the user can type freely without React reverting partial input.
@@ -520,6 +543,104 @@ export function CoverageSimulatorPanel({
                 <span>{MIN_DENSITY_MAX.toLocaleString("es-AR")} hab./km²</span>
               </div>
             </div>
+
+            {/* Max distance from network filter */}
+            <div className="mt-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                  Dist. máx. a la red logística
+                </label>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    max={MAX_DIST_NETWORK_MAX}
+                    step={MAX_DIST_NETWORK_STEP}
+                    value={distInput}
+                    onChange={(e) => {
+                      setDistInput(e.target.value);
+                      const v = Math.max(0, Math.min(MAX_DIST_NETWORK_MAX, Number(e.target.value) || 0));
+                      onMaxDistFromNetworkChange?.(v);
+                    }}
+                    onBlur={() => {
+                      const v = Math.max(0, Math.min(MAX_DIST_NETWORK_MAX, Number(distInput) || 0));
+                      setDistInput(String(v));
+                      onMaxDistFromNetworkChange?.(v);
+                    }}
+                    disabled={isDisabled}
+                    className="w-16 text-right text-xs border border-slate-200 dark:border-gray-600 rounded px-1.5 py-0.5 bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500">km</span>
+                </div>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={MAX_DIST_NETWORK_MAX}
+                step={MAX_DIST_NETWORK_STEP}
+                value={maxDistFromNetwork}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setDistInput(String(v));
+                  onMaxDistFromNetworkChange?.(v);
+                }}
+                disabled={isDisabled}
+                className="w-full h-1.5 accent-rose-500 disabled:opacity-50"
+              />
+              <div className="flex justify-between text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">
+                <span>Sin filtro</span>
+                <span>{MAX_DIST_NETWORK_MAX.toLocaleString("es-AR")} km</span>
+              </div>
+            </div>
+
+            {/* Min viability score filter */}
+            <div className="mt-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                  Puntuación mínima de viabilidad
+                </label>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    max={MIN_SCORE_MAX}
+                    step={MIN_SCORE_STEP}
+                    value={scoreInput}
+                    onChange={(e) => {
+                      setScoreInput(e.target.value);
+                      const v = Math.max(0, Math.min(MIN_SCORE_MAX, Number(e.target.value) || 0));
+                      onMinScoreChange?.(v);
+                    }}
+                    onBlur={() => {
+                      const v = Math.max(0, Math.min(MIN_SCORE_MAX, Number(scoreInput) || 0));
+                      setScoreInput(String(v));
+                      onMinScoreChange?.(v);
+                    }}
+                    disabled={isDisabled}
+                    className="w-14 text-right text-xs border border-slate-200 dark:border-gray-600 rounded px-1.5 py-0.5 bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500">/100</span>
+                </div>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={MIN_SCORE_MAX}
+                step={MIN_SCORE_STEP}
+                value={minScore}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setScoreInput(String(v));
+                  onMinScoreChange?.(v);
+                }}
+                disabled={isDisabled}
+                className="w-full h-1.5 accent-emerald-500 disabled:opacity-50"
+              />
+              <div className="flex justify-between text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">
+                <span>Sin filtro</span>
+                <span>100/100</span>
+              </div>
+            </div>
           </>
         )}
       </div>
@@ -571,6 +692,24 @@ export function CoverageSimulatorPanel({
             Zonas industriales OSM. Se actualiza al mover el mapa. Activo desde zoom regional (nivel 7+).
           </p>
         )}
+        <label className="flex items-center gap-2 cursor-pointer select-none mt-1.5">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showRejectedOnMap}
+            onClick={() => onShowRejectedOnMapChange?.(!showRejectedOnMap)}
+            className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer focus:outline-none ${
+              showRejectedOnMap ? "bg-slate-400 dark:bg-slate-500" : "bg-slate-300 dark:bg-gray-600"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
+                showRejectedOnMap ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <span className="text-[11px] text-slate-600 dark:text-slate-300">🚫 Ciudades descartadas en mapa</span>
+        </label>
       </div>
     </div>
   );

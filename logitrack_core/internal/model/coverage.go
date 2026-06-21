@@ -247,6 +247,17 @@ type DensityOptions struct {
 	// (1.0 = flat Pampas, up to 1.5 = Andes). Candidates in difficult terrain
 	// rank lower even when their population density is high.
 	ApplyTerrainFriction bool `json:"apply_terrain_friction,omitempty"`
+
+	// MaxDistFromNetworkKm, when > 0, rejects candidates farther than this
+	// distance (km) from the nearest existing branch or accepted suggestion from
+	// a prior "Buscar más" round. Prevents placing logistics points that are
+	// completely isolated from the current delivery network. 0 = no filter.
+	MaxDistFromNetworkKm float64 `json:"max_dist_from_network_km,omitempty"`
+
+	// MinScore rejects candidates whose Logistics Viability Index (1–100) is
+	// strictly below this value. Applied after the full score is computed
+	// (terrain + industry + population + area). 0 = no filter.
+	MinScore int `json:"min_score,omitempty"`
 }
 
 // DiagnoseRequest is the body of POST /coverage/diagnose: parameters for the

@@ -991,6 +991,7 @@ export function CoberturaTab() {
   // ciudades reales"), para que el usuario no pueda disparar un nuevo
   // diagnóstico mientras eso está en curso.
   const [isFetchingCities, setIsFetchingCities] = useState(false);
+  const [snappingProgress, setSnappingProgress] = useState<{ current: number; total: number } | null>(null);
   const [isDiagnosing, setIsDiagnosing] = useState(false);
   const [isFindingMore, setIsFindingMore] = useState(false);
   const [excludedCitiesForMore, setExcludedCitiesForMore] = useState<string[]>([]);
@@ -1026,6 +1027,11 @@ export function CoberturaTab() {
   const prioritizeIndustrialRef = useRef(false);
   const [applyTerrainFriction, setApplyTerrainFriction] = useState(false);
   const applyTerrainFrictionRef = useRef(false);
+  const [maxDistFromNetwork, setMaxDistFromNetwork] = useState(0);
+  const maxDistFromNetworkRef = useRef(0);
+  const [minScore, setMinScore] = useState(0);
+  const minScoreRef = useRef(0);
+  const [showRejectedOnMap, setShowRejectedOnMap] = useState(true);
 
   const simResultRef = useRef<SimulationResult | null>(null);
   const visualAreaRef = useRef(SIM_AREA_DEFAULT);
@@ -1075,6 +1081,8 @@ export function CoberturaTab() {
   useEffect(() => { minDensityRef.current = minDensity; }, [minDensity]);
   useEffect(() => { prioritizeIndustrialRef.current = prioritizeIndustrial; }, [prioritizeIndustrial]);
   useEffect(() => { applyTerrainFrictionRef.current = applyTerrainFriction; }, [applyTerrainFriction]);
+  useEffect(() => { maxDistFromNetworkRef.current = maxDistFromNetwork; }, [maxDistFromNetwork]);
+  useEffect(() => { minScoreRef.current = minScore; }, [minScore]);
 
   // Fetch all branches (including inactive) for the simulation panel.
   useEffect(() => { branchApi.list().then(setAllBranches).catch(() => {}); }, []);
@@ -1277,6 +1285,8 @@ export function CoberturaTab() {
               rankingMode: rankingModeRef.current !== "population" ? rankingModeRef.current : undefined,
               prioritizeIndustrial: prioritizeIndustrialRef.current || undefined,
               applyTerrainFriction: applyTerrainFrictionRef.current || undefined,
+              maxDistFromNetwork: maxDistFromNetworkRef.current > 0 ? maxDistFromNetworkRef.current : undefined,
+              minScore: minScoreRef.current > 0 ? minScoreRef.current : undefined,
             }
           : undefined,
       )
@@ -1376,6 +1386,8 @@ export function CoberturaTab() {
               additionalSites: currentSuggestionSites.length > 0 ? currentSuggestionSites : undefined,
               prioritizeIndustrial: prioritizeIndustrialRef.current || undefined,
               applyTerrainFriction: applyTerrainFrictionRef.current || undefined,
+              maxDistFromNetwork: maxDistFromNetworkRef.current > 0 ? maxDistFromNetworkRef.current : undefined,
+              minScore: minScoreRef.current > 0 ? minScoreRef.current : undefined,
             }
           : undefined,
       )
@@ -1421,36 +1433,80 @@ export function CoberturaTab() {
     [snappedCities]
   );
 
-  const handleSnapToCity = useCallback(() => {
-    if (!simResult || pendingSnapIndexes.length === 0) return;
+  // Progressive snap: iterates one point at a time so the map updates in
+  // real-time (grey → green) instead of waiting for all points to resolve.
+  // Maintains array alignment via `removedSoFar`: each NO_RESULTS removal
+  // shifts subsequent indices down by one, and the counter corrects for that.
+  const handleSnapToCity = useCallback(async () => {
+    const result = simResultRef.current;
+    if (!result || pendingSnapIndexes.length === 0) return;
+
+    // Snapshot lat/lng before the loop so mutations don't invalidate them.
+    const locsToProcess = pendingSnapIndexes.map((origIndex) => ({
+      origIndex,
+      lat: result.suggested_locations[origIndex].lat,
+      lng: result.suggested_locations[origIndex].lng,
+    }));
+
+    const radiusKm = Math.sqrt(result.simulated_area_km2 / Math.PI);
+    const total = locsToProcess.length;
+    let removedSoFar = 0;
+
     setIsFetchingCities(true);
     setSnapError(null);
-    // Radio de búsqueda = radio de la zona de cobertura simulada (mismo
-    // círculo gris punteado dibujado en el mapa), para que una ciudad
-    // importante dentro de esa zona (p.ej. Río Gallegos, Salta) sea
-    // detectada como ubicación posible.
-    const radiusKm = Math.sqrt(simResult.simulated_area_km2 / Math.PI);
-    const pendingPoints = pendingSnapIndexes.map((i) => {
-      const loc = simResult.suggested_locations[i];
-      return { lat: loc.lat, lng: loc.lng };
-    });
 
-    coverageApi
-      .snapToCity(pendingPoints, radiusKm, snapMinPopulation, blacklistedCities.length > 0 ? blacklistedCities : undefined)
-      .then((results) => {
-        setSnappedCities((prev) => {
-          const merged: SnappedCity[] =
-            prev ??
-            simResult.suggested_locations.map(() => ({ lat: 0, lng: 0, city_name: "", is_snapped: false }));
-          pendingSnapIndexes.forEach((origIndex, i) => {
-            merged[origIndex] = results[i];
+    for (let step = 0; step < locsToProcess.length; step++) {
+      const { origIndex, lat, lng } = locsToProcess[step];
+      const currentIndex = origIndex - removedSoFar;
+
+      setSnappingProgress({ current: step + 1, total });
+
+      try {
+        const [snapResult] = await coverageApi.snapToCity(
+          [{ lat, lng }],
+          radiusKm,
+          snapMinPopulationRef.current,
+          blacklistedCities.length > 0 ? blacklistedCities : undefined,
+        );
+
+        if (snapResult.is_snapped) {
+          // Turn the grey marker green immediately.
+          setSnappedCities((prev) => {
+            const updated = prev ? [...prev] : Array(result.suggested_locations.length).fill({ lat: 0, lng: 0, city_name: "", is_snapped: false });
+            updated[currentIndex] = snapResult;
+            return updated as SnappedCity[];
           });
-          return [...merged];
-        });
-      })
-      .catch(() => setSnapError("No se pudo aterrizar las sugerencias en ciudades reales en este momento."))
-      .finally(() => setIsFetchingCities(false));
-  }, [simResult, pendingSnapIndexes, snapMinPopulation, blacklistedCities]);
+        } else if (snapResult.error_reason === "NO_RESULTS") {
+          // No city found in radius — move to rejected accordion and remove marker.
+          const reason = snapMinPopulationRef.current > 0
+            ? `Sin ciudad con ≥ ${snapMinPopulationRef.current.toLocaleString("es-AR")} hab. en el radio`
+            : "Sin ciudad en el radio de búsqueda";
+          setRejectedLocations((prev) => [...prev, {
+            city_name: `(${lat.toFixed(3)}°, ${lng.toFixed(3)}°)`,
+            lat,
+            lng,
+            reject_reason: reason,
+            score: 1,
+          }]);
+          setSimResult((prev) => prev
+            ? { ...prev, suggested_locations: prev.suggested_locations.filter((_, i) => i !== currentIndex) }
+            : prev);
+          setSnappedCities((prev) => prev ? prev.filter((_, i) => i !== currentIndex) : prev);
+          removedSoFar++;
+        }
+        // TIMEOUT: leave grey — the retry button will pick it up next time.
+      } catch {
+        // Network error for this point — skip silently, leave grey.
+      }
+
+      if (step < locsToProcess.length - 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 500));
+      }
+    }
+
+    setIsFetchingCities(false);
+    setSnappingProgress(null);
+  }, [pendingSnapIndexes, blacklistedCities]);
 
   // Descarta una sugerencia: la quita de `simResult.suggested_locations` y de
   // `snappedCities` en el mismo índice, manteniendo ambos arrays alineados.
@@ -1789,7 +1845,7 @@ export function CoberturaTab() {
               onBoundaryEdited={handleBoundaryEdited}
               onBoundaryEditCancel={handleBoundaryEditCancel}
               showIndustrialHeatmap={showIndustrialHeatmap}
-              rejectedLocations={rejectedLocations.length > 0 ? rejectedLocations : undefined}
+              rejectedLocations={showRejectedOnMap && rejectedLocations.length > 0 ? rejectedLocations : undefined}
             />
           </div>
         </Card>
@@ -1836,6 +1892,12 @@ export function CoberturaTab() {
                 onPrioritizeIndustrialChange={setPrioritizeIndustrial}
                 applyTerrainFriction={applyTerrainFriction}
                 onApplyTerrainFrictionChange={setApplyTerrainFriction}
+                maxDistFromNetwork={maxDistFromNetwork}
+                onMaxDistFromNetworkChange={setMaxDistFromNetwork}
+                minScore={minScore}
+                onMinScoreChange={setMinScore}
+                showRejectedOnMap={showRejectedOnMap}
+                onShowRejectedOnMapChange={setShowRejectedOnMap}
                 zoneAreaKm2={zoneAreaKm2}
                 showIndustrialHeatmap={showIndustrialHeatmap}
                 onIndustrialHeatmapChange={setShowIndustrialHeatmap}
@@ -1863,13 +1925,13 @@ export function CoberturaTab() {
                 <div className="mt-3 pt-3 border-t border-slate-200 dark:border-gray-700">
                   {pendingSnapIndexes.length > 0 ? (
                     <button
-                      onClick={handleSnapToCity}
+                      onClick={() => void handleSnapToCity()}
                       disabled={isFetchingCities}
                       className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-gray-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-gray-700/40 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isFetchingCities ? "animate-spin" : ""}`} />
-                      {isFetchingCities
-                        ? "Buscando ciudades cercanas…"
+                      {snappingProgress
+                        ? `Aterrizando ${snappingProgress.current} de ${snappingProgress.total}…`
                         : snappedCities
                           ? `Reintentar ${pendingSnapIndexes.length} sugerencia${pendingSnapIndexes.length === 1 ? "" : "s"} pendiente${pendingSnapIndexes.length === 1 ? "" : "s"}`
                           : "Aterrizar sugerencias en ciudades reales"}
@@ -2450,7 +2512,9 @@ function SuggestionCard({
       </p>
       {(loc.density ?? 0) > 0 && (
         <p className="mt-1 text-xs font-semibold text-violet-600 dark:text-violet-400">
-          {Math.round(loc.density!).toLocaleString("es-AR")} hab./km² en zona sin cobertura
+          {loc.density! >= 1
+            ? Math.round(loc.density!).toLocaleString("es-AR")
+            : "< 1"} hab./km² en zona sin cobertura
         </p>
       )}
       {(loc.has_industrial_zone || (loc.terrain_type && loc.terrain_type !== "Llano")) && (
