@@ -98,7 +98,7 @@ export interface SuggestedLocation {
   population?: number;
   /** Densidad poblacional (hab./km²) de la celda Voronoi — solo en modo "density". */
   density?: number;
-  /** true cuando hay zonas industriales OSM dentro de ~10 km (modo density + prioritize_industrial). */
+  /** true cuando hay zonas industriales IGN dentro de ~10 km (modo density + prioritize_industrial). */
   has_industrial_zone?: boolean;
   /** Tipo de terreno: "Llano", "Llano-Ventoso", "Semi-montañoso", "Serrano", "Montañoso". */
   terrain_type?: string;
@@ -134,7 +134,7 @@ export interface SimulationResult {
 
 /**
  * Resultado de "Snap to City" para un punto sugerido: lugar poblado real más
- * cercano (OSM Overpass) dentro del radio de cobertura simulado.
+ * cercano (dataset oficial INDEC/Georef) dentro del radio de cobertura simulado.
  * `is_snapped = false` cuando no se encontró ningún lugar poblado dentro del
  * radio de búsqueda — el punto geométrico original debe conservarse en ese
  * caso.
@@ -144,9 +144,10 @@ export interface SnappedCity {
   lng: number;
   city_name: string;
   is_snapped: boolean;
-  /** Población efectiva de la ciudad elegida (tag OSM o fallback por tipo). 0 / ausente cuando is_snapped=false. */
+  /** Población oficial de la ciudad elegida (Censo INDEC 2022). 0 / ausente cuando is_snapped=false. */
   population?: number;
-  /** Razón por la que no se encontró ciudad. "TIMEOUT" = error de red/API; "NO_RESULTS" = no hay ciudad en el radio. */
+  /** Razón por la que no se encontró ciudad. "NO_RESULTS" = no hay ciudad en el radio.
+   *  ("TIMEOUT" era posible con la fuente Overpass anterior; ya no se emite.) */
   error_reason?: string;
   /**
    * Frontend-only (no proviene del backend): true cuando el usuario "pausó"
@@ -278,15 +279,11 @@ export const coverageApi = {
       .then((r) => r.data),
 
   /**
-   * Returns OSM industrial-zone centroids inside the given bounding box as
-   * [lat, lng] pairs for the leaflet.heat layer. Empty array when the bbox is
-   * too large or Overpass is unreachable. Results are cached 15 min server-side.
+   * Returns the official IGN industrial-zone polygon rings ("áreas de
+   * fabricación y procesamiento", incl. parques industriales) intersecting the
+   * bbox as [lat, lng][][] — one ring per zone. Served from an embedded dataset
+   * in memory: no upstream call, no timeout, no bbox size limit.
    * bbox format: "minLon,minLat,maxLon,maxLat" (Leaflet getBounds order).
-   */
-  /**
-   * Returns OSM landuse=industrial polygon rings inside the bbox as
-   * [lat, lng][][] — one ring per way element. Empty when bbox > 5° or
-   * Overpass is unreachable.
    */
   getIndustrialHeatmap: (bbox: string) =>
     api

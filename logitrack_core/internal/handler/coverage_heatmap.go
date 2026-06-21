@@ -1,51 +1,25 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"math"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/logitrack/core/internal/geo"
 )
 
-const (
-	heatmapCacheTTL    = 15 * time.Minute
-	heatmapMaxDeg      = 5.0
-	heatmapOverpassURL = "https://overpass-api.de/api/interpreter"
-)
-
-// heatmapEntry caches the polygon rings returned for a given bbox.
-// Each entry is one closed ring ([][2]float64) representing a single
-// OSM way tagged landuse=industrial.
-type heatmapEntry struct {
-	polys    [][][2]float64
-	cachedAt time.Time
-}
-
-var (
-	heatmapMu     sync.Mutex
-	heatmapCache  = make(map[string]heatmapEntry)
-	heatmapClient = &http.Client{Timeout: 12 * time.Second}
-)
-
-func heatmapCacheKey(minLon, minLat, maxLon, maxLat float64) string {
-	r := func(v float64) float64 { return math.Round(v*10) / 10 }
-	return fmt.Sprintf("%.1f,%.1f,%.1f,%.1f", r(minLon), r(minLat), r(maxLon), r(maxLat))
-}
-
-// IndustrialHeatmap returns OSM "landuse=industrial" polygon geometries inside
-// the given bounding box (bbox query param: minLon,minLat,maxLon,maxLat) as a
-// JSON array of polygon rings — each ring is [][2]float64 with [lat, lng] pairs.
-// Only way elements are returned (nodes have no polygon geometry; relations are
-// skipped for simplicity). Results are cached 15 minutes per bbox.
-// Bboxes wider than 5° return an empty array without querying Overpass.
+// IndustrialHeatmap returns the official IGN industrial zones ("áreas de
+// fabricación y procesamiento", incl. parques industriales y polos
+// petroquímicos) whose geometry intersects the given bounding box, as a JSON
+// array of polygon rings — each ring is [][2]float64 with [lat, lng] pairs.
+//
+// The data is the embedded IGN dataset queried entirely in memory, so there is
+// no upstream call, no timeout, no per-bbox size limit and no cache TTL: the
+// previous Overpass dependency (and its 5° guard) is gone.
+//
+// bbox query param order: minLon,minLat,maxLon,maxLat (Leaflet getBounds order).
 func (h *CoverageHandler) IndustrialHeatmap(c *gin.Context) {
 	bboxStr := c.Query("bbox")
 	if bboxStr == "" {
@@ -70,71 +44,6 @@ func (h *CoverageHandler) IndustrialHeatmap(c *gin.Context) {
 	}
 	minLon, minLat, maxLon, maxLat := coords[0], coords[1], coords[2], coords[3]
 
-	if maxLon-minLon > heatmapMaxDeg || maxLat-minLat > heatmapMaxDeg {
-		c.JSON(http.StatusOK, [][][2]float64{})
-		return
-	}
-
-	key := heatmapCacheKey(minLon, minLat, maxLon, maxLat)
-
-	heatmapMu.Lock()
-	if entry, ok := heatmapCache[key]; ok && time.Since(entry.cachedAt) < heatmapCacheTTL {
-		polys := entry.polys
-		heatmapMu.Unlock()
-		c.JSON(http.StatusOK, polys)
-		return
-	}
-	heatmapMu.Unlock()
-
-	// Overpass bbox order: (south,west,north,east).
-	// "out geom" includes the full node-coordinate list for each way so we can
-	// draw the real polygon shape rather than just its centroid.
-	query := fmt.Sprintf(
-		`[out:json][timeout:12];way["landuse"="industrial"](%f,%f,%f,%f);out geom 200;`,
-		minLat, minLon, maxLat, maxLon,
-	)
-
-	resp, err := heatmapClient.PostForm(heatmapOverpassURL, url.Values{"data": {query}})
-	if err != nil || resp.StatusCode != http.StatusOK {
-		c.JSON(http.StatusOK, [][][2]float64{})
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.JSON(http.StatusOK, [][][2]float64{})
-		return
-	}
-
-	var result struct {
-		Elements []struct {
-			Geometry []struct {
-				Lat float64 `json:"lat"`
-				Lon float64 `json:"lon"`
-			} `json:"geometry"`
-		} `json:"elements"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		c.JSON(http.StatusOK, [][][2]float64{})
-		return
-	}
-
-	polys := make([][][2]float64, 0, len(result.Elements))
-	for _, el := range result.Elements {
-		if len(el.Geometry) < 3 {
-			continue
-		}
-		ring := make([][2]float64, len(el.Geometry))
-		for i, g := range el.Geometry {
-			ring[i] = [2]float64{g.Lat, g.Lon}
-		}
-		polys = append(polys, ring)
-	}
-
-	heatmapMu.Lock()
-	heatmapCache[key] = heatmapEntry{polys: polys, cachedAt: time.Now()}
-	heatmapMu.Unlock()
-
-	c.JSON(http.StatusOK, polys)
+	rings := geo.IndustrialRingsInBBox(minLon, minLat, maxLon, maxLat)
+	c.JSON(http.StatusOK, rings)
 }

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"net/http"
 	"sort"
 	"sync"
 	"time"
@@ -107,10 +106,6 @@ type CoverageService struct {
 
 	mu      sync.RWMutex
 	diagram *model.CoverageDiagram
-
-	// httpClient is used for the "Snap to City" Overpass lookup (coverage_geocode.go).
-	// Nil uses a default client with snapToCityHTTPTimeout — overridable in tests.
-	httpClient *http.Client
 }
 
 // NewCoverageService wires the service. Call Refresh once at startup (and after

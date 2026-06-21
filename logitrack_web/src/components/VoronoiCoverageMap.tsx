@@ -78,7 +78,7 @@ interface VoronoiCoverageMapProps {
   onBoundaryEdited?: (pts: [number, number][]) => void;
   /** Llamado cuando el usuario presiona Esc durante la edición. */
   onBoundaryEditCancel?: () => void;
-  /** Cuando true, superpone polígonos OSM landuse=industrial sobre el mapa. */
+  /** Cuando true, superpone los polígonos de zonas industriales (IGN) sobre el mapa. */
   showIndustrialHeatmap?: boolean;
   /**
    * Bounding box de la zona de análisis activa: "minLon,minLat,maxLon,maxLat".
@@ -87,7 +87,7 @@ interface VoronoiCoverageMapProps {
    * con actualización en moveend, respetando el límite de 5°.
    */
   heatmapBbox?: string;
-  /** Llamado cuando la carga de zonas industriales termina. count = polígonos dibujados, error = true si Overpass falló. */
+  /** Llamado cuando la carga de zonas industriales termina. count = polígonos dibujados, error = true si la petición falló. */
   onIndustrialHeatmapLoaded?: (count: number, error?: boolean) => void;
   /** Ciudades descartadas por el filtro de densidad: se dibujan como círculos grises semitransparentes. */
   rejectedLocations?: RejectedLocation[];
@@ -637,9 +637,9 @@ function VoronoiCoverageMap({
     });
   }, [snappedCities]);
 
-  // Zonas industriales: carga los polígonos OSM (geometría real de cada way
-  // landuse=industrial). Cuando hay zona de análisis usa heatmapBbox; en modo
-  // nacional cae al viewport actual y se recarga en moveend.
+  // Zonas industriales: carga los polígonos del dataset IGN (geometría real de
+  // cada área de fabricación). Cuando hay zona de análisis usa heatmapBbox; en
+  // modo nacional cae al viewport actual y se recarga en moveend.
   useEffect(() => {
     const layer = industrialLayer.current;
     const map = mapRef.current;
@@ -686,13 +686,13 @@ function VoronoiCoverageMap({
       return fetchBbox(heatmapBbox);
     }
 
-    // Fallback al viewport (modo nacional o sin zona personalizada).
-    // El backend rechaza bboxes > 5°, así que solo pedimos si la vista es suficientemente pequeña.
-    const bboxFromBounds = (): string | null => {
+    // Fallback al viewport (modo nacional o sin zona personalizada). El backend
+    // sirve las zonas IGN desde memoria (sin límite de tamaño de bbox), así que
+    // pedimos siempre el viewport actual y refrescamos al desplazar el mapa.
+    const bboxFromBounds = (): string => {
       const b = map.getBounds();
       const minLng = b.getWest(), maxLng = b.getEast();
       const minLat = b.getSouth(), maxLat = b.getNorth();
-      if (maxLng - minLng > 5 || maxLat - minLat > 5) return null;
       return `${minLng},${minLat},${maxLng},${maxLat}`;
     };
 
@@ -700,13 +700,7 @@ function VoronoiCoverageMap({
 
     const refresh = () => {
       cancelCurrent?.();
-      const bbox = bboxFromBounds();
-      if (!bbox) {
-        layer.clearLayers();
-        onIndustrialHeatmapLoadedRef.current?.(0);
-        return;
-      }
-      cancelCurrent = fetchBbox(bbox);
+      cancelCurrent = fetchBbox(bboxFromBounds());
     };
 
     refresh();

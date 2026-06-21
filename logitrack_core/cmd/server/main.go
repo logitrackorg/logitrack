@@ -13,6 +13,7 @@ import (
 	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/email"
+	"github.com/logitrack/core/internal/geo"
 	"github.com/logitrack/core/internal/handler"
 	"github.com/logitrack/core/internal/mercadopago"
 	"github.com/logitrack/core/internal/messaging"
@@ -142,6 +143,10 @@ func main() {
 	seed.LoadRegions(regionRepo)
 
 	// Detector de falta de sucursal: diagrama de cobertura (Voronoi) + gaps.
+	// Pre-carga el dataset IGN de zonas industriales (embebido) para fallar
+	// temprano si el asset está corrupto y registrar cuántas zonas se cargaron.
+	log.Printf("[IGN] zonas industriales cargadas: %d", geo.IndustrialZoneCount())
+	log.Printf("[INDEC] localidades cargadas: %d", geo.LocalityCount())
 	coverageSvc := service.NewCoverageService(branchRepo, sysConfigSvc)
 	coverageHandler := handler.NewCoverageHandler(coverageSvc)
 	draftLifecycleRepo := repository.NewPostgresDraftLifecycleRepository(database)

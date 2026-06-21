@@ -65,7 +65,7 @@ interface CoverageSimulatorPanelProps {
   /** Minimum population density filter for density mode (hab./km²). */
   minDensity?: number;
   onMinDensityChange?: (v: number) => void;
-  /** When true, candidates near industrial OSM areas get a 1.3× score bonus. */
+  /** When true, candidates near IGN industrial areas get a 1.3× score bonus. */
   prioritizeIndustrial?: boolean;
   onPrioritizeIndustrialChange?: (v: boolean) => void;
   /** When true, mountainous terrain divides the score (discourages Andes candidates). */
@@ -76,7 +76,7 @@ interface CoverageSimulatorPanelProps {
   /** Toggles the industrial zones overlay on the map. */
   showIndustrialHeatmap?: boolean;
   onIndustrialHeatmapChange?: (v: boolean) => void;
-  /** true while the map is fetching industrial zone polygons from Overpass. */
+  /** true while the map is fetching industrial zone polygons (IGN dataset). */
   industrialHeatmapLoading?: boolean;
   /** Result of the last industrial zones fetch. null = not yet loaded. */
   industrialZoneResult?: { count: number; error: boolean } | null;
@@ -705,10 +705,10 @@ export function CoverageSimulatorPanel({
         {showIndustrialHeatmap && !industrialHeatmapLoading && industrialZoneResult && (
           <p className={`text-[10px] mt-1 leading-tight ${industrialZoneResult.error ? "text-rose-500 dark:text-rose-400" : industrialZoneResult.count === 0 ? "text-slate-400 dark:text-slate-500" : "text-emerald-600 dark:text-emerald-400"}`}>
             {industrialZoneResult.error
-              ? "⚠ Error al consultar Overpass API."
+              ? "⚠ No se pudieron cargar las zonas industriales."
               : industrialZoneResult.count === 0
-                ? "Sin zonas industriales en esta área. Zoom in o cambia la zona."
-                : `✓ ${industrialZoneResult.count} zona${industrialZoneResult.count !== 1 ? "s" : ""} industrial${industrialZoneResult.count !== 1 ? "es" : ""} encontrada${industrialZoneResult.count !== 1 ? "s" : ""}. Zoom in para ver el detalle.`}
+                ? "Sin zonas industriales (IGN) en esta área. Zoom in o cambia la zona."
+                : `✓ ${industrialZoneResult.count} zona${industrialZoneResult.count !== 1 ? "s" : ""} industrial${industrialZoneResult.count !== 1 ? "es" : ""} (IGN) encontrada${industrialZoneResult.count !== 1 ? "s" : ""}. Zoom in para ver el detalle.`}
           </p>
         )}
         <label className="flex items-center gap-2 cursor-pointer select-none mt-1.5">

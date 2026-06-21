@@ -982,9 +982,9 @@ export function CoberturaTab() {
   // ventana (incluyendo el topbar) para aprovechar el espacio al analizar el mapa.
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // "Aterrizar sugerencias en ciudades reales": ciudades reales (OSM Overpass)
-  // resueltas para simResult.suggested_locations, en el mismo orden. Se
-  // resetea cada vez que cambia el diagnóstico simulado.
+  // "Aterrizar sugerencias en ciudades reales": ciudades reales (dataset oficial
+  // INDEC/Georef) resueltas para simResult.suggested_locations, en el mismo
+  // orden. Se resetea cada vez que cambia el diagnóstico simulado.
   const [snappedCities, setSnappedCities] = useState<SnappedCity[] | null>(null);
   // Bloquea el slider del simulador y el botón "Confirmar y Diagnosticar"
   // mientras se geocodifican las sugerencias ("Aterrizar sugerencias en
@@ -1455,8 +1455,8 @@ export function CoberturaTab() {
   }, [isFindingMore, isDiagnosing, snappedCities, excludedCitiesForMore, rejectedLocations]);
 
   // Sugerencias que todavía no aterrizaron en una ciudad real: solo estas se
-  // vuelven a enviar al backend en cada click (evita re-consultar Overpass
-  // para puntos que ya tienen resultado).
+  // vuelven a enviar al backend en cada click (evita reprocesar puntos que ya
+  // tienen resultado).
   const pendingSnapIndexes = useMemo(() => {
     if (!simResult) return [];
     return simResult.suggested_locations
@@ -1713,10 +1713,10 @@ export function CoberturaTab() {
     return diagram?.total_area_km2 ?? SIM_AREA_MAX;
   }, [isZoneActive, customBoundary, diagram]);
 
-  // Bounding box de la zona activa para el calor industrial.
-  // Devuelve undefined cuando no hay zona personalizada o cuando la zona es
-  // demasiado grande (> 5°), que es el límite que el backend acepta sin
-  // devolver vacío.
+  // Bounding box de la zona activa para las zonas industriales. Devuelve
+  // undefined solo cuando no hay zona personalizada (el mapa cae entonces al
+  // viewport). El backend sirve las zonas IGN desde memoria, sin límite de
+  // tamaño, así que una zona grande ya no se descarta.
   const heatmapBbox = useMemo<string | undefined>(() => {
     if (!customBoundary || customBoundary.length < 3) return undefined;
     let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
@@ -1726,7 +1726,6 @@ export function CoberturaTab() {
       if (lng < minLng) minLng = lng;
       if (lng > maxLng) maxLng = lng;
     }
-    if (maxLng - minLng > 5 || maxLat - minLat > 5) return undefined;
     return `${minLng},${minLat},${maxLng},${maxLat}`;
   }, [customBoundary]);
 
@@ -1975,7 +1974,7 @@ export function CoberturaTab() {
               {simResult !== null && simResult.suggested_locations.length === 0 && !simError && (
                 diagnosisModeRef.current === "density" ? (
                   <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                    No se encontraron ciudades sin cobertura en la zona. Si el área es grande o no hay zona personalizada, Overpass puede agotar el tiempo. Definí una zona más pequeña o usá el modo Radio de cobertura.
+                    No se encontraron ciudades sin cobertura en la zona con los filtros actuales. Probá ampliar el área, bajar la población mínima o usá el modo Radio de cobertura.
                   </p>
                 ) : (
                   <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
