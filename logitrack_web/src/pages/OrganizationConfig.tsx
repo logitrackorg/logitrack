@@ -14,7 +14,7 @@ const inputClass =
 const labelClass = "text-sm font-semibold text-slate-700 dark:text-slate-300";
 
 const colorPickerClass =
-  "w-full h-10 px-2 rounded-lg border border-slate-200 bg-white cursor-pointer dark:bg-slate-800 dark:border-slate-600";
+  "h-10 w-10 rounded-lg border border-slate-200 bg-white cursor-pointer p-0 dark:bg-slate-800 dark:border-slate-600";
 
 export function OrganizationConfig() {
   const [config, setConfig] = useState<OrganizationConfigType | null>(null);
@@ -189,8 +189,8 @@ export function OrganizationConfig() {
                 <div className="flex gap-2">
                   <input
                     type="color"
-                    className={`${colorPickerClass} w-12 shrink-0`}
-                    value={form.primary_color || "#2563eb"}
+className={colorPickerClass}
+                     value={form.primary_color || "#2563eb"}
                     onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
                   />
                   <input
@@ -209,8 +209,8 @@ export function OrganizationConfig() {
                 <div className="flex gap-2">
                   <input
                     type="color"
-                    className={`${colorPickerClass} w-12 shrink-0`}
-                    value={form.accent_color || "#f97316"}
+className={colorPickerClass}
+                     value={form.accent_color || "#f97316"}
                     onChange={(e) => setForm({ ...form, accent_color: e.target.value })}
                   />
                   <input
@@ -230,7 +230,7 @@ export function OrganizationConfig() {
               <div className="flex gap-2">
                 <input
                   type="color"
-                  className={`${colorPickerClass} w-12 shrink-0`}
+                  className={colorPickerClass}
                     value={form.sidebar_color || "#1e3a5f"}
                     onChange={(e) => setForm({ ...form, sidebar_color: e.target.value })}
                   />
