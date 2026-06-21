@@ -151,6 +151,11 @@ func main() {
 	draftScheduler := service.NewDraftScheduler(draftLifecycleSvc)
 	draftScheduler.Start()
 
+	photoLifecycleRepo := repository.NewPostgresPhotoLifecycleRepository(database)
+	photoLifecycleSvc := service.NewPhotoLifecycleService(photoLifecycleRepo, sysConfigSvc)
+	photoScheduler := service.NewPhotoScheduler(photoLifecycleSvc)
+	photoScheduler.Start()
+
 	// Mercado Pago — siempre non-nil; IsConfigured() depende de credenciales (DB > env vars)
 	mpClient := mercadopago.NewClient(
 		os.Getenv("MP_ACCESS_TOKEN"),
@@ -169,6 +174,8 @@ func main() {
 	clockHandler := handler.NewClockHandler(func() {
 		draftLifecycleSvc.RunExpirationJob()
 		draftLifecycleSvc.RunPurgeJob()
+		photoLifecycleSvc.RunExpirationJob()
+		photoLifecycleSvc.RunPurgeJob()
 		if slaRiskChecker != nil {
 			slaRiskChecker()
 		}
@@ -789,6 +796,15 @@ func main() {
 	protected.POST("/admin/compliance/suppress", adminOnly, draftLifecycleHandler.Suppress)
 	protected.POST("/admin/compliance/expire-drafts", adminOnly, draftLifecycleHandler.TriggerExpiration)
 	protected.POST("/admin/compliance/purge-pii", adminOnly, draftLifecycleHandler.TriggerPurge)
+	// Photo lifecycle / compliance (Ley 25.326) — admin only
+	protected.POST("/admin/compliance/expire-photos", adminOnly, func(c *gin.Context) {
+		photoLifecycleSvc.RunExpirationJob()
+		c.JSON(200, gin.H{"message": "job de expiración de fotos ejecutado"})
+	})
+	protected.POST("/admin/compliance/purge-photos", adminOnly, func(c *gin.Context) {
+		photoLifecycleSvc.RunPurgeJob()
+		c.JSON(200, gin.H{"message": "job de purga de fotos ejecutado"})
+	})
 
 	// Pricing — quote belongs to the shipment-creation flow (operator/supervisor); config is admin-only
 	protected.POST("/pricing/quote", shipmentWrite, pricingHandler.Quote)

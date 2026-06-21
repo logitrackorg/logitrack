@@ -147,6 +147,15 @@ type Shipment struct {
 	HopIndex          int      `json:"hop_index,omitempty"`            
 	PathRevision      int      `json:"path_revision,omitempty"`        
 
+	// PhotoExpiredAt is set by the photo lifecycle job when the delivery photo's
+	// retention window (PhotoRetentionDays) has elapsed. Once set, the photo endpoint
+	// returns 410 Gone even if the file is still on disk.
+	PhotoExpiredAt *time.Time `json:"photo_expired_at,omitempty"`
+
+	// PhotoPurgedAt is set after the physical file has been deleted from disk
+	// (PhotoPurgeDays after PhotoExpiredAt). The endpoint returns 410 Gone permanently.
+	PhotoPurgedAt *time.Time `json:"photo_purged_at,omitempty"`
+
 	// SLANotifiedAt registra cuándo se emitió la última notificación de SLA en riesgo.
 	// Se resetea a nil cuando el envío sale del estado crítico, habilitando una nueva
 	// notificación si vuelve a entrar (CA-04).

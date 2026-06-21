@@ -889,6 +889,14 @@ func RunMigrations(db *sql.DB) error {
 			coordinates JSONB       NOT NULL DEFAULT '[]',
 			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
+
+		-- Photo lifecycle: ciclo de vida de fotos de entrega (Ley 25.326).
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS photo_retention_days INTEGER NOT NULL DEFAULT 365;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS photo_purge_days     INTEGER NOT NULL DEFAULT 30;
+		UPDATE system_config SET photo_retention_days = 365, photo_purge_days = 30 WHERE id = 1 AND photo_retention_days = 0;
+
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS photo_expired_at TIMESTAMPTZ;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS photo_purged_at  TIMESTAMPTZ;
 	`)
 	return err
 }

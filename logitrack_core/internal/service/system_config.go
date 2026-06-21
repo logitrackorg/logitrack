@@ -76,6 +76,13 @@ func (s *SystemConfigService) Update(cfg model.SystemConfig) (model.SystemConfig
 		return model.SystemConfig{}, fmt.Errorf("claim_escalation_alta_days debe ser mayor a 0")
 	}
 
+	if cfg.PhotoRetentionDays < 1 || cfg.PhotoRetentionDays > 3650 {
+		return model.SystemConfig{}, fmt.Errorf("photo_retention_days debe estar entre 1 y 3650 (10 años)")
+	}
+	if cfg.PhotoPurgeDays < 1 || cfg.PhotoPurgeDays > 1825 {
+		return model.SystemConfig{}, fmt.Errorf("photo_purge_days debe estar entre 1 y 1825 (5 años)")
+	}
+
 	// CA01: Guardar configuración
 	if err := s.repo.Update(cfg); err != nil {
 		return model.SystemConfig{}, err

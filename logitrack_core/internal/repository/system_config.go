@@ -27,13 +27,15 @@ func (r *postgresSystemConfigRepository) Get() model.SystemConfig {
 		       pickup_deadline_days, email_notifications_enabled, whatsapp_notifications_enabled,
 		       max_reschedules, max_reschedule_days, two_fa_cooldown_minutes, max_coverage_area_km2,
 		       urgent_claims_cap_pct, claims_high_priority_threshold, claims_medium_priority_threshold,
-		       claim_escalation_enabled, claim_escalation_baja_days, claim_escalation_media_days, claim_escalation_alta_days
+		       claim_escalation_enabled, claim_escalation_baja_days, claim_escalation_media_days, claim_escalation_alta_days,
+		       photo_retention_days, photo_purge_days
 		FROM system_config WHERE id = 1`).
 		Scan(&cfg.MaxDeliveryAttempts, &cfg.DraftRetentionDays, &cfg.DraftPurgeDays,
 			&cfg.PickupDeadlineDays, &cfg.EmailNotificationsEnabled, &cfg.WhatsAppNotificationsEnabled,
 			&cfg.MaxReschedules, &cfg.MaxRescheduleDays, &cfg.TwoFACooldownMinutes, &cfg.MaxCoverageAreaKm2,
 			&cfg.UrgentClaimsCapPct, &cfg.ClaimsHighPriorityThreshold, &cfg.ClaimsMediumPriorityThreshold,
-			&cfg.ClaimEscalationEnabled, &cfg.ClaimEscalationBajaDays, &cfg.ClaimEscalationMediaDays, &cfg.ClaimEscalationAltaDays)
+			&cfg.ClaimEscalationEnabled, &cfg.ClaimEscalationBajaDays, &cfg.ClaimEscalationMediaDays, &cfg.ClaimEscalationAltaDays,
+			&cfg.PhotoRetentionDays, &cfg.PhotoPurgeDays)
 	if err != nil {
 		log.Printf("❌ [REPO] Error leyendo config: %v", err)
 		return model.DefaultSystemConfig()
@@ -63,7 +65,9 @@ func (r *postgresSystemConfigRepository) Update(cfg model.SystemConfig) error {
 		     claim_escalation_enabled         = $14,
 		     claim_escalation_baja_days       = $15,
 		     claim_escalation_media_days      = $16,
-		     claim_escalation_alta_days       = $17
+		     claim_escalation_alta_days       = $17,
+		     photo_retention_days             = $18,
+		     photo_purge_days                 = $19
 		 WHERE id = 1`,
 		cfg.MaxDeliveryAttempts,
 		cfg.DraftRetentionDays,
@@ -82,6 +86,8 @@ func (r *postgresSystemConfigRepository) Update(cfg model.SystemConfig) error {
 		cfg.ClaimEscalationBajaDays,
 		cfg.ClaimEscalationMediaDays,
 		cfg.ClaimEscalationAltaDays,
+		cfg.PhotoRetentionDays,
+		cfg.PhotoPurgeDays,
 	)
 	if err != nil {
 		log.Printf("[ERROR] Update failed: %v", err)

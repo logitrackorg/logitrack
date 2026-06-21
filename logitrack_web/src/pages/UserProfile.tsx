@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, Lock, ClipboardList, Loader2 } from "lucide-react";
 import { usersApi, type UserProfile, type ChangePasswordRequest } from "../api/users";
 import { driverApi, type PersonalHistoryResult } from "../api/driver";
+import { AwardBadge } from "../components/AwardBadge";
 import { useAuth } from "../context/AuthContext";
 
 import { Button } from "@/components/ui/button";
@@ -366,7 +367,28 @@ export function UserProfile() {
               ) : profileError ? (
                 <p className="text-[var(--danger-text)] text-sm">{profileError}</p>
               ) : (
-                <div className="grid gap-4 max-w-lg">
+                <div className="flex flex-col gap-6 max-w-lg">
+                  {(() => {
+                    const awards = profile?.awards;
+                    if (!awards || awards.length === 0) return null;
+                    const now = new Date();
+                    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    const award = awards.find((a) => {
+                      const [ay, am] = a.period.substring(0, 7).split("-").map(Number);
+                      return ay === lastMonth.getFullYear() && am - 1 === lastMonth.getMonth();
+                    });
+                    if (!award) return null;
+                    return (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/5 px-4 py-3 flex items-center gap-3">
+                        <span className="text-2xl leading-none">🏆</span>
+                        <div>
+                          <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-0.5">Distinción del mes</p>
+                          <AwardBadge award={award} />
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <div className="grid gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                       Nombre Completo
@@ -417,6 +439,7 @@ export function UserProfile() {
                       />
                     </div>
                   )}
+                  </div>
                 </div>
               )}
             </div>

@@ -119,7 +119,7 @@ const ROLE_LABELS: Record<string, string> = {
   driver: "Chofer",
 };
 
-// Returns the most recent award for the current month-1 period (the last winner cycle).
+// Returns the award only if it corresponds to the previous calendar month.
 function useMostRecentAward(userId: string | undefined): Award | null {
   const [award, setAward] = useState<Award | null>(null);
   useEffect(() => {
@@ -127,8 +127,16 @@ function useMostRecentAward(userId: string | undefined): Award | null {
     usersApi.getById(userId).then((p) => {
       const awards = p.awards;
       if (!awards || awards.length === 0) return;
-      // Show only the most recent one (already sorted DESC by backend).
-      setAward(awards[0]);
+      // Awards are sorted DESC by backend; take the most recent one.
+      const latest = awards[0];
+      // Only show the badge if the award period is exactly last month.
+      // Parse year/month directly from the ISO string to avoid UTC→local shift.
+      const now = new Date();
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const [ay, am] = latest.period.substring(0, 7).split("-").map(Number);
+      if (ay === lastMonth.getFullYear() && am - 1 === lastMonth.getMonth()) {
+        setAward(latest);
+      }
     }).catch(() => null);
   }, [userId]);
   return award;
