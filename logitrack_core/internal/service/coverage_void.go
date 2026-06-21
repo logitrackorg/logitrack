@@ -209,7 +209,7 @@ func computeMathematicalSuggestions(
 		newSuggs := fillFragmentIteratively(
 			globalCell, proj, frag, radiusKm,
 			&projSites, tierraFertil, otherCells,
-			minFragAreaKm2,
+			minFragAreaKm2, coverageSuggestionMaxPerFragment,
 		)
 		if maxSuggestions > 0 && len(out)+len(newSuggs) > maxSuggestions {
 			newSuggs = newSuggs[:maxSuggestions-len(out)]

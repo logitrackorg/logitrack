@@ -246,7 +246,54 @@ export function SlaSettings() {
         </CardContent>
       </Card>
 
-      {/* ── Card 4: Modo + Frecuencia de recálculo ──────────────────────────── */}
+      {/* ── Card 4: Ventana de datos históricos ─────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3 border-b dark:border-gray-700 border-slate-100">
+          <CardTitle className="text-base">Antigüedad de datos para métricas</CardTitle>
+          <CardDescription>
+            Cuántos meses hacia atrás toma el Collector para calcular el promedio de permanencia
+            por estado. Ventanas cortas reflejan el rendimiento reciente; ventanas largas son más estables.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4 space-y-2">
+          {(
+            [
+              { months: 2,  label: "2 meses",  desc: "Solo envíos muy recientes. Máxima sensibilidad a cambios operativos." },
+              { months: 6,  label: "6 meses",  desc: "Semestre actual. Buen balance entre agilidad y estabilidad." },
+              { months: 12, label: "12 meses", desc: "Último año completo. Captura variaciones estacionales. (Recomendado)" },
+              { months: 18, label: "18 meses", desc: "Año y medio. Promedios muy estables, reacciona lento a mejoras." },
+            ] as const
+          ).map((opt) => {
+            const current = draft.data_window_months ?? 12;
+            const selected = current === opt.months;
+            return (
+              <label
+                key={opt.months}
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                  selected
+                    ? "border-amber-400 bg-amber-50/60 dark:bg-amber-900/10"
+                    : "dark:border-gray-700 border-slate-200 dark:hover:bg-gray-700 hover:bg-slate-50"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="data_window_months"
+                  value={opt.months}
+                  checked={selected}
+                  onChange={() => setDraft({ ...draft, data_window_months: opt.months })}
+                  className="mt-0.5 accent-amber-500 shrink-0"
+                />
+                <div>
+                  <p className="text-sm font-semibold dark:text-gray-300 text-slate-800">{opt.label}</p>
+                  <p className="text-[11px] dark:text-gray-400 text-slate-500">{opt.desc}</p>
+                </div>
+              </label>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      {/* ── Card 5: Modo + Frecuencia de recálculo ──────────────────────────── */}
       <Card>
         <CardHeader className="pb-3 border-b dark:border-gray-700 border-slate-100">
           <CardTitle className="text-base">Modo y frecuencia del Collector</CardTitle>

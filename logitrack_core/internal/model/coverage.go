@@ -95,6 +95,43 @@ type SuggestedLocation struct {
 	CityName   string `json:"city_name,omitempty"`
 	IsSnapped  bool   `json:"is_snapped,omitempty"`
 	Population int    `json:"population,omitempty"`
+
+	// Density is the population density of the snapped city expressed as
+	// inhabitants per km² of the Voronoi cell area. Only populated in
+	// "density" diagnostic mode.
+	Density float64 `json:"density,omitempty"`
+
+	// HasIndustrialZone is true when an OSM "landuse=industrial" area exists
+	// within ~10 km of this suggestion. Set by density-mode scoring when
+	// PrioritizeIndustrial is enabled; always false otherwise.
+	HasIndustrialZone bool `json:"has_industrial_zone,omitempty"`
+
+	// TerrainType is a human-readable label describing the topographic
+	// character of the suggestion's location (e.g. "Llano", "Serrano",
+	// "Montañoso"). Set by density-mode scoring when ApplyTerrainFriction is
+	// enabled; empty otherwise.
+	TerrainType string `json:"terrain_type,omitempty"`
+
+	// Score is the Logistics Viability Index (1–100) computed by
+	// CalculateViabilityScore. Combines population, density, net coverage area,
+	// industrial-zone presence, and terrain friction into a single number so the
+	// frontend can show at a glance how strong a candidate this city is.
+	Score int `json:"score,omitempty"`
+}
+
+// RejectedLocation is a candidate city evaluated during density-mode diagnosis
+// that was excluded from SuggestedLocations because it failed at least one
+// filter. RejectReason is a human-readable explanation for the manager
+// (e.g. "Densidad insuficiente: 45 hab./km² (mínimo: 100 hab./km²)").
+type RejectedLocation struct {
+	CityName     string  `json:"city_name"`
+	Lat          float64 `json:"lat"`
+	Lng          float64 `json:"lng"`
+	RejectReason string  `json:"reject_reason"`
+	// Score is the Logistics Viability Index computed at rejection time, using
+	// whatever data was available (terrain always included; industrial zone
+	// defaults to false for rejected candidates since detection runs later).
+	Score int `json:"score,omitempty"`
 }
 
 // SimulationResult is the response of CoverageService.Diagnose: the per-branch
@@ -113,6 +150,11 @@ type SimulationResult struct {
 	// are active and all cells are within the simulated radius, or when no
 	// simulation area has been set.
 	MathematicalSuggestions []SuggestedLocation `json:"mathematical_suggestions,omitempty"`
+
+	// RejectedLocations lists city candidates evaluated in density mode that did
+	// not pass at least one filter (population, density, proximity, etc.). Each
+	// entry carries the human-readable reason for exclusion. Empty in area mode.
+	RejectedLocations []RejectedLocation `json:"rejected_locations,omitempty"`
 
 	// DiagramCells carries the Voronoi cells (with polygon geometry) that were
 	// used for this diagnosis run. The frontend uses these to redraw the map
@@ -165,6 +207,60 @@ type SnapToCityResponse struct {
 	Results []SnappedCity `json:"results"`
 }
 
+// DensityOptions groups all density-mode–specific parameters for Diagnose and
+// related service functions, keeping function signatures manageable as new
+// density options are added.
+type DensityOptions struct {
+	// MinPopulation filters snap candidates: only cities with at least this
+	// many inhabitants are eligible. 0 = no filter.
+	MinPopulation int `json:"min_population,omitempty"`
+
+	// MinDensity filters candidates after snapping: only cities whose computed
+	// density (population / uncovered_fragment_area, hab./km²) meets this
+	// threshold are returned. 0 = no filter.
+	MinDensity float64 `json:"min_density,omitempty"`
+
+	// RankingMode controls the final sort of density-mode suggestions:
+	//   "population" (default) — sort by absolute population descending
+	//                            (most under-served urban areas first).
+	//   "gap_area"             — sort by uncovered fragment area descending
+	//                            (largest geographic voids first).
+	RankingMode string `json:"ranking_mode,omitempty"`
+
+	// ExcludedCities are city names from previous diagnoses that the snap
+	// step must skip, so "Buscar más" returns genuinely new locations.
+	ExcludedCities []string `json:"excluded_cities,omitempty"`
+
+	// AdditionalSites are coordinates of already-placed suggestions (from
+	// previous "Buscar más" rounds). Their coverage circles are subtracted
+	// from cell remainders before new candidates are computed.
+	AdditionalSites []LatLng `json:"additional_sites,omitempty"`
+
+	// PrioritizeIndustrial, when true, applies a 1.3× multiplier to the
+	// final score of candidates that have an OSM "landuse=industrial" area
+	// within 10 km, making them rank higher than equally-populated residential
+	// candidates.
+	PrioritizeIndustrial bool `json:"prioritize_industrial,omitempty"`
+
+	// ApplyTerrainFriction, when true, divides each candidate's score by a
+	// friction factor derived from its topographic position in Argentina
+	// (1.0 = flat Pampas, up to 1.5 = Andes). Candidates in difficult terrain
+	// rank lower even when their population density is high.
+	ApplyTerrainFriction bool `json:"apply_terrain_friction,omitempty"`
+
+	// MinSeparationKm, when > 0, overrides the automatic minimum distance (km)
+	// enforced between a suggested branch and (a) every existing branch and
+	// (b) every other suggestion. Lower values pack suggestions closer together
+	// (more suggestions); higher values spread them out. 0 = automatic default
+	// (max(radius×2, 20) inside a custom zone; max(radius, 150) nationally).
+	MinSeparationKm float64 `json:"min_separation_km,omitempty"`
+
+	// MinScore rejects candidates whose Logistics Viability Index (1–100) is
+	// strictly below this value. Applied after the full score is computed
+	// (terrain + industry + population + area). 0 = no filter.
+	MinScore int `json:"min_score,omitempty"`
+}
+
 // DiagnoseRequest is the body of POST /coverage/diagnose: parameters for the
 // coverage simulator's "Confirmar y Diagnosticar" action.
 type DiagnoseRequest struct {
@@ -208,6 +304,16 @@ type DiagnoseRequest struct {
 	// the diagnosis fast; the frontend can snap client-side via POST
 	// /coverage/snap-to-city when the user explicitly requests it.
 	SnapToCities bool `json:"snap_to_cities,omitempty"`
+
+	// Mode controls the suggestion ranking strategy:
+	//   "area"    (default) ranks by Voronoi cell area — geographic gaps.
+	//   "density" ranks by population density (hab./km²) so that
+	//             under-served urban areas surface above vast rural cells.
+	Mode string `json:"mode,omitempty"`
+
+	// Density groups all density-mode–specific options. Fields are ignored
+	// when Mode != "density".
+	Density DensityOptions `json:"density,omitempty"`
 }
 
 // ProjectionRequest is the body of POST /coverage/project: the simulated

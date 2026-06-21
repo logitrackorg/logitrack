@@ -364,7 +364,12 @@ func (s *SLAAnomalyService) collect() error {
 		cacheTTL = debugCacheTTL
 	}
 
-	snap, err := s.refreshAverages(cacheTTL)
+	dataWindow := cfg.DataWindowMonths
+	if dataWindow <= 0 {
+		dataWindow = 12 // safe default when reading old config files without this field
+	}
+
+	snap, err := s.refreshAverages(cacheTTL, dataWindow)
 	if err != nil {
 		// Even on error, restore status so the UI doesn't stay stuck on "en proceso".
 		s.cacheMu.Lock()
@@ -416,7 +421,7 @@ func (s *SLAAnomalyService) collect() error {
 
 // refreshAverages queries the DB for per-status dwell-time averages, honouring
 // the cache TTL, and returns a fresh snapshot (also stored in the cache).
-func (s *SLAAnomalyService) refreshAverages(cacheTTL time.Duration) (map[string]float64, error) {
+func (s *SLAAnomalyService) refreshAverages(cacheTTL time.Duration, dataWindowMonths int) (map[string]float64, error) {
 	s.cacheMu.RLock()
 	if time.Since(s.cacheBuilt) < cacheTTL && len(s.avgByState) > 0 {
 		out := make(map[string]float64, len(s.avgByState))
@@ -428,6 +433,10 @@ func (s *SLAAnomalyService) refreshAverages(cacheTTL time.Duration) (map[string]
 	}
 	s.cacheMu.RUnlock()
 
+	// Compute the cutoff timestamp in Go so it can be passed as a typed
+	// parameter — avoids injecting an integer into raw SQL.
+	cutoff := clock.Now().AddDate(0, -dataWindowMonths, 0)
+
 	rows, err := s.db.Query(`
 		WITH ordered AS (
 			SELECT
@@ -438,6 +447,7 @@ func (s *SLAAnomalyService) refreshAverages(cacheTTL time.Duration) (map[string]
 				)                                                                   AS next_ts
 			FROM events e
 			WHERE e.event_type = 'status_changed'
+			  AND e.timestamp >= $1
 		)
 		SELECT
 			from_status,
@@ -445,7 +455,7 @@ func (s *SLAAnomalyService) refreshAverages(cacheTTL time.Duration) (map[string]
 		FROM ordered
 		WHERE next_ts IS NOT NULL
 		  AND from_status != ''
-		GROUP BY from_status`)
+		GROUP BY from_status`, cutoff)
 	if err != nil {
 		return nil, fmt.Errorf("avg query: %w", err)
 	}
@@ -485,7 +495,11 @@ func (s *SLAAnomalyService) execute(cfg model.SLASettings) error {
 		log.Printf("[SLAAnomalyService] executor: buffer vacío — usando promedio directo de DB")
 		// Fallback: query directly if no buffer snapshots were collected yet.
 		var err error
-		consolidated, err = s.refreshAverages(0) // force refresh (TTL=0)
+		dataWindow := cfg.DataWindowMonths
+		if dataWindow <= 0 {
+			dataWindow = 12
+		}
+		consolidated, err = s.refreshAverages(0, dataWindow) // force refresh (TTL=0)
 		if err != nil {
 			return fmt.Errorf("consolidate fallback: %w", err)
 		}
