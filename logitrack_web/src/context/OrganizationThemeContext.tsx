@@ -150,8 +150,8 @@ function injectThemeTokens(config: OrganizationBranding | null) {
     root.style.setProperty("--fc-button-active-bg-color", palette["700"] || brandHex);
     root.style.setProperty("--fc-highlight-color", `${brandHex}1a`);
 
-    // Heading text → brand-800 tone
-    root.style.setProperty("--text-heading", palette["800"] || brandHex);
+    const isDark = document.documentElement.classList.contains("dark");
+    root.style.setProperty("--text-heading", isDark ? "#f1f5fb" : (palette["800"] || brandHex));
   }
 
   // --accent palette
