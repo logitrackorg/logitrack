@@ -227,7 +227,14 @@ func normalizeCity(city string) string {
 
 // LookupCity returns coordinates for a known Argentine city.
 // Returns (lat, lng, true) if found, or (0, 0, false) if not.
+//
+// Consults the official INDEC/Georef dataset (2000+ localities) first, falling
+// back to the curated static map for any name not present there (e.g. a few
+// neighbourhood-level aliases below the municipal granularity of the dataset).
 func LookupCity(city string) (float64, float64, bool) {
+	if l, ok := LookupLocality(city); ok {
+		return l.Lat, l.Lng, true
+	}
 	coords, ok := argentineCities[normalizeCity(city)]
 	if !ok {
 		return 0, 0, false

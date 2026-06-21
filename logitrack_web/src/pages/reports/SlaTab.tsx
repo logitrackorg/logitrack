@@ -4,7 +4,7 @@ import {
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
   ChevronDown, ChevronUp, UserPlus, UserMinus, Info, MapPin,
   Eye, EyeOff, X, AlertTriangle, Gauge, Maximize2, Minimize2, Target, Trash2, ExternalLink,
-  Power, RotateCcw, Building2,
+  Power, RotateCcw, Building2, Settings,
 } from "lucide-react";
 import type { FleetStatus, FleetDiagnosis, BranchFleetDiagnosis } from "../../api/slaMetrics";
 import {
@@ -27,11 +27,12 @@ import {
   type SnappedCity,
   type SuggestedLocation,
   type BranchProjection,
+  type RejectedLocation,
   GAP_STYLE,
 } from "../../api/coverage";
 import { regionsApi, type Region as CoverageRegion } from "../../api/regions";
 import { VoronoiCoverageMap, type VoronoiCoverageMapHandle } from "../../components/VoronoiCoverageMap";
-import { CoverageSimulatorPanel, SIM_AREA_DEFAULT } from "../../components/CoverageSimulatorPanel";
+import { CoverageSimulatorPanel, SIM_AREA_DEFAULT, SIM_AREA_MIN, SIM_AREA_MAX, type DiagnosisMode } from "../../components/CoverageSimulatorPanel";
 import { CollapsiblePanel } from "../../components/CollapsiblePanel";
 import { SkeletonCard } from "../../components/ui/skeleton";
 // ── Palette ──────────────────────────────────────────────────────────────────
@@ -971,6 +972,10 @@ export function CoberturaTab() {
   const [error, setError] = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
 
+  // Pesos del Índice de Viabilidad (configurables por el usuario desde el ícono ⚙️).
+  const [scoreWeights, setScoreWeights] = useState<ScoreWeightsConfig>(DEFAULT_SCORE_WEIGHTS);
+  const [showScoreSettings, setShowScoreSettings] = useState(false);
+
   // Simulador de cobertura: visualArea sigue al slider al instante (sin
   // llamar al servidor); simResult refleja el último diagnóstico confirmado.
   const [visualArea, setVisualArea] = useState(SIM_AREA_DEFAULT);
@@ -981,15 +986,20 @@ export function CoberturaTab() {
   // ventana (incluyendo el topbar) para aprovechar el espacio al analizar el mapa.
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // "Aterrizar sugerencias en ciudades reales": ciudades reales (OSM Overpass)
-  // resueltas para simResult.suggested_locations, en el mismo orden. Se
-  // resetea cada vez que cambia el diagnóstico simulado.
+  // "Aterrizar sugerencias en ciudades reales": ciudades reales (dataset oficial
+  // INDEC/Georef) resueltas para simResult.suggested_locations, en el mismo
+  // orden. Se resetea cada vez que cambia el diagnóstico simulado.
   const [snappedCities, setSnappedCities] = useState<SnappedCity[] | null>(null);
   // Bloquea el slider del simulador y el botón "Confirmar y Diagnosticar"
   // mientras se geocodifican las sugerencias ("Aterrizar sugerencias en
   // ciudades reales"), para que el usuario no pueda disparar un nuevo
   // diagnóstico mientras eso está en curso.
   const [isFetchingCities, setIsFetchingCities] = useState(false);
+  const [snappingProgress, setSnappingProgress] = useState<{ current: number; total: number } | null>(null);
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [isFindingMore, setIsFindingMore] = useState(false);
+  const [excludedCitiesForMore, setExcludedCitiesForMore] = useState<string[]>([]);
+  const [findMoreSummary, setFindMoreSummary] = useState<{ found: number; error: boolean } | null>(null);
   const [snapError, setSnapError] = useState<string | null>(null);
   const [snapMinPopulation, setSnapMinPopulation] = useState(0);
 
@@ -1007,8 +1017,28 @@ export function CoberturaTab() {
   const [allBranches, setAllBranches] = useState<Branch[]>([]);
 
   // Refs para diagnoseCore (evita stale closures en toggleClosedBranch / handleToggleIncludeInactive).
-  const [maxSuggestions, setMaxSuggestions] = useState(0);
-  const maxSuggestionsRef = useRef(0);
+  const [maxSuggestions, setMaxSuggestions] = useState(40);
+  const maxSuggestionsRef = useRef(40);
+
+  const [diagnosisMode, setDiagnosisMode] = useState<DiagnosisMode>("area");
+  const diagnosisModeRef = useRef<DiagnosisMode>("area");
+  const snapMinPopulationRef = useRef(0);
+  const [minDensity, setMinDensity] = useState(0);
+  const minDensityRef = useRef(0);
+  const [prioritizeIndustrial, setPrioritizeIndustrial] = useState(false);
+  const prioritizeIndustrialRef = useRef(false);
+  const [applyTerrainFriction, setApplyTerrainFriction] = useState(false);
+  const applyTerrainFrictionRef = useRef(false);
+  // Cuando "Penalizar terreno" está apagado, la penalización se fuerza a 0.
+  const effectiveWeights = useMemo(
+    () => ({ ...scoreWeights, terrain: applyTerrainFriction ? scoreWeights.terrain : 0 }),
+    [scoreWeights, applyTerrainFriction],
+  );
+  const [minSeparation, setMinSeparation] = useState(20);
+  const minSeparationRef = useRef(20);
+  const [minScore, setMinScore] = useState(0);
+  const minScoreRef = useRef(0);
+  const [showRejectedOnMap, setShowRejectedOnMap] = useState(true);
 
   const simResultRef = useRef<SimulationResult | null>(null);
   const visualAreaRef = useRef(SIM_AREA_DEFAULT);
@@ -1017,6 +1047,10 @@ export function CoberturaTab() {
   const includeInactiveRef = useRef(false);
   const closedBranchIdsRef = useRef<string[]>([]);
   const coverageMapRef = useRef<VoronoiCoverageMapHandle>(null);
+  const highlightedCellPolygonRef = useRef<[number, number][] | null>(null);
+  const highlightedRef = useRef<string | null>(null);
+  // Guarda el estado de zona anterior a la selección de celda para restaurarlo al deseleccionar.
+  const preCellSelectionStateRef = useRef<{ boundary: [number, number][] | null; mode: "national" | "custom" } | null>(null);
 
   const handleFlyToLocation = useCallback((lat: number, lng: number, zoom = 8) => {
     coverageMapRef.current?.flyTo(lat, lng, zoom);
@@ -1027,6 +1061,11 @@ export function CoberturaTab() {
   const [territoryMode, setTerritoryMode] = useState<"national" | "custom">("national");
   const [customBoundary, setCustomBoundary] = useState<[number, number][] | null>(null);
   const [isDrawingBoundary, setIsDrawingBoundary] = useState(false);
+  const [isEditingBoundary, setIsEditingBoundary] = useState(false);
+  const [showIndustrialHeatmap, setShowIndustrialHeatmap] = useState(false);
+  const [industrialHeatmapLoading, setIndustrialHeatmapLoading] = useState(false);
+  const [industrialZoneResult, setIndustrialZoneResult] = useState<{ count: number; error: boolean } | null>(null);
+  const [rejectedLocations, setRejectedLocations] = useState<RejectedLocation[]>([]);
 
   // Zonas guardadas (predefinidas + zonas del usuario).
   const [regions, setRegions] = useState<CoverageRegion[]>([]);
@@ -1036,6 +1075,7 @@ export function CoberturaTab() {
   const [pendingRegionBoundary, setPendingRegionBoundary] = useState<[number, number][] | null>(null);
   const [savingRegionName, setSavingRegionName] = useState("");
   const [savingRegion, setSavingRegion] = useState(false);
+  const [regionSaveError, setRegionSaveError] = useState<string | null>(null);
   // Edición de zona: id de la zona que se está editando (null = creando una
   // nueva). `redrawReference` es la forma original que se dibuja de fondo en
   // tono claro mientras el usuario la re-dibuja, como referencia.
@@ -1050,6 +1090,13 @@ export function CoberturaTab() {
   useEffect(() => { territoryModeRef.current = territoryMode; }, [territoryMode]);
   useEffect(() => { includeInactiveRef.current = includeInactive; }, [includeInactive]);
   useEffect(() => { closedBranchIdsRef.current = closedBranchIds; }, [closedBranchIds]);
+  useEffect(() => { highlightedRef.current = highlighted; }, [highlighted]);
+  useEffect(() => { diagnosisModeRef.current = diagnosisMode; }, [diagnosisMode]);
+  useEffect(() => { minDensityRef.current = minDensity; }, [minDensity]);
+  useEffect(() => { prioritizeIndustrialRef.current = prioritizeIndustrial; }, [prioritizeIndustrial]);
+  useEffect(() => { applyTerrainFrictionRef.current = applyTerrainFriction; }, [applyTerrainFriction]);
+  useEffect(() => { minSeparationRef.current = minSeparation; }, [minSeparation]);
+  useEffect(() => { minScoreRef.current = minScore; }, [minScore]);
 
   // Fetch all branches (including inactive) for the simulation panel.
   useEffect(() => { branchApi.list().then(setAllBranches).catch(() => {}); }, []);
@@ -1068,6 +1115,7 @@ export function CoberturaTab() {
     setSnapError(null);
     setSimError(null);
     setBlacklistedCities([]);
+    setRejectedLocations([]);
   }, []);
 
   const handleRegionChange = useCallback((id: string) => {
@@ -1118,6 +1166,7 @@ export function CoberturaTab() {
     setCustomBoundary(pts);
     setIsDrawingBoundary(false);
     setRedrawReference(null);
+    setRegionSaveError(null);
     setPendingRegionBoundary(pts);
     // Al editar, precargamos el nombre actual para que el usuario pueda
     // mantenerlo o cambiarlo en el mismo paso de confirmación.
@@ -1159,9 +1208,43 @@ export function CoberturaTab() {
     setIsDrawingBoundary(true);
   }, []);
 
+  const handleStartEditBoundary = useCallback(() => {
+    setRegionSaveError(null);
+    setIsEditingBoundary(true);
+  }, []);
+
+  const handleBoundaryEdited = useCallback(async (pts: [number, number][]) => {
+    setCustomBoundary(pts);
+    setIsEditingBoundary(false);
+    resetDiagnosis();
+    // If the active boundary belongs to a saved custom region, persist the new
+    // shape immediately so it survives a page refresh.
+    if (selectedRegionId !== "national") {
+      const region = regions.find((r) => r.id === selectedRegionId && r.type === "custom");
+      if (region) {
+        try {
+          setRegionSaveError(null);
+          await regionsApi.update(region.id, {
+            name: region.name,
+            coordinates: pts.map(([lat, lng]) => ({ lat, lng })),
+          });
+          const updated = await regionsApi.list();
+          setRegions(updated);
+        } catch {
+          setRegionSaveError("No se pudieron guardar los cambios de la zona. Verificá tu conexión e intentá de nuevo.");
+        }
+      }
+    }
+  }, [resetDiagnosis, selectedRegionId, regions]);
+
+  const handleBoundaryEditCancel = useCallback(() => {
+    setIsEditingBoundary(false);
+  }, []);
+
   const handleSaveNewRegion = useCallback(async () => {
     if (!pendingRegionBoundary || !savingRegionName.trim()) return;
     setSavingRegion(true);
+    setRegionSaveError(null);
     try {
       const coordinates = pendingRegionBoundary.map(([lat, lng]) => ({ lat, lng }));
       const name = savingRegionName.trim();
@@ -1173,12 +1256,16 @@ export function CoberturaTab() {
       setSelectedRegionId(saved.id);
       setCustomBoundary(pendingRegionBoundary);
       setTerritoryMode("custom");
-    } finally {
-      setSavingRegion(false);
+      // Close and clean up only on success.
       setShowSaveRegionModal(false);
       setSavingRegionName("");
       setPendingRegionBoundary(null);
       setEditingRegionId(null);
+    } catch {
+      // Keep the modal open so the user can retry — don't silently discard.
+      setRegionSaveError("No se pudo guardar la zona. Verificá tu conexión e intentá de nuevo.");
+    } finally {
+      setSavingRegion(false);
     }
   }, [pendingRegionBoundary, savingRegionName, editingRegionId]);
 
@@ -1205,30 +1292,54 @@ export function CoberturaTab() {
   // updaters (e.g. toggleClosedBranch / handleToggleIncludeInactive) without
   // stale-closure issues. Declared before `load` so `load` can close over it.
   const diagnoseCore = useCallback((area: number, closed: string[]) => {
-    const mode = territoryModeRef.current;
+    const territoryMode = territoryModeRef.current;
     const boundary = customBoundaryRef.current;
     const inactive = includeInactiveRef.current;
+    const dMode = diagnosisModeRef.current;
+    const minPop = snapMinPopulationRef.current;
+    const highlightedPoly = highlightedCellPolygonRef.current;
     const boundingArea =
-      mode === "custom" && boundary && boundary.length >= 3
+      highlightedPoly && highlightedPoly.length >= 3
+        ? highlightedPoly.map(([lat, lng]) => ({ lat, lng }))
+        : territoryMode === "custom" && boundary && boundary.length >= 3
         ? boundary.map(([lat, lng]) => ({ lat, lng }))
         : undefined;
     setSimError(null);
     setSnappedCities(null);
     setSnapError(null);
     setBlacklistedCities([]);
+    setExcludedCitiesForMore([]);
+    setFindMoreSummary(null);
+    setIsDiagnosing(true);
     coverageApi
-      .diagnose(area, closed.length > 0 ? closed : undefined, boundingArea, inactive || undefined, maxSuggestionsRef.current > 0 ? maxSuggestionsRef.current : undefined)
+      .diagnose(
+        area,
+        closed.length > 0 ? closed : undefined,
+        boundingArea,
+        inactive || undefined,
+        maxSuggestionsRef.current > 0 ? maxSuggestionsRef.current : undefined,
+        undefined,
+        dMode !== "area" ? dMode : undefined,
+        dMode === "density"
+          ? {
+              minPopulation: minPop > 0 ? minPop : undefined,
+              minDensity: minDensityRef.current > 0 ? minDensityRef.current : undefined,
+              prioritizeIndustrial: prioritizeIndustrialRef.current || undefined,
+              applyTerrainFriction: applyTerrainFrictionRef.current || undefined,
+              minSeparation: minSeparationRef.current > 0 ? minSeparationRef.current : undefined,
+              minScore: minScoreRef.current > 0 ? minScoreRef.current : undefined,
+            }
+          : undefined,
+      )
       .then((result) => {
         const mathSuggs = result.mathematical_suggestions ?? [];
         const merged = [...result.suggested_locations, ...mathSuggs];
-        // Pre-populate snappedCities para sugerencias matemáticas que el
-        // servidor ya aterrizó server-side (Fase 4). Las sugerencias por celda
-        // quedan sin aterrizar hasta que el usuario pulsa "Aterrizar".
-        const baseLen = result.suggested_locations.length;
-        if (mathSuggs.some((s) => s.is_snapped)) {
+        // Pre-populate snappedCities para cualquier sugerencia que el servidor
+        // ya aterrizó (density mode: todas; area mode: solo las matemáticas).
+        if (merged.some((s) => s.is_snapped)) {
           setSnappedCities(
-            merged.map((loc, i) =>
-              i >= baseLen && loc.is_snapped
+            merged.map((loc) =>
+              loc.is_snapped
                 ? {
                     lat: loc.lat,
                     lng: loc.lng,
@@ -1240,9 +1351,11 @@ export function CoberturaTab() {
             ),
           );
         }
+        setRejectedLocations(result.rejected_locations ?? []);
         setSimResult({ ...result, suggested_locations: merged });
       })
-      .catch(() => setSimError("No se pudo calcular el diagnóstico en este momento."));
+      .catch(() => setSimError("No se pudo calcular el diagnóstico en este momento."))
+      .finally(() => setIsDiagnosing(false));
   }, []); // intentionally empty deps — reads from refs only
 
   const load = useCallback(() => {
@@ -1259,13 +1372,158 @@ export function CoberturaTab() {
 
   // Diagnóstico: compara el área simulada contra el área Voronoi real (post-recorte) de cada sucursal.
   const handleConfirmSimulation = useCallback((area: number, minPopulation: number) => {
+    snapMinPopulationRef.current = minPopulation; // sync immediately so diagnoseCore reads it
     setSnapMinPopulation(minPopulation);
     diagnoseCore(area, closedBranchIds);
   }, [diagnoseCore, closedBranchIds]);
 
+  // Selección de celda Voronoi: restringe el diagnóstico al polígono real de la
+  // celda (ya recortado a la Argentina por el backend) y lo muestra visualmente
+  // como la zona activa. Al deseleccionar restaura la zona previa.
+  const handleSelectBranch = useCallback((id: string | null) => {
+    if (id === highlightedRef.current) return; // sin cambio, no re-diagnosticar
+
+    if (id !== null) {
+      // Guardar estado de zona previo a la selección.
+      preCellSelectionStateRef.current = {
+        boundary: customBoundaryRef.current,
+        mode: territoryModeRef.current,
+      };
+
+      // Elegir el anillo más grande del polígono de la celda (cada anillo es un
+      // fragmento desconectado ya recortado a Argentina — sin Chile, sin océano).
+      const cell = diagram?.cells.find((c) => c.branch_id === id);
+      const rings = cell?.polygon ?? [];
+      let largestRing: { lat: number; lng: number }[] | null = null;
+      let maxArea = 0;
+      for (const ring of rings) {
+        let area = 0;
+        for (let i = 0; i < ring.length; i++) {
+          const j = (i + 1) % ring.length;
+          area += ring[i].lat * ring[j].lng - ring[j].lat * ring[i].lng;
+        }
+        area = Math.abs(area / 2);
+        if (area > maxArea) { maxArea = area; largestRing = ring; }
+      }
+      const cellRing = largestRing
+        ? largestRing.map((p) => [p.lat, p.lng] as [number, number])
+        : null;
+
+      // Actualizar refs (síncronamente, para diagnoseCore) y estados (para UI).
+      customBoundaryRef.current = cellRing;
+      territoryModeRef.current = "custom";
+      highlightedCellPolygonRef.current = null; // la boundary maneja el scope
+      setCustomBoundary(cellRing);
+      setTerritoryMode("custom");
+    } else {
+      // Restaurar zona previa a la selección de celda.
+      const saved = preCellSelectionStateRef.current;
+      const prevBoundary = saved?.boundary ?? null;
+      const prevMode = saved?.mode ?? "national";
+      customBoundaryRef.current = prevBoundary;
+      territoryModeRef.current = prevMode;
+      highlightedCellPolygonRef.current = null;
+      setCustomBoundary(prevBoundary);
+      setTerritoryMode(prevMode);
+      preCellSelectionStateRef.current = null;
+    }
+
+    setHighlighted(id);
+    diagnoseCore(visualAreaRef.current, closedBranchIdsRef.current);
+  }, [diagram, diagnoseCore]);
+
+  // "Buscar más sugerencias": llama al backend con las ciudades ya mostradas
+  // como blacklist, y ACUMULA (en lugar de reemplazar) los resultados nuevos.
+  const handleFindMore = useCallback(() => {
+    if (!simResultRef.current || isFindingMore || isDiagnosing) return;
+    const currentCityNames = snappedCities
+      ?.filter((c) => c.is_snapped && c.city_name)
+      .map((c) => c.city_name) ?? [];
+    // Also exclude cities that were evaluated and rejected in previous rounds
+    // (they would be rejected again by the same filters — no point re-querying).
+    // Names starting with "(" are coordinate placeholders, not real city names.
+    const rejectedCityNames = rejectedLocations
+      .map((r) => r.city_name)
+      .filter((n) => n && !n.startsWith("("));
+    const seen = new Set(excludedCitiesForMore);
+    const newExcluded = [
+      ...excludedCitiesForMore,
+      ...currentCityNames.filter((n) => !seen.has(n)),
+      ...rejectedCityNames.filter((n) => !seen.has(n)),
+    ];
+    setExcludedCitiesForMore(newExcluded);
+    setIsFindingMore(true);
+    setFindMoreSummary(null);
+    setProjection(null); // clear projection so the user sees it recalculate after results arrive
+    const area = visualAreaRef.current;
+    const boundary = customBoundaryRef.current;
+    const territoryMode = territoryModeRef.current;
+    const inactive = includeInactiveRef.current;
+    const dMode = diagnosisModeRef.current;
+    const minPop = snapMinPopulationRef.current;
+    const closed = closedBranchIdsRef.current;
+    const boundingArea =
+      territoryMode === "custom" && boundary && boundary.length >= 3
+        ? boundary.map(([lat, lng]) => ({ lat, lng }))
+        : undefined;
+    // Pass currently active suggestion coordinates as additionalSites so the
+    // backend treats those cities as already covered — Buscar-más rounds find
+    // different cities in genuinely uncovered areas.
+    const currentSuggestionSites = simResultRef.current?.suggested_locations.map(
+      (s) => ({ lat: s.lat, lng: s.lng }),
+    ) ?? [];
+    coverageApi
+      .diagnose(
+        area,
+        closed.length > 0 ? closed : undefined,
+        boundingArea,
+        inactive || undefined,
+        maxSuggestionsRef.current > 0 ? maxSuggestionsRef.current : undefined,
+        undefined,
+        dMode !== "area" ? dMode : undefined,
+        dMode === "density"
+          ? {
+              minPopulation: minPop > 0 ? minPop : undefined,
+              minDensity: minDensityRef.current > 0 ? minDensityRef.current : undefined,
+              excludedCities: newExcluded.length > 0 ? newExcluded : undefined,
+              additionalSites: currentSuggestionSites.length > 0 ? currentSuggestionSites : undefined,
+              prioritizeIndustrial: prioritizeIndustrialRef.current || undefined,
+              applyTerrainFriction: applyTerrainFrictionRef.current || undefined,
+              minSeparation: minSeparationRef.current > 0 ? minSeparationRef.current : undefined,
+              minScore: minScoreRef.current > 0 ? minScoreRef.current : undefined,
+            }
+          : undefined,
+      )
+      .then((result) => {
+        const mathSuggs = result.mathematical_suggestions ?? [];
+        const newSuggs = [...result.suggested_locations, ...mathSuggs];
+        setFindMoreSummary({ found: newSuggs.length, error: false });
+        setRejectedLocations((prev) => [...prev, ...(result.rejected_locations ?? [])]);
+        if (newSuggs.length === 0) return;
+        setSimResult((prev) => {
+          if (!prev) return prev;
+          return { ...prev, suggested_locations: [...prev.suggested_locations, ...newSuggs] };
+        });
+        setSnappedCities((prev) => {
+          const existing = prev ?? [];
+          const newEntries = newSuggs.map((loc) =>
+            loc.is_snapped
+              ? { lat: loc.lat, lng: loc.lng, city_name: loc.city_name ?? "", is_snapped: true as const, population: loc.population }
+              : { lat: loc.lat, lng: loc.lng, city_name: "", is_snapped: false as const },
+          );
+          return [...existing, ...newEntries];
+        });
+      })
+      .catch(() => {
+        setFindMoreSummary({ found: 0, error: true });
+        setSimError("No se pudo buscar más sugerencias en este momento.");
+      })
+      .finally(() => setIsFindingMore(false));
+  }, [isFindingMore, isDiagnosing, snappedCities, excludedCitiesForMore, rejectedLocations]);
+
   // Sugerencias que todavía no aterrizaron en una ciudad real: solo estas se
-  // vuelven a enviar al backend en cada click (evita re-consultar Overpass
-  // para puntos que ya tienen resultado).
+  // vuelven a enviar al backend en cada click (evita reprocesar puntos que ya
+  // tienen resultado).
   const pendingSnapIndexes = useMemo(() => {
     if (!simResult) return [];
     return simResult.suggested_locations
@@ -1278,36 +1536,80 @@ export function CoberturaTab() {
     [snappedCities]
   );
 
-  const handleSnapToCity = useCallback(() => {
-    if (!simResult || pendingSnapIndexes.length === 0) return;
+  // Progressive snap: iterates one point at a time so the map updates in
+  // real-time (grey → green) instead of waiting for all points to resolve.
+  // Maintains array alignment via `removedSoFar`: each NO_RESULTS removal
+  // shifts subsequent indices down by one, and the counter corrects for that.
+  const handleSnapToCity = useCallback(async () => {
+    const result = simResultRef.current;
+    if (!result || pendingSnapIndexes.length === 0) return;
+
+    // Snapshot lat/lng before the loop so mutations don't invalidate them.
+    const locsToProcess = pendingSnapIndexes.map((origIndex) => ({
+      origIndex,
+      lat: result.suggested_locations[origIndex].lat,
+      lng: result.suggested_locations[origIndex].lng,
+    }));
+
+    const radiusKm = Math.sqrt(result.simulated_area_km2 / Math.PI);
+    const total = locsToProcess.length;
+    let removedSoFar = 0;
+
     setIsFetchingCities(true);
     setSnapError(null);
-    // Radio de búsqueda = radio de la zona de cobertura simulada (mismo
-    // círculo gris punteado dibujado en el mapa), para que una ciudad
-    // importante dentro de esa zona (p.ej. Río Gallegos, Salta) sea
-    // detectada como ubicación posible.
-    const radiusKm = Math.sqrt(simResult.simulated_area_km2 / Math.PI);
-    const pendingPoints = pendingSnapIndexes.map((i) => {
-      const loc = simResult.suggested_locations[i];
-      return { lat: loc.lat, lng: loc.lng };
-    });
 
-    coverageApi
-      .snapToCity(pendingPoints, radiusKm, snapMinPopulation, blacklistedCities.length > 0 ? blacklistedCities : undefined)
-      .then((results) => {
-        setSnappedCities((prev) => {
-          const merged: SnappedCity[] =
-            prev ??
-            simResult.suggested_locations.map(() => ({ lat: 0, lng: 0, city_name: "", is_snapped: false }));
-          pendingSnapIndexes.forEach((origIndex, i) => {
-            merged[origIndex] = results[i];
+    for (let step = 0; step < locsToProcess.length; step++) {
+      const { origIndex, lat, lng } = locsToProcess[step];
+      const currentIndex = origIndex - removedSoFar;
+
+      setSnappingProgress({ current: step + 1, total });
+
+      try {
+        const [snapResult] = await coverageApi.snapToCity(
+          [{ lat, lng }],
+          radiusKm,
+          snapMinPopulationRef.current,
+          blacklistedCities.length > 0 ? blacklistedCities : undefined,
+        );
+
+        if (snapResult.is_snapped) {
+          // Turn the grey marker green immediately.
+          setSnappedCities((prev) => {
+            const updated = prev ? [...prev] : Array(result.suggested_locations.length).fill({ lat: 0, lng: 0, city_name: "", is_snapped: false });
+            updated[currentIndex] = snapResult;
+            return updated as SnappedCity[];
           });
-          return [...merged];
-        });
-      })
-      .catch(() => setSnapError("No se pudo aterrizar las sugerencias en ciudades reales en este momento."))
-      .finally(() => setIsFetchingCities(false));
-  }, [simResult, pendingSnapIndexes, snapMinPopulation, blacklistedCities]);
+        } else if (snapResult.error_reason === "NO_RESULTS") {
+          // No city found in radius — move to rejected accordion and remove marker.
+          const reason = snapMinPopulationRef.current > 0
+            ? `Sin ciudad con ≥ ${snapMinPopulationRef.current.toLocaleString("es-AR")} hab. en el radio`
+            : "Sin ciudad en el radio de búsqueda";
+          setRejectedLocations((prev) => [...prev, {
+            city_name: `(${lat.toFixed(3)}°, ${lng.toFixed(3)}°)`,
+            lat,
+            lng,
+            reject_reason: reason,
+            score: 1,
+          }]);
+          setSimResult((prev) => prev
+            ? { ...prev, suggested_locations: prev.suggested_locations.filter((_, i) => i !== currentIndex) }
+            : prev);
+          setSnappedCities((prev) => prev ? prev.filter((_, i) => i !== currentIndex) : prev);
+          removedSoFar++;
+        }
+        // TIMEOUT: leave grey — the retry button will pick it up next time.
+      } catch {
+        // Network error for this point — skip silently, leave grey.
+      }
+
+      if (step < locsToProcess.length - 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
+    setIsFetchingCities(false);
+    setSnappingProgress(null);
+  }, [pendingSnapIndexes, blacklistedCities]);
 
   // Descarta una sugerencia: la quita de `simResult.suggested_locations` y de
   // `snappedCities` en el mismo índice, manteniendo ambos arrays alineados.
@@ -1470,6 +1772,41 @@ export function CoberturaTab() {
   // para acotar la Proyección de Impacto a las sucursales de la zona.
   const isZoneActive = territoryMode === "custom" && !!customBoundary && customBoundary.length >= 3;
 
+  // Total area of the active zone — drives the adaptive slider bounds.
+  const zoneAreaKm2 = useMemo(() => {
+    if (isZoneActive && customBoundary && customBoundary.length >= 3) {
+      return polygonAreaKm2(customBoundary);
+    }
+    return diagram?.total_area_km2 ?? SIM_AREA_MAX;
+  }, [isZoneActive, customBoundary, diagram]);
+
+  // Bounding box de la zona activa para las zonas industriales. Devuelve
+  // undefined solo cuando no hay zona personalizada (el mapa cae entonces al
+  // viewport). El backend sirve las zonas IGN desde memoria, sin límite de
+  // tamaño, así que una zona grande ya no se descarta.
+  const heatmapBbox = useMemo<string | undefined>(() => {
+    if (!customBoundary || customBoundary.length < 3) return undefined;
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const [lat, lng] of customBoundary) {
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+    return `${minLng},${minLat},${maxLng},${maxLat}`;
+  }, [customBoundary]);
+
+  // Clamp the coverage-radius slider whenever the zone area changes.
+  // The floor stays at SIM_AREA_MIN (~4 km radius) even nationally so dense
+  // metros (AMBA) can use a tight radius that exposes uncovered demand — a
+  // larger floor would let a single central branch blanket the whole metro and
+  // suppress all suggestions there.
+  useEffect(() => {
+    const minA = SIM_AREA_MIN;
+    const maxA = Math.max(minA, Math.min(SIM_AREA_MAX, Math.round(zoneAreaKm2 * 0.25)));
+    setVisualArea((prev) => Math.max(minA, Math.min(maxA, prev)));
+  }, [zoneAreaKm2]);
+
   const isBranchInZone = useCallback(
     (b: PanelBranchItem) =>
       b.lat != null && b.lng != null && !!customBoundary && rayCastPointInPolygon(b.lat, b.lng, customBoundary),
@@ -1618,7 +1955,7 @@ export function CoberturaTab() {
               ref={coverageMapRef}
               cells={visibleCells}
               highlightedBranchId={highlighted}
-              onSelectBranch={(id) => setHighlighted(id)}
+              onSelectBranch={handleSelectBranch}
               simulationAreaKm2={visualArea}
               suggestedLocations={activeSuggestionLocations}
               snappedCities={activeSnappedCities}
@@ -1627,6 +1964,16 @@ export function CoberturaTab() {
               onBoundaryCancel={handleBoundaryCancel}
               customBoundary={customBoundary}
               redrawReference={redrawReference}
+              isEditingBoundary={isEditingBoundary}
+              onBoundaryEdited={handleBoundaryEdited}
+              onBoundaryEditCancel={handleBoundaryEditCancel}
+              showIndustrialHeatmap={showIndustrialHeatmap}
+              heatmapBbox={heatmapBbox}
+              onIndustrialHeatmapLoaded={(count, error) => {
+                setIndustrialHeatmapLoading(false);
+                setIndustrialZoneResult({ count, error: error ?? false });
+              }}
+              rejectedLocations={showRejectedOnMap && rejectedLocations.length > 0 ? rejectedLocations : undefined}
             />
           </div>
         </Card>
@@ -1649,10 +1996,13 @@ export function CoberturaTab() {
                 maxSuggestions={maxSuggestions}
                 onMaxSuggestionsChange={setMaxSuggestions}
                 scopeLabel={simScopeLabel}
-                disabled={isFetchingCities}
+                disabled={isFetchingCities || isDiagnosing}
+                isDiagnosing={isDiagnosing}
                 territoryMode={territoryMode}
                 customBoundaryPoints={customBoundary?.length ?? 0}
                 isDrawingBoundary={isDrawingBoundary}
+                isEditingBoundary={isEditingBoundary}
+                onStartEditBoundary={customBoundary && customBoundary.length >= 3 ? handleStartEditBoundary : undefined}
                 onClearBoundary={handleClearBoundary}
                 regions={regions}
                 selectedRegionId={selectedRegionId}
@@ -1660,6 +2010,30 @@ export function CoberturaTab() {
                 onStartDrawNewRegion={handleStartDrawNewRegion}
                 canEditSelectedRegion={regions.find((r) => r.id === selectedRegionId)?.type === "custom"}
                 onEditRegion={handleStartEditRegion}
+                diagnosisMode={diagnosisMode}
+                onDiagnosisModeChange={setDiagnosisMode}
+                minDensity={minDensity}
+                onMinDensityChange={setMinDensity}
+                prioritizeIndustrial={prioritizeIndustrial}
+                onPrioritizeIndustrialChange={setPrioritizeIndustrial}
+                applyTerrainFriction={applyTerrainFriction}
+                onApplyTerrainFrictionChange={setApplyTerrainFriction}
+                minSeparation={minSeparation}
+                onMinSeparationChange={setMinSeparation}
+                minScore={minScore}
+                onMinScoreChange={setMinScore}
+                showRejectedOnMap={showRejectedOnMap}
+                onShowRejectedOnMapChange={setShowRejectedOnMap}
+                zoneAreaKm2={zoneAreaKm2}
+                showIndustrialHeatmap={showIndustrialHeatmap}
+                onIndustrialHeatmapChange={(v) => {
+                  setShowIndustrialHeatmap(v);
+                  setIndustrialZoneResult(null);
+                  if (v) setIndustrialHeatmapLoading(true);
+                  else setIndustrialHeatmapLoading(false);
+                }}
+                industrialHeatmapLoading={industrialHeatmapLoading}
+                industrialZoneResult={industrialZoneResult}
               />
               {simResult !== null && (
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -1667,24 +2041,35 @@ export function CoberturaTab() {
                 </p>
               )}
               {simResult !== null && simResult.suggested_locations.length === 0 && !simError && (
-                <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
-                  No se detectaron vacíos de cobertura con este radio. Reducí el radio de prueba para ver sugerencias de nuevas sucursales.
-                </p>
+                diagnosisMode === "density" ? (
+                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                    No se encontraron ciudades sin cobertura en la zona con los filtros actuales. Probá ampliar el área, bajar la población mínima o usá el modo Radio de cobertura.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
+                    No se detectaron vacíos de cobertura con este radio. Reducí el radio de cobertura para ver sugerencias de nuevas sucursales.
+                  </p>
+                )
               )}
               {simError && (
                 <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{simError}</p>
+              )}
+              {regionSaveError && (
+                <p className="mt-2 text-xs text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 rounded-lg px-3 py-2">
+                  {regionSaveError}
+                </p>
               )}
               {simResult && simResult.suggested_locations.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-slate-200 dark:border-gray-700">
                   {pendingSnapIndexes.length > 0 ? (
                     <button
-                      onClick={handleSnapToCity}
+                      onClick={() => void handleSnapToCity()}
                       disabled={isFetchingCities}
                       className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-gray-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-gray-700/40 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isFetchingCities ? "animate-spin" : ""}`} />
-                      {isFetchingCities
-                        ? "Buscando ciudades cercanas…"
+                      {snappingProgress
+                        ? `Aterrizando ${snappingProgress.current} de ${snappingProgress.total}…`
                         : snappedCities
                           ? `Reintentar ${pendingSnapIndexes.length} sugerencia${pendingSnapIndexes.length === 1 ? "" : "s"} pendiente${pendingSnapIndexes.length === 1 ? "" : "s"}`
                           : "Aterrizar sugerencias en ciudades reales"}
@@ -1734,6 +2119,10 @@ export function CoberturaTab() {
                             {snappedCities
                               .map((c, i) => ({ city: c, index: i }))
                               .filter(({ city }) => city.is_snapped)
+                              .sort((a, b) =>
+                                computeWeightedScore(simResult.suggested_locations[b.index], effectiveWeights) -
+                                computeWeightedScore(simResult.suggested_locations[a.index], effectiveWeights)
+                              )
                               .map(({ city, index }) => (
                                 <SuggestionCard
                                   key={`${city.city_name}-${index}`}
@@ -1743,6 +2132,7 @@ export function CoberturaTab() {
                                   onTogglePause={() => togglePauseSuggestion(index)}
                                   onBlacklist={(name) => blacklistCity(index, name)}
                                   onFlyTo={handleFlyToLocation}
+                                  weights={effectiveWeights}
                                 />
                               ))}
                           </ul>
@@ -1794,9 +2184,11 @@ export function CoberturaTab() {
                                       ID-{ui + 1}
                                     </button>
                                     <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300">
-                                      Aportará ~{formatKm2(loc.actual_added_km2)} de cobertura neta.
-                                      {loc.affected_branches.length > 0 && (
-                                        <> Descomprimirá las zonas de: {loc.affected_branches.join(", ")}.</>
+                                      {(loc.actual_added_km2 ?? 0) > 0 && (
+                                        <>Aportará ~{formatKm2(loc.actual_added_km2)} de cobertura neta. </>
+                                      )}
+                                      {(loc.affected_branches ?? []).length > 0 && (
+                                        <>Descomprimirá las zonas de: {(loc.affected_branches ?? []).join(", ")}.</>
                                       )}
                                     </p>
                                   </li>
@@ -1806,7 +2198,61 @@ export function CoberturaTab() {
                           </div>
                         );
                       })()}
+                      {snappedCount > 0 && diagnosisMode === "density" && (
+                        <button
+                          type="button"
+                          disabled={isFindingMore || isDiagnosing}
+                          onClick={handleFindMore}
+                          className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border border-slate-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {isFindingMore ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              Buscando más sugerencias…
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              Buscar más sugerencias
+                              {excludedCitiesForMore.length > 0 && (
+                                <span className="ml-1 text-slate-400">
+                                  (excluyendo {excludedCitiesForMore.length} {excludedCitiesForMore.length === 1 ? "ciudad" : "ciudades"})
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </button>
+                      )}
+                      {findMoreSummary && !isFindingMore && (
+                        <p className={`mt-1.5 text-xs ${findMoreSummary.error ? "text-rose-600 dark:text-rose-400" : findMoreSummary.found === 0 ? "text-slate-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                          {findMoreSummary.error
+                            ? "Error al buscar más sugerencias."
+                            : findMoreSummary.found === 0
+                              ? "No se encontraron más sugerencias."
+                              : `Se encontraron ${findMoreSummary.found} sugerencia${findMoreSummary.found === 1 ? "" : "s"} nueva${findMoreSummary.found === 1 ? "" : "s"}.`}
+                        </p>
+                      )}
                     </>
+                  )}
+                  {simResult !== null && rejectedLocations.length > 0 && (
+                    <details className="mt-3 group">
+                      <summary className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+                        <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />
+                        Ciudades descartadas ({rejectedLocations.length})
+                        <span className="normal-case font-normal tracking-normal text-slate-400 ml-1">· No viables</span>
+                      </summary>
+                      <ul className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {rejectedLocations.map((r, i) => (
+                          <li key={i} className="flex items-start gap-2 p-2 rounded-lg bg-slate-100/70 dark:bg-gray-700/40 border border-slate-200 dark:border-gray-600">
+                            {(r.score ?? 0) > 0 && <ScoreBadge score={r.score!} size="sm" />}
+                            <div className="min-w-0">
+                              <span className="block text-xs font-semibold text-slate-700 dark:text-slate-200">{r.city_name}</span>
+                              <span className="block text-[10px] text-slate-500 dark:text-slate-400 leading-snug">{r.reject_reason}</span>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
                   )}
                   {((visibleProjection && visibleProjection.length > 0) || projectionLoading || projectionError) && (
                     <div className="mt-3 pt-3 border-t border-slate-200 dark:border-gray-700">
@@ -1908,6 +2354,14 @@ export function CoberturaTab() {
           </p>
         </div>
         <button
+          onClick={() => setShowScoreSettings(true)}
+          title="Configurar pesos del Índice de Viabilidad"
+          aria-label="Configurar puntuación"
+          className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-gray-700 cursor-pointer"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+        <button
           onClick={() => setIsFullscreen((v) => !v)}
           title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
           aria-label={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
@@ -1917,6 +2371,114 @@ export function CoberturaTab() {
         </button>
       </div>
       {body}
+
+      {/* ── Modal: configuración de pesos del Índice de Viabilidad ─────────── */}
+      {showScoreSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowScoreSettings(false)}>
+          <div
+            className="w-full max-w-md mx-4 rounded-xl bg-white dark:bg-gray-900 shadow-2xl border border-slate-200 dark:border-gray-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <Settings className="w-4 h-4 text-violet-500" />
+                Pesos del Índice de Viabilidad
+              </h3>
+              <button onClick={() => setShowScoreSettings(false)} className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Ajustá la importancia de cada factor positivo. El subtotal se normaliza automáticamente a 100 antes de aplicar la penalización de terreno.
+            </p>
+
+            {/* ── Factores positivos ── */}
+            {(
+              [
+                {
+                  key: "pop" as const,
+                  label: "👥 Población",
+                  desc: "Escala logarítmica sobre la población de la ciudad. 3 000 000 hab. = máximo.",
+                  max: 60,
+                },
+                {
+                  key: "density" as const,
+                  label: "🏙 Densidad",
+                  desc: "Escala lineal. 300 hab./km² de nueva cobertura = máximo. Favorece ciudades densas.",
+                  max: 60,
+                },
+                {
+                  key: "area" as const,
+                  label: "📦 Área útil",
+                  desc: "Escala logarítmica. Km² netos que el círculo de cobertura aporta sobre territorio argentino no cubierto.",
+                  max: 60,
+                },
+                {
+                  key: "industry" as const,
+                  label: "🏭 Industrial",
+                  desc: "Bonus fijo si hay zonas industriales IGN a menos de ~10 km. Premia la cercanía a parques logísticos.",
+                  max: 40,
+                },
+              ]
+            ).map(({ key, label, desc, max }) => (
+              <div key={key} className="space-y-0.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-700 dark:text-slate-200 font-medium">{label}</span>
+                  <span className="tabular-nums font-semibold text-violet-600 dark:text-violet-400">{scoreWeights[key]} pts</span>
+                </div>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">{desc}</p>
+                <input
+                  type="range"
+                  min={0}
+                  max={max}
+                  step={1}
+                  value={scoreWeights[key]}
+                  onChange={(e) => setScoreWeights((prev) => ({ ...prev, [key]: Number(e.target.value) }))}
+                  className="w-full accent-violet-600 mt-1"
+                />
+                <div className="flex justify-between text-[9px] text-slate-400">
+                  <span>0</span><span>{max}</span>
+                </div>
+              </div>
+            ))}
+
+            {/* ── Penalización de terreno ── */}
+            <div className="pt-3 border-t border-slate-100 dark:border-gray-700 space-y-0.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-700 dark:text-slate-200 font-medium">⛰️ Penalización de terreno</span>
+                <span className="tabular-nums font-semibold text-rose-500 dark:text-rose-400">−{scoreWeights.terrain} pts máx.</span>
+              </div>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
+                Puntos que se <strong>restan</strong> al score final según la dificultad orográfica. Se aplica en proporción: Llano −0, Llano-Ventoso −{(0.25 * scoreWeights.terrain).toFixed(0)}, Semi-montañoso −{(0.5 * scoreWeights.terrain).toFixed(0)}, Serrano −{(0.75 * scoreWeights.terrain).toFixed(0)}, Montañoso −{scoreWeights.terrain}.
+              </p>
+              <input
+                type="range"
+                min={0}
+                max={50}
+                step={1}
+                value={scoreWeights.terrain}
+                onChange={(e) => setScoreWeights((prev) => ({ ...prev, terrain: Number(e.target.value) }))}
+                className="w-full accent-rose-500 mt-1"
+              />
+              <div className="flex justify-between text-[9px] text-slate-400">
+                <span>0 (sin penalización)</span><span>50</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-gray-700">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Base máx.: <strong className="text-slate-700 dark:text-slate-200">{scoreWeights.pop + scoreWeights.density + scoreWeights.area + scoreWeights.industry} pts</strong>
+              </span>
+              <button
+                onClick={() => setScoreWeights(DEFAULT_SCORE_WEIGHTS)}
+                className="text-[11px] text-violet-600 dark:text-violet-400 hover:underline cursor-pointer"
+              >
+                Restaurar valores
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal: guardar zona dibujada ─────────────────────────────────────── */}
       {showSaveRegionModal && (
@@ -1940,6 +2502,11 @@ export function CoberturaTab() {
               maxLength={60}
               className="w-full text-sm px-3 py-2 rounded-lg border border-slate-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {regionSaveError && (
+              <p className="text-xs text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 rounded-lg px-3 py-2">
+                {regionSaveError}
+              </p>
+            )}
             <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"
@@ -2097,6 +2664,101 @@ function SeverityPill({
   );
 }
 
+type ScoreWeightsConfig = { pop: number; density: number; area: number; industry: number; terrain: number };
+const DEFAULT_SCORE_WEIGHTS: ScoreWeightsConfig = { pop: 20, density: 20, area: 35, industry: 15, terrain: 20 };
+
+/** Returns Tailwind color classes based on the 1–100 Logistics Viability Score. */
+function scoreColor(score: number): { ring: string; bg: string; text: string } {
+  if (score >= 80) return { ring: "ring-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400" };
+  if (score >= 50) return { ring: "ring-amber-400",   bg: "bg-amber-50 dark:bg-amber-900/30",   text: "text-amber-700 dark:text-amber-400"   };
+  return               { ring: "ring-rose-400",    bg: "bg-rose-50 dark:bg-rose-900/30",     text: "text-rose-700 dark:text-rose-400"     };
+}
+
+// terrainFactor: 0 (Llano) → 1.0 (Montañoso), proportional penalty scale.
+const TERRAIN_FACTORS: Record<string, number> = {
+  "Llano": 0, "Llano-Ventoso": 0.2, "Semi-montañoso": 0.5, "Serrano": 0.7, "Montañoso": 1.0,
+};
+
+type ScoreBreakdown = { popPts: number; densPts: number; areaPts: number; industryPts: number; terrainPenalty: number };
+
+function computeScoreBreakdown(loc: SuggestedLocation, w: ScoreWeightsConfig = DEFAULT_SCORE_WEIGHTS): ScoreBreakdown {
+  const pop = loc.population ?? 0;
+  const density = loc.density ?? 0;
+  const area = loc.actual_added_km2 ?? loc.gap_area_km2 ?? 0;
+  const terrainFactor = TERRAIN_FACTORS[loc.terrain_type ?? ""] ?? 0;
+  const popPts = pop > 0 ? Math.min(w.pop, Math.log10(pop) / Math.log10(3_000_000) * w.pop) : 0;
+  const densPts = density > 0 ? Math.min(w.density, density / 300 * w.density) : 0;
+  const areaPts = area > 0 ? Math.min(w.area, Math.log10(area + 1) / Math.log10(300_001) * w.area) : 0;
+  const industryPts = (loc.has_industrial_zone ?? false) ? w.industry : 0;
+  const terrainPenalty = terrainFactor * w.terrain;
+  return { popPts, densPts, areaPts, industryPts, terrainPenalty };
+}
+
+function computeWeightedScore(loc: SuggestedLocation, w: ScoreWeightsConfig): number {
+  const b = computeScoreBreakdown(loc, w);
+  const totalMax = w.pop + w.density + w.area + w.industry;
+  if (totalMax <= 0) return 1;
+  const normalized = (b.popPts + b.densPts + b.areaPts + b.industryPts) * (100 / totalMax);
+  return Math.round(Math.min(100, Math.max(1, normalized - b.terrainPenalty)));
+}
+
+/** Compact circular badge that shows the Logistics Viability Index.
+ *  When `loc` is provided, hovering shows a breakdown of how the score was computed. */
+function ScoreBadge({ score, size = "md", loc, weights = DEFAULT_SCORE_WEIGHTS }: { score: number; size?: "sm" | "md"; loc?: SuggestedLocation; weights?: ScoreWeightsConfig }) {
+  const [hovered, setHovered] = useState(false);
+  const breakdown = loc ? computeScoreBreakdown(loc, weights) : null;
+  const displayScore = breakdown ? computeWeightedScore(loc!, weights) : score;
+  const { ring, bg, text } = scoreColor(displayScore);
+  const dim = size === "sm" ? "w-8 h-8 text-[10px]" : "w-10 h-10 text-xs";
+  return (
+    <div
+      className="relative shrink-0"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div
+        className={`flex flex-col items-center justify-center rounded-full ring-2 font-bold leading-none cursor-help ${dim} ${ring} ${bg} ${text}`}
+      >
+        <span>{displayScore}</span>
+        <span className="text-[8px] font-normal opacity-70">/100</span>
+      </div>
+      {hovered && breakdown && (
+        <div className="absolute left-full top-0 ml-2 z-50 w-56 rounded-lg shadow-xl border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-2.5 pointer-events-none">
+          <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-2">
+            Índice de Viabilidad: {displayScore}/100
+          </p>
+          <div className="space-y-1 text-[10px]">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 dark:text-slate-400">👥 Población</span>
+              <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.popPts.toFixed(1)}<span className="text-slate-400">/{weights.pop}</span></span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 dark:text-slate-400">🏙 Densidad</span>
+              <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.densPts.toFixed(1)}<span className="text-slate-400">/{weights.density}</span></span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 dark:text-slate-400">📦 Área útil</span>
+              <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.areaPts.toFixed(1)}<span className="text-slate-400">/{weights.area}</span></span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 dark:text-slate-400">🏭 Industrial</span>
+              <span className={`font-medium tabular-nums ${breakdown.industryPts > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-400"}`}>
+                {breakdown.industryPts.toFixed(0)}<span className="text-slate-400">/{weights.industry}</span>
+              </span>
+            </div>
+            {breakdown.terrainPenalty > 0 && (
+              <div className="flex justify-between items-center border-t border-slate-100 dark:border-gray-700 pt-1 mt-1 text-rose-500 dark:text-rose-400">
+                <span>⛰️ {loc!.terrain_type ?? "Terreno difícil"}</span>
+                <span className="font-medium tabular-nums">−{breakdown.terrainPenalty.toFixed(1)} pts</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Tarjeta de sugerencia "aterrizada": ciudad real candidata a nueva sucursal,
  * con un enlace a Google Maps y el detalle de impacto operativo (cobertura
@@ -2113,6 +2775,7 @@ function SuggestionCard({
   onTogglePause,
   onBlacklist,
   onFlyTo,
+  weights = DEFAULT_SCORE_WEIGHTS,
 }: {
   city: SnappedCity;
   loc: SuggestedLocation;
@@ -2120,6 +2783,7 @@ function SuggestionCard({
   onTogglePause: () => void;
   onBlacklist: (cityName: string) => void;
   onFlyTo: (lat: number, lng: number) => void;
+  weights?: ScoreWeightsConfig;
 }) {
   const [blacklistChecked, setBlacklistChecked] = useState(false);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${city.lat},${city.lng}`;
@@ -2156,28 +2820,56 @@ function SuggestionCard({
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
-      <button
-        type="button"
-        onClick={() => onFlyTo(city.lat, city.lng)}
-        title="Centrar mapa en esta ciudad"
-        className="text-sm font-semibold text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors text-left"
-      >
-        {city.city_name}
-      </button>
-      <a
-        href={mapsUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-0.5 inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-      >
-        <ExternalLink className="w-3 h-3" /> Ver en Google Maps
-      </a>
+      <div className="flex items-start gap-2">
+        {(loc.score ?? 0) > 0 && <ScoreBadge score={loc.score!} loc={loc} weights={weights} />}
+        <div className="min-w-0">
+          <button
+            type="button"
+            onClick={() => onFlyTo(city.lat, city.lng)}
+            title="Centrar mapa en esta ciudad"
+            className="text-sm font-semibold text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors text-left"
+          >
+            {city.city_name}
+          </button>
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-0.5 inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            <ExternalLink className="w-3 h-3" /> Ver en Google Maps
+          </a>
+        </div>
+      </div>
       <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300">
-        Aportará ~{formatKm2(loc.actual_added_km2)} de cobertura neta.
-        {loc.affected_branches.length > 0 && (
-          <> Descomprimirá las zonas de: {loc.affected_branches.join(", ")}.</>
+        {(loc.actual_added_km2 ?? 0) > 0 && (
+          <>Aportará ~{formatKm2(loc.actual_added_km2)} de cobertura neta. </>
+        )}
+        {(loc.affected_branches ?? []).length > 0 && (
+          <>Descomprimirá las zonas de: {(loc.affected_branches ?? []).join(", ")}.</>
         )}
       </p>
+      {(loc.density ?? 0) > 0 && (
+        <p className="mt-1 text-xs font-semibold text-violet-600 dark:text-violet-400">
+          {loc.density! >= 1
+            ? Math.round(loc.density!).toLocaleString("es-AR")
+            : "< 1"} hab./km² de nueva cobertura
+        </p>
+      )}
+      {(loc.has_industrial_zone || (loc.terrain_type && loc.terrain_type !== "Llano")) && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {loc.has_industrial_zone && (
+            <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium">
+              🏭 Zona Industrial Cercana
+            </span>
+          )}
+          {loc.terrain_type && loc.terrain_type !== "Llano" && (
+            <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-gray-700 text-slate-600 dark:text-slate-300 font-medium">
+              ⛰️ {loc.terrain_type}
+            </span>
+          )}
+        </div>
+      )}
       {(city.population ?? 0) > 0 && (
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
           Población estimada: {city.population!.toLocaleString("es-AR")} habitantes.
@@ -2432,6 +3124,21 @@ function BranchSimulationCard({
 
 /** Ray-casting point-in-polygon for lat/lng coordinates.
  *  polygon is `[lat, lng][]` — the same format as `customBoundary`. */
+/** Spherical polygon area in km² using the trapezoidal formula on WGS-84. */
+function polygonAreaKm2(pts: [number, number][]): number {
+  if (pts.length < 3) return 0;
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  let area = 0;
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const [lat1, lng1] = [toRad(pts[i][0]), toRad(pts[i][1])];
+    const [lat2, lng2] = [toRad(pts[(i + 1) % n][0]), toRad(pts[(i + 1) % n][1])];
+    area += (lng2 - lng1) * (2 + Math.sin(lat1) + Math.sin(lat2));
+  }
+  return (Math.abs(area) * R * R) / 2;
+}
+
 function rayCastPointInPolygon(lat: number, lng: number, polygon: [number, number][]): boolean {
   let inside = false;
   const n = polygon.length;

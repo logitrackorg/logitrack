@@ -2,9 +2,11 @@ import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
+  coverageApi,
   type CoverageCell,
   type SuggestedLocation,
   type SnappedCity,
+  type RejectedLocation,
   GAP_STYLE,
   COVERED_STYLE,
 } from "../api/coverage";
@@ -66,6 +68,29 @@ interface VoronoiCoverageMapProps {
    * polígono. `null` = no hay re-dibujo en curso.
    */
   redrawReference?: [number, number][] | null;
+  /**
+   * Cuando true, el mapa entra en modo edición de vértices: muestra handles
+   * arrastrables en cada vértice del polígono activo y marcadores en los
+   * puntos medios para insertar nuevos vértices. Enter confirma, Esc cancela.
+   */
+  isEditingBoundary?: boolean;
+  /** Llamado con los vértices finales cuando el usuario confirma la edición (Enter). */
+  onBoundaryEdited?: (pts: [number, number][]) => void;
+  /** Llamado cuando el usuario presiona Esc durante la edición. */
+  onBoundaryEditCancel?: () => void;
+  /** Cuando true, superpone los polígonos de zonas industriales (IGN) sobre el mapa. */
+  showIndustrialHeatmap?: boolean;
+  /**
+   * Bounding box de la zona de análisis activa: "minLon,minLat,maxLon,maxLat".
+   * Si se proporciona, se carga la capa para esa zona y se refresca solo cuando
+   * cambia. Si es undefined (sin zona personalizada) se usa el viewport actual
+   * con actualización en moveend, respetando el límite de 5°.
+   */
+  heatmapBbox?: string;
+  /** Llamado cuando la carga de zonas industriales termina. count = polígonos dibujados, error = true si la petición falló. */
+  onIndustrialHeatmapLoaded?: (count: number, error?: boolean) => void;
+  /** Ciudades descartadas por el filtro de densidad: se dibujan como círculos grises semitransparentes. */
+  rejectedLocations?: RejectedLocation[];
 }
 
 const FACTORY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg>`;
@@ -110,6 +135,13 @@ function VoronoiCoverageMap({
   onBoundaryCancel,
   customBoundary,
   redrawReference,
+  isEditingBoundary = false,
+  onBoundaryEdited,
+  onBoundaryEditCancel,
+  showIndustrialHeatmap = false,
+  heatmapBbox,
+  onIndustrialHeatmapLoaded,
+  rejectedLocations,
 }: VoronoiCoverageMapProps, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -131,6 +163,9 @@ function VoronoiCoverageMap({
   const boundaryLayer = useRef<L.LayerGroup | null>(null);
   const referenceLayer = useRef<L.LayerGroup | null>(null);
   const drawLayer = useRef<L.LayerGroup | null>(null);
+  const editLayer = useRef<L.LayerGroup | null>(null);
+  const industrialLayer = useRef<L.LayerGroup | null>(null);
+  const rejectedLayer = useRef<L.LayerGroup | null>(null);
 
   // Refs para manejar el estado de dibujo sin stale closures en los event handlers.
   const isDrawingRef = useRef(isDrawingBoundary);
@@ -138,11 +173,18 @@ function VoronoiCoverageMap({
   const onBoundaryCompleteRef = useRef(onBoundaryComplete);
   const onBoundaryCancelRef = useRef(onBoundaryCancel);
   const onSelectRef = useRef(onSelectBranch);
+  const editVerticesRef = useRef<[number, number][]>([]);
+  const onBoundaryEditedRef = useRef(onBoundaryEdited);
+  const onBoundaryEditCancelRef = useRef(onBoundaryEditCancel);
+  const onIndustrialHeatmapLoadedRef = useRef(onIndustrialHeatmapLoaded);
 
   useEffect(() => { isDrawingRef.current = isDrawingBoundary; }, [isDrawingBoundary]);
   useEffect(() => { onBoundaryCompleteRef.current = onBoundaryComplete; }, [onBoundaryComplete]);
   useEffect(() => { onBoundaryCancelRef.current = onBoundaryCancel; }, [onBoundaryCancel]);
   useEffect(() => { onSelectRef.current = onSelectBranch; }, [onSelectBranch]);
+  useEffect(() => { onBoundaryEditedRef.current = onBoundaryEdited; }, [onBoundaryEdited]);
+  useEffect(() => { onBoundaryEditCancelRef.current = onBoundaryEditCancel; }, [onBoundaryEditCancel]);
+  useEffect(() => { onIndustrialHeatmapLoadedRef.current = onIndustrialHeatmapLoaded; }, [onIndustrialHeatmapLoaded]);
 
   const suggestionMarkersRef = useRef<
     { marker: L.Marker; circle: L.Circle | null; loc: SuggestedLocation }[]
@@ -157,21 +199,42 @@ function VoronoiCoverageMap({
       zoomControl: true,
       scrollWheelZoom: true,
     });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors",
+    const osmLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(map);
+    const topoLayer = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+      attribution: '© <a href="https://opentopomap.org">OpenTopoMap</a>, © OpenStreetMap',
+      maxZoom: 17,
+    });
+    L.control.layers(
+      { "🏙 Vista Urbana": osmLayer, "🗺 Vista Topográfica": topoLayer },
+      {},
+      { position: "topright" },
+    ).addTo(map);
     mapRef.current = map;
     cellsLayer.current = L.layerGroup().addTo(map);
+    industrialLayer.current = L.layerGroup().addTo(map);
     markersLayer.current = L.layerGroup().addTo(map);
     simLayer.current = L.layerGroup().addTo(map);
     suggestionsLayer.current = L.layerGroup().addTo(map);
     boundaryLayer.current = L.layerGroup().addTo(map);
     referenceLayer.current = L.layerGroup().addTo(map);
     drawLayer.current = L.layerGroup().addTo(map);
+    editLayer.current = L.layerGroup().addTo(map);
+    rejectedLayer.current = L.layerGroup().addTo(map);
 
     const ro = new ResizeObserver(() => map.invalidateSize());
     ro.observe(containerRef.current);
+
+    // Click sobre el fondo del mapa (fuera de cualquier celda) → deseleccionar.
+    // Las celdas llaman a L.DomEvent.stopPropagation para que este handler
+    // no se active cuando el usuario hace click sobre una celda.
+    map.on("click", () => {
+      if (!isDrawingRef.current) {
+        onSelectRef.current?.(null);
+      }
+    });
 
     return () => {
       ro.disconnect();
@@ -277,11 +340,12 @@ function VoronoiCoverageMap({
   }, [isDrawingBoundary]);
 
   // Renderizar el polígono personalizado confirmado (borde azul permanente).
+  // Se omite cuando está en modo edición — editLayer dibuja la versión editable.
   useEffect(() => {
     const layer = boundaryLayer.current;
     if (!layer) return;
     layer.clearLayers();
-    if (!customBoundary || customBoundary.length < 3) return;
+    if (isEditingBoundary || !customBoundary || customBoundary.length < 3) return;
 
     L.polygon(customBoundary, {
       color: "#2563eb",
@@ -292,7 +356,113 @@ function VoronoiCoverageMap({
     })
       .bindTooltip("Área personalizada activa", { sticky: true })
       .addTo(layer);
-  }, [customBoundary]);
+  }, [customBoundary, isEditingBoundary]);
+
+  // Modo edición de vértices: handles arrastrables + puntos medios para insertar.
+  useEffect(() => {
+    const layer = editLayer.current;
+    if (!layer) return;
+
+    if (!isEditingBoundary || !customBoundary || customBoundary.length < 3) {
+      layer.clearLayers();
+      return;
+    }
+
+    editVerticesRef.current = [...customBoundary];
+
+    const vertexIcon = (total: number) =>
+      L.divIcon({
+        html: `<div style="width:12px;height:12px;border-radius:50%;background:#6d28d9;border:2.5px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.5);cursor:grab" title="${total > 3 ? "Arrastrar · clic derecho para eliminar" : "Arrastrar para mover"}"></div>`,
+        className: "",
+        iconSize: [12, 12],
+        iconAnchor: [6, 6],
+      });
+
+    let editPoly: L.Polygon | null = null;
+
+    const rebuild = () => {
+      const verts = editVerticesRef.current;
+      layer.clearLayers();
+
+      editPoly = L.polygon(verts, {
+        color: "#7c3aed",
+        weight: 2,
+        dashArray: "6 4",
+        fillColor: "#7c3aed",
+        fillOpacity: 0.07,
+      }).addTo(layer);
+
+      const n = verts.length;
+
+      // Vertex handles (draggable L.Marker with DivIcon)
+      verts.forEach((pt, i) => {
+        const marker = L.marker(pt, {
+          draggable: true,
+          icon: vertexIcon(n),
+        }).addTo(layer);
+
+        marker.on("drag", (e) => {
+          const latlng = (e.target as L.Marker).getLatLng();
+          editVerticesRef.current[i] = [latlng.lat, latlng.lng];
+          if (editPoly) editPoly.setLatLngs(editVerticesRef.current as L.LatLngExpression[]);
+        });
+
+        marker.on("dragend", () => rebuild());
+
+        if (n > 3) {
+          marker.on("contextmenu", (e) => {
+            L.DomEvent.stopPropagation(e);
+            editVerticesRef.current = [
+              ...editVerticesRef.current.slice(0, i),
+              ...editVerticesRef.current.slice(i + 1),
+            ];
+            rebuild();
+          });
+        }
+      });
+
+      // Midpoint handles (click to insert new vertex)
+      verts.forEach((pt, i) => {
+        const nextPt = verts[(i + 1) % n];
+        const midPt: [number, number] = [(pt[0] + nextPt[0]) / 2, (pt[1] + nextPt[1]) / 2];
+        L.circleMarker(midPt, {
+          radius: 5,
+          color: "#7c3aed",
+          fillColor: "#ede9fe",
+          fillOpacity: 1,
+          weight: 2,
+          bubblingMouseEvents: false,
+        } as L.CircleMarkerOptions)
+          .bindTooltip("Clic para agregar vértice", { direction: "top", offset: [0, -8] })
+          .on("click", (e) => {
+            L.DomEvent.stopPropagation(e);
+            editVerticesRef.current = [
+              ...editVerticesRef.current.slice(0, i + 1),
+              midPt,
+              ...editVerticesRef.current.slice(i + 1),
+            ];
+            rebuild();
+          })
+          .addTo(layer);
+      });
+    };
+
+    rebuild();
+
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && editVerticesRef.current.length >= 3) {
+        onBoundaryEditedRef.current?.([...editVerticesRef.current]);
+      } else if (e.key === "Escape") {
+        onBoundaryEditCancelRef.current?.();
+      }
+    };
+    window.addEventListener("keydown", keyHandler);
+
+    return () => {
+      window.removeEventListener("keydown", keyHandler);
+      layer.clearLayers();
+    };
+  }, [isEditingBoundary, customBoundary]);
 
   // Forma original de referencia mientras se re-dibuja una zona: relleno claro
   // de fondo, lo bastante visible para ubicarse pero más tenue que el borrador.
@@ -344,8 +514,9 @@ function VoronoiCoverageMap({
           opacity: isHighlighted ? 1 : 0.8,
           dashArray: cell.is_gap ? "6, 5" : undefined,
         });
-        poly.on("click", () => {
+        poly.on("click", (e) => {
           if (isDrawingRef.current) return; // ignorar clicks de dibujo
+          L.DomEvent.stopPropagation(e);
           onSelectRef.current?.(cell.branch_id === highlightedBranchId ? null : cell.branch_id);
         });
         poly.bindTooltip(
@@ -475,6 +646,104 @@ function VoronoiCoverageMap({
       );
     });
   }, [snappedCities]);
+
+  // Zonas industriales: carga los polígonos del dataset IGN (geometría real de
+  // cada área de fabricación). Cuando hay zona de análisis usa heatmapBbox; en
+  // modo nacional cae al viewport actual y se recarga en moveend.
+  useEffect(() => {
+    const layer = industrialLayer.current;
+    const map = mapRef.current;
+    if (!layer || !map) return;
+
+    layer.clearLayers();
+    if (!showIndustrialHeatmap) {
+      onIndustrialHeatmapLoadedRef.current?.(0);
+      return;
+    }
+
+    const drawPolygons = (rings: [number, number][][]) => {
+      layer.clearLayers();
+      for (const ring of rings) {
+        L.polygon(ring, {
+          color: "#b45309",
+          weight: 1.5,
+          fillColor: "#fbbf24",
+          fillOpacity: 0.4,
+        })
+          .bindTooltip("🏭 Zona Industrial", { sticky: true })
+          .addTo(layer);
+      }
+    };
+
+    const fetchBbox = (bbox: string) => {
+      let cancelled = false;
+      coverageApi
+        .getIndustrialHeatmap(bbox)
+        .then((rings) => {
+          if (cancelled) return;
+          const typed = rings as [number, number][][];
+          drawPolygons(typed);
+          onIndustrialHeatmapLoadedRef.current?.(typed.length);
+        })
+        .catch(() => {
+          if (!cancelled) onIndustrialHeatmapLoadedRef.current?.(0, true);
+        });
+      return () => { cancelled = true; };
+    };
+
+    // Zona de análisis activa: bbox fijo, sin listener de moveend.
+    if (heatmapBbox) {
+      return fetchBbox(heatmapBbox);
+    }
+
+    // Fallback al viewport (modo nacional o sin zona personalizada). El backend
+    // sirve las zonas IGN desde memoria (sin límite de tamaño de bbox), así que
+    // pedimos siempre el viewport actual y refrescamos al desplazar el mapa.
+    const bboxFromBounds = (): string => {
+      const b = map.getBounds();
+      const minLng = b.getWest(), maxLng = b.getEast();
+      const minLat = b.getSouth(), maxLat = b.getNorth();
+      return `${minLng},${minLat},${maxLng},${maxLat}`;
+    };
+
+    let cancelCurrent: (() => void) | undefined;
+
+    const refresh = () => {
+      cancelCurrent?.();
+      cancelCurrent = fetchBbox(bboxFromBounds());
+    };
+
+    refresh();
+    map.on("moveend", refresh);
+
+    return () => {
+      cancelCurrent?.();
+      map.off("moveend", refresh);
+    };
+  }, [showIndustrialHeatmap, heatmapBbox]);
+
+  // Rejected locations: grey semi-transparent circles with a tooltip showing the reject reason.
+  useEffect(() => {
+    const layer = rejectedLayer.current;
+    if (!layer) return;
+    layer.clearLayers();
+    if (!rejectedLocations?.length) return;
+    for (const r of rejectedLocations) {
+      L.circleMarker([r.lat, r.lng], {
+        radius: 8,
+        color: "#6b7280",
+        weight: 1.5,
+        fillColor: "#9ca3af",
+        fillOpacity: 0.35,
+        dashArray: "4 3",
+      })
+        .bindTooltip(`<strong>${r.city_name}</strong><br/><span style="font-size:11px">${r.reject_reason}</span>`, {
+          direction: "top",
+          offset: [0, -6],
+        })
+        .addTo(layer);
+    }
+  }, [rejectedLocations]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 });

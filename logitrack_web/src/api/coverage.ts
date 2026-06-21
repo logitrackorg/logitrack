@@ -96,6 +96,24 @@ export interface SuggestedLocation {
   is_snapped?: boolean;
   /** Población de la ciudad aterrizda; 0 cuando is_snapped=false. */
   population?: number;
+  /** Densidad poblacional (hab./km²) de la celda Voronoi — solo en modo "density". */
+  density?: number;
+  /** true cuando hay zonas industriales IGN dentro de ~10 km (modo density + prioritize_industrial). */
+  has_industrial_zone?: boolean;
+  /** Tipo de terreno: "Llano", "Llano-Ventoso", "Semi-montañoso", "Serrano", "Montañoso". */
+  terrain_type?: string;
+  /** Índice de Viabilidad Logística (1–100) calculado por el backend. */
+  score?: number;
+}
+
+/** Ciudad candidata que no pasó algún filtro de densidad, población o proximidad. */
+export interface RejectedLocation {
+  city_name: string;
+  lat: number;
+  lng: number;
+  reject_reason: string;
+  /** Índice de Viabilidad Logística (1–100) calculado en el momento del rechazo. */
+  score?: number;
 }
 
 export interface SimulationResult {
@@ -110,11 +128,13 @@ export interface SimulationResult {
   /** Voronoi cells with polygon geometry from this diagnosis run. Only present
    *  when branches were excluded — the client uses them to update map shapes. */
   diagram_cells?: CoverageCell[];
+  /** Ciudades evaluadas en modo density que no pasaron al menos un filtro. Solo en modo density. */
+  rejected_locations?: RejectedLocation[];
 }
 
 /**
  * Resultado de "Snap to City" para un punto sugerido: lugar poblado real más
- * cercano (OSM Overpass) dentro del radio de cobertura simulado.
+ * cercano (dataset oficial INDEC/Georef) dentro del radio de cobertura simulado.
  * `is_snapped = false` cuando no se encontró ningún lugar poblado dentro del
  * radio de búsqueda — el punto geométrico original debe conservarse en ese
  * caso.
@@ -124,9 +144,10 @@ export interface SnappedCity {
   lng: number;
   city_name: string;
   is_snapped: boolean;
-  /** Población efectiva de la ciudad elegida (tag OSM o fallback por tipo). 0 / ausente cuando is_snapped=false. */
+  /** Población oficial de la ciudad elegida (Censo INDEC 2022). 0 / ausente cuando is_snapped=false. */
   population?: number;
-  /** Razón por la que no se encontró ciudad. "TIMEOUT" = error de red/API; "NO_RESULTS" = no hay ciudad en el radio. */
+  /** Razón por la que no se encontró ciudad. "NO_RESULTS" = no hay ciudad en el radio.
+   *  ("TIMEOUT" era posible con la fuente Overpass anterior; ya no se emite.) */
   error_reason?: string;
   /**
    * Frontend-only (no proviene del backend): true cuando el usuario "pausó"
@@ -176,7 +197,26 @@ export const coverageApi = {
    * excludedBranchIds: IDs de sucursales a excluir del cálculo (simulación de cierre).
    * customBoundingArea: polígono dibujado por el usuario — recorta el diagnóstico a esa zona.
    */
-  diagnose: (areaKm2: number, excludedBranchIds?: string[], customBoundingArea?: LatLng[], includeInactive?: boolean, maxSuggestions?: number, snapToCities?: boolean) =>
+  diagnose: (
+    areaKm2: number,
+    excludedBranchIds?: string[],
+    customBoundingArea?: LatLng[],
+    includeInactive?: boolean,
+    maxSuggestions?: number,
+    snapToCities?: boolean,
+    mode?: "area" | "density",
+    density?: {
+      minPopulation?: number;
+      minDensity?: number;
+      rankingMode?: "population" | "gap_area";
+      excludedCities?: string[];
+      additionalSites?: LatLng[];
+      prioritizeIndustrial?: boolean;
+      applyTerrainFriction?: boolean;
+      minSeparation?: number;
+      minScore?: number;
+    },
+  ) =>
     api
       .post<SimulationResult>("/coverage/diagnose", {
         area_km2: areaKm2,
@@ -185,6 +225,22 @@ export const coverageApi = {
         ...(includeInactive ? { include_inactive: true } : {}),
         ...(maxSuggestions && maxSuggestions > 0 ? { max_suggestions: maxSuggestions } : {}),
         ...(snapToCities ? { snap_to_cities: true } : {}),
+        ...(mode && mode !== "area" ? { mode } : {}),
+        ...(density && Object.keys(density).length > 0
+          ? {
+              density: {
+                ...(density.minPopulation && density.minPopulation > 0 ? { min_population: density.minPopulation } : {}),
+                ...(density.minDensity && density.minDensity > 0 ? { min_density: density.minDensity } : {}),
+                ...(density.rankingMode && density.rankingMode !== "population" ? { ranking_mode: density.rankingMode } : {}),
+                ...(density.excludedCities?.length ? { excluded_cities: density.excludedCities } : {}),
+                ...(density.additionalSites?.length ? { additional_sites: density.additionalSites } : {}),
+                ...(density.prioritizeIndustrial ? { prioritize_industrial: true } : {}),
+                ...(density.applyTerrainFriction ? { apply_terrain_friction: true } : {}),
+                ...(density.minSeparation && density.minSeparation > 0 ? { min_separation_km: density.minSeparation } : {}),
+                ...(density.minScore && density.minScore > 0 ? { min_score: density.minScore } : {}),
+              },
+            }
+          : {}),
       })
       .then((r) => r.data),
 
@@ -220,6 +276,18 @@ export const coverageApi = {
         suggestions,
         ...(customBoundingArea?.length ? { custom_bounding_area: customBoundingArea } : {}),
       })
+      .then((r) => r.data),
+
+  /**
+   * Returns the official IGN industrial-zone polygon rings ("áreas de
+   * fabricación y procesamiento", incl. parques industriales) intersecting the
+   * bbox as [lat, lng][][] — one ring per zone. Served from an embedded dataset
+   * in memory: no upstream call, no timeout, no bbox size limit.
+   * bbox format: "minLon,minLat,maxLon,maxLat" (Leaflet getBounds order).
+   */
+  getIndustrialHeatmap: (bbox: string) =>
+    api
+      .get<[number, number][][]>("/coverage/industrial-heatmap", { params: { bbox } })
       .then((r) => r.data),
 };
 

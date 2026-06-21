@@ -30,6 +30,12 @@ export interface SLASettings {
   last_calculation_duration?: string;
   /** Modo de ejecución del Collector: "periodic" | "daily". Default "periodic". */
   calculation_mode?: "periodic" | "daily";
+  /**
+   * Antigüedad máxima de los eventos considerados al calcular los promedios
+   * de permanencia por estado. Solo se permiten los valores 2, 6, 12 y 18.
+   * Default 12 (un año).
+   */
+  data_window_months?: number;
 }
 
 export const slaSettingsApi = {
