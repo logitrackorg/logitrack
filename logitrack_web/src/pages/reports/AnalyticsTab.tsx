@@ -7,8 +7,19 @@ import {
     ExternalLink,
     RefreshCw,
     TrendingUp,
+    Eye,
 } from "lucide-react";
+import {
+    ResponsiveContainer,
+    AreaChart,
+    Area,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+} from "recharts";
 import { Card } from "../../components/ui/card";
+import { umamiApi, type UmamiPageviewPoint } from "../../api/umami";
 
 interface EventCount {
     event: string;
@@ -80,6 +91,84 @@ function BarRow({ label, value, max }: { label: string; value: number; max: numb
     );
 }
 
+// Formatea "2026-06-15" -> "15/06" para el eje X.
+function formatDayLabel(iso: string): string {
+    const parts = iso.slice(5).split("-"); // ["06", "15"]
+    if (parts.length !== 2) return iso;
+    return `${parts[1]}/${parts[0]}`;
+}
+
+// Tooltip personalizado — más prolijo que el default de recharts y respeta dark mode.
+function ChartTooltip({
+    active,
+    payload,
+    label,
+}: {
+    active?: boolean;
+    payload?: { value: number }[];
+    label?: string;
+}) {
+    if (!active || !payload || payload.length === 0) return null;
+    return (
+        <div className="bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg px-3 py-2 shadow-lg text-xs">
+            <p className="text-slate-500 dark:text-slate-400 mb-0.5">{label ? formatDayLabel(label) : ""}</p>
+            <p className="font-semibold text-slate-900 dark:text-slate-100">{payload[0].value} visitas</p>
+        </div>
+    );
+}
+
+// Gráfico de tendencia de visitas por día, usando recharts (ya instalado en el proyecto).
+function PageviewsChart({ data }: { data: UmamiPageviewPoint[] }) {
+    if (data.length === 0) {
+        return (
+            <p className="text-sm text-slate-400 dark:text-slate-500 py-8 text-center">
+                Sin datos de visitas todavía.
+            </p>
+        );
+    }
+
+    return (
+        <div className="h-48 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                    <defs>
+                        <linearGradient id="umamiPageviewsGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
+                            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-slate-100 dark:stroke-gray-700" />
+                    <XAxis
+                        dataKey="x"
+                        tickFormatter={formatDayLabel}
+                        tick={{ fontSize: 11 }}
+                        className="fill-slate-400 dark:fill-slate-500"
+                        interval={Math.max(0, Math.floor(data.length / 6) - 1)}
+                        axisLine={false}
+                        tickLine={false}
+                    />
+                    <YAxis
+                        allowDecimals={false}
+                        tick={{ fontSize: 11 }}
+                        className="fill-slate-400 dark:fill-slate-500"
+                        width={32}
+                        axisLine={false}
+                        tickLine={false}
+                    />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Area
+                        type="monotone"
+                        dataKey="y"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        fill="url(#umamiPageviewsGradient)"
+                    />
+                </AreaChart>
+            </ResponsiveContainer>
+        </div>
+    );
+}
+
 export function AnalyticsTab() {
     const [events, setEvents] = useState<EventCount[]>([]);
     const [claimTypes, setClaimTypes] = useState<EventCount[]>([]);
@@ -89,6 +178,31 @@ export function AnalyticsTab() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+
+    // ── Umami: visitas a la página pública ──
+    const [umamiVisits, setUmamiVisits] = useState<number | null>(null);
+    const [umamiVisitors, setUmamiVisitors] = useState<number | null>(null);
+    const [umamiPageviews, setUmamiPageviews] = useState<UmamiPageviewPoint[]>([]);
+    const [umamiLoading, setUmamiLoading] = useState(true);
+    const [umamiError, setUmamiError] = useState("");
+
+    const fetchUmamiData = async () => {
+        setUmamiLoading(true);
+        setUmamiError("");
+        try {
+            const [stats, pv] = await Promise.all([
+                umamiApi.getStats(),
+                umamiApi.getPageviews(30),
+            ]);
+            setUmamiVisits(stats.visits ?? 0);
+            setUmamiVisitors(stats.visitors ?? 0);
+            setUmamiPageviews(pv.pageviews ?? []);
+        } catch {
+            setUmamiError("No se pudieron cargar las métricas de Umami.");
+        } finally {
+            setUmamiLoading(false);
+        }
+    };
 
     const fetchData = async () => {
         setLoading(true);
@@ -126,93 +240,14 @@ export function AnalyticsTab() {
         }
     };
 
-    /* const fetchData = async () => {
-       setLoading(true);
-       setError("");
-       try {
-         // Usar la API de PostHog para obtener eventos
-         const headers = {
-           Authorization: `Bearer ${POSTHOG_API_KEY}`,
-           "Content-Type": "application/json",
-         };
-   
-         // Obtener conteo de eventos de los últimos 30 días
-         const since = new Date();
-         since.setDate(since.getDate() - 30);
-         const sinceStr = since.toISOString().slice(0, 10);
-   
-         const res = await fetch(
-           `${POSTHOG_HOST}/api/projects/@current/events/?event=chatbot_option_selected&after=${sinceStr}&limit=1000`,
-           { headers }
-         );
-   
-         if (!res.ok) throw new Error("No se pudieron cargar los datos de PostHog");
-   
-         const data = await res.json();
-         const results = data.results ?? [];
-   
-         // Contar por acción
-         const actionCounts: Record<string, number> = {};
-         for (const ev of results) {
-           const action = ev.properties?.action as string;
-           if (action) actionCounts[action] = (actionCounts[action] ?? 0) + 1;
-         }
-         setEvents(
-           Object.entries(actionCounts)
-             .map(([event, count]) => ({ event, count }))
-             .sort((a, b) => b.count - a.count)
-         );
-   
-         // Claim types
-         const claimRes = await fetch(
-           `${POSTHOG_HOST}/api/projects/@current/events/?event=chatbot_claim_type_selected&after=${sinceStr}&limit=1000`,
-           { headers }
-         );
-         const claimData = await claimRes.json();
-         const claimResults = claimData.results ?? [];
-         const claimCounts: Record<string, number> = {};
-         for (const ev of claimResults) {
-           const ct = ev.properties?.claim_type as string;
-           if (ct) claimCounts[ct] = (claimCounts[ct] ?? 0) + 1;
-         }
-         setClaimTypes(
-           Object.entries(claimCounts)
-             .map(([event, count]) => ({ event, count }))
-             .sort((a, b) => b.count - a.count)
-         );
-   
-         // Totales
-         const openedRes = await fetch(
-           `${POSTHOG_HOST}/api/projects/@current/events/?event=chatbot_opened&after=${sinceStr}&limit=1`,
-           { headers }
-         );
-         const openedData = await openedRes.json();
-         setTotalOpened(openedData.count ?? 0);
-   
-         const authRes = await fetch(
-           `${POSTHOG_HOST}/api/projects/@current/events/?event=chatbot_authenticated&after=${sinceStr}&limit=1`,
-           { headers }
-         );
-         const authData = await authRes.json();
-         setTotalAuth(authData.count ?? 0);
-   
-         const claimSubmitRes = await fetch(
-           `${POSTHOG_HOST}/api/projects/@current/events/?event=chatbot_claim_submitted&after=${sinceStr}&limit=1`,
-           { headers }
-         );
-         const claimSubmitData = await claimSubmitRes.json();
-         setTotalClaims(claimSubmitData.count ?? 0);
-   
-         setLastRefresh(new Date());
-       } catch (e) {
-         setError("No se pudieron cargar los datos. Verificá la conexión con PostHog.");
-       } finally {
-         setLoading(false);
-       }
-     };*/
+    const refreshAll = () => {
+        fetchData();
+        fetchUmamiData();
+    };
 
     useEffect(() => {
         fetchData();
+        fetchUmamiData();
     }, []);
 
     const maxAction = events[0]?.count ?? 1;
@@ -238,11 +273,11 @@ export function AnalyticsTab() {
                 </div>
                 <div className="flex items-center gap-2">
                     <button
-                        onClick={fetchData}
-                        disabled={loading}
+                        onClick={refreshAll}
+                        disabled={loading || umamiLoading}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-gray-700 text-slate-600 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 cursor-pointer"
                     >
-                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+                        <RefreshCw className={`w-3.5 h-3.5 ${loading || umamiLoading ? "animate-spin" : ""}`} />
                         Actualizar
                     </button>
                     <a
@@ -259,31 +294,65 @@ export function AnalyticsTab() {
 
             {/* Sección Umami */}
             <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-blue-600" />
-                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                        Visitas — Página pública
-                    </h3>
-                </div>
-                <Card className="p-5 flex items-center justify-between">
-                    <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">
-                            Las métricas de visitas están disponibles en el dashboard de Umami.
-                        </p>
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                            Umami registra visitas, países, dispositivos y páginas más vistas de la página pública de seguimiento.
-                        </p>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-blue-600" />
+                        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                            Visitas — Página pública (últimos 30 días)
+                        </h3>
                     </div>
                     <a
                         href="https://cloud.umami.is"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 text-white text-sm font-semibold transition-colors ml-4"
+                        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-semibold transition-colors"
                     >
-                        <ExternalLink className="w-3.5 h-3.5" />
+                        <ExternalLink className="w-3 h-3" />
                         Abrir Umami
                     </a>
-                </Card>
+                </div>
+
+                {umamiError && (
+                    <Card className="p-4 text-center">
+                        <p className="text-sm text-rose-600">{umamiError}</p>
+                    </Card>
+                )}
+
+                {umamiLoading ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {[1, 2].map((i) => (
+                            <Card key={i} className="p-4 h-20 animate-pulse bg-slate-100 dark:bg-gray-800" />
+                        ))}
+                    </div>
+                ) : (
+                    !umamiError && (
+                        <>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <StatBox
+                                    label="Visitas totales"
+                                    value={umamiVisits ?? "—"}
+                                    icon={<Eye className="w-5 h-5" />}
+                                    color="blue"
+                                />
+                                <StatBox
+                                    label="Visitantes únicos"
+                                    value={umamiVisitors ?? "—"}
+                                    icon={<Users className="w-5 h-5" />}
+                                    color="violet"
+                                />
+                            </div>
+                            <Card className="p-5">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <TrendingUp className="w-4 h-4 text-blue-600" />
+                                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                        Tendencia de visitas por día
+                                    </h4>
+                                </div>
+                                <PageviewsChart data={umamiPageviews} />
+                            </Card>
+                        </>
+                    )
+                )}
             </div>
 
             {/* Sección chatbot */}
