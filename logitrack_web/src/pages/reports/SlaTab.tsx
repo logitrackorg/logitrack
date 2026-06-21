@@ -1017,8 +1017,8 @@ export function CoberturaTab() {
   const [allBranches, setAllBranches] = useState<Branch[]>([]);
 
   // Refs para diagnoseCore (evita stale closures en toggleClosedBranch / handleToggleIncludeInactive).
-  const [maxSuggestions, setMaxSuggestions] = useState(0);
-  const maxSuggestionsRef = useRef(0);
+  const [maxSuggestions, setMaxSuggestions] = useState(40);
+  const maxSuggestionsRef = useRef(40);
 
   const [diagnosisMode, setDiagnosisMode] = useState<DiagnosisMode>("area");
   const diagnosisModeRef = useRef<DiagnosisMode>("area");
@@ -1029,8 +1029,13 @@ export function CoberturaTab() {
   const prioritizeIndustrialRef = useRef(false);
   const [applyTerrainFriction, setApplyTerrainFriction] = useState(false);
   const applyTerrainFrictionRef = useRef(false);
-  const [minSeparation, setMinSeparation] = useState(0);
-  const minSeparationRef = useRef(0);
+  // Cuando "Penalizar terreno" está apagado, la penalización se fuerza a 0.
+  const effectiveWeights = useMemo(
+    () => ({ ...scoreWeights, terrain: applyTerrainFriction ? scoreWeights.terrain : 0 }),
+    [scoreWeights, applyTerrainFriction],
+  );
+  const [minSeparation, setMinSeparation] = useState(20);
+  const minSeparationRef = useRef(20);
   const [minScore, setMinScore] = useState(0);
   const minScoreRef = useRef(0);
   const [showRejectedOnMap, setShowRejectedOnMap] = useState(true);
@@ -1042,6 +1047,10 @@ export function CoberturaTab() {
   const includeInactiveRef = useRef(false);
   const closedBranchIdsRef = useRef<string[]>([]);
   const coverageMapRef = useRef<VoronoiCoverageMapHandle>(null);
+  const highlightedCellPolygonRef = useRef<[number, number][] | null>(null);
+  const highlightedRef = useRef<string | null>(null);
+  // Guarda el estado de zona anterior a la selección de celda para restaurarlo al deseleccionar.
+  const preCellSelectionStateRef = useRef<{ boundary: [number, number][] | null; mode: "national" | "custom" } | null>(null);
 
   const handleFlyToLocation = useCallback((lat: number, lng: number, zoom = 8) => {
     coverageMapRef.current?.flyTo(lat, lng, zoom);
@@ -1081,6 +1090,7 @@ export function CoberturaTab() {
   useEffect(() => { territoryModeRef.current = territoryMode; }, [territoryMode]);
   useEffect(() => { includeInactiveRef.current = includeInactive; }, [includeInactive]);
   useEffect(() => { closedBranchIdsRef.current = closedBranchIds; }, [closedBranchIds]);
+  useEffect(() => { highlightedRef.current = highlighted; }, [highlighted]);
   useEffect(() => { diagnosisModeRef.current = diagnosisMode; }, [diagnosisMode]);
   useEffect(() => { minDensityRef.current = minDensity; }, [minDensity]);
   useEffect(() => { prioritizeIndustrialRef.current = prioritizeIndustrial; }, [prioritizeIndustrial]);
@@ -1287,8 +1297,11 @@ export function CoberturaTab() {
     const inactive = includeInactiveRef.current;
     const dMode = diagnosisModeRef.current;
     const minPop = snapMinPopulationRef.current;
+    const highlightedPoly = highlightedCellPolygonRef.current;
     const boundingArea =
-      territoryMode === "custom" && boundary && boundary.length >= 3
+      highlightedPoly && highlightedPoly.length >= 3
+        ? highlightedPoly.map(([lat, lng]) => ({ lat, lng }))
+        : territoryMode === "custom" && boundary && boundary.length >= 3
         ? boundary.map(([lat, lng]) => ({ lat, lng }))
         : undefined;
     setSimError(null);
@@ -1363,6 +1376,61 @@ export function CoberturaTab() {
     setSnapMinPopulation(minPopulation);
     diagnoseCore(area, closedBranchIds);
   }, [diagnoseCore, closedBranchIds]);
+
+  // Selección de celda Voronoi: restringe el diagnóstico al polígono real de la
+  // celda (ya recortado a la Argentina por el backend) y lo muestra visualmente
+  // como la zona activa. Al deseleccionar restaura la zona previa.
+  const handleSelectBranch = useCallback((id: string | null) => {
+    if (id === highlightedRef.current) return; // sin cambio, no re-diagnosticar
+
+    if (id !== null) {
+      // Guardar estado de zona previo a la selección.
+      preCellSelectionStateRef.current = {
+        boundary: customBoundaryRef.current,
+        mode: territoryModeRef.current,
+      };
+
+      // Elegir el anillo más grande del polígono de la celda (cada anillo es un
+      // fragmento desconectado ya recortado a Argentina — sin Chile, sin océano).
+      const cell = diagram?.cells.find((c) => c.branch_id === id);
+      const rings = cell?.polygon ?? [];
+      let largestRing: { lat: number; lng: number }[] | null = null;
+      let maxArea = 0;
+      for (const ring of rings) {
+        let area = 0;
+        for (let i = 0; i < ring.length; i++) {
+          const j = (i + 1) % ring.length;
+          area += ring[i].lat * ring[j].lng - ring[j].lat * ring[i].lng;
+        }
+        area = Math.abs(area / 2);
+        if (area > maxArea) { maxArea = area; largestRing = ring; }
+      }
+      const cellRing = largestRing
+        ? largestRing.map((p) => [p.lat, p.lng] as [number, number])
+        : null;
+
+      // Actualizar refs (síncronamente, para diagnoseCore) y estados (para UI).
+      customBoundaryRef.current = cellRing;
+      territoryModeRef.current = "custom";
+      highlightedCellPolygonRef.current = null; // la boundary maneja el scope
+      setCustomBoundary(cellRing);
+      setTerritoryMode("custom");
+    } else {
+      // Restaurar zona previa a la selección de celda.
+      const saved = preCellSelectionStateRef.current;
+      const prevBoundary = saved?.boundary ?? null;
+      const prevMode = saved?.mode ?? "national";
+      customBoundaryRef.current = prevBoundary;
+      territoryModeRef.current = prevMode;
+      highlightedCellPolygonRef.current = null;
+      setCustomBoundary(prevBoundary);
+      setTerritoryMode(prevMode);
+      preCellSelectionStateRef.current = null;
+    }
+
+    setHighlighted(id);
+    diagnoseCore(visualAreaRef.current, closedBranchIdsRef.current);
+  }, [diagram, diagnoseCore]);
 
   // "Buscar más sugerencias": llama al backend con las ciudades ya mostradas
   // como blacklist, y ACUMULA (en lugar de reemplazar) los resultados nuevos.
@@ -1887,7 +1955,7 @@ export function CoberturaTab() {
               ref={coverageMapRef}
               cells={visibleCells}
               highlightedBranchId={highlighted}
-              onSelectBranch={(id) => setHighlighted(id)}
+              onSelectBranch={handleSelectBranch}
               simulationAreaKm2={visualArea}
               suggestedLocations={activeSuggestionLocations}
               snappedCities={activeSnappedCities}
@@ -2052,8 +2120,8 @@ export function CoberturaTab() {
                               .map((c, i) => ({ city: c, index: i }))
                               .filter(({ city }) => city.is_snapped)
                               .sort((a, b) =>
-                                computeWeightedScore(simResult.suggested_locations[b.index], scoreWeights) -
-                                computeWeightedScore(simResult.suggested_locations[a.index], scoreWeights)
+                                computeWeightedScore(simResult.suggested_locations[b.index], effectiveWeights) -
+                                computeWeightedScore(simResult.suggested_locations[a.index], effectiveWeights)
                               )
                               .map(({ city, index }) => (
                                 <SuggestionCard
@@ -2064,7 +2132,7 @@ export function CoberturaTab() {
                                   onTogglePause={() => togglePauseSuggestion(index)}
                                   onBlacklist={(name) => blacklistCity(index, name)}
                                   onFlyTo={handleFlyToLocation}
-                                  weights={scoreWeights}
+                                  weights={effectiveWeights}
                                 />
                               ))}
                           </ul>

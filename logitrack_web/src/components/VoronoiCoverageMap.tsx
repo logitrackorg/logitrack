@@ -227,6 +227,15 @@ function VoronoiCoverageMap({
     const ro = new ResizeObserver(() => map.invalidateSize());
     ro.observe(containerRef.current);
 
+    // Click sobre el fondo del mapa (fuera de cualquier celda) → deseleccionar.
+    // Las celdas llaman a L.DomEvent.stopPropagation para que este handler
+    // no se active cuando el usuario hace click sobre una celda.
+    map.on("click", () => {
+      if (!isDrawingRef.current) {
+        onSelectRef.current?.(null);
+      }
+    });
+
     return () => {
       ro.disconnect();
       map.remove();
@@ -505,8 +514,9 @@ function VoronoiCoverageMap({
           opacity: isHighlighted ? 1 : 0.8,
           dashArray: cell.is_gap ? "6, 5" : undefined,
         });
-        poly.on("click", () => {
+        poly.on("click", (e) => {
           if (isDrawingRef.current) return; // ignorar clicks de dibujo
+          L.DomEvent.stopPropagation(e);
           onSelectRef.current?.(cell.branch_id === highlightedBranchId ? null : cell.branch_id);
         });
         poly.bindTooltip(

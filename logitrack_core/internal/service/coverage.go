@@ -913,7 +913,10 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 
 	// ── Step 10: viability score ──────────────────────────────────────────────
 	for i := range candidates {
-		f, _ := terrainFriction(candidates[i].Lat, candidates[i].Lng)
+		f := 1.0
+		if density.ApplyTerrainFriction {
+			f, _ = terrainFriction(candidates[i].Lat, candidates[i].Lng)
+		}
 		candidates[i].Score = CalculateViabilityScore(
 			candidates[i].Population,
 			candidates[i].Density,

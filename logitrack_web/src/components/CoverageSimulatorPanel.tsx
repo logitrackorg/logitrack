@@ -20,8 +20,8 @@ const MIN_SEP_STEP = 5;
 const MIN_SCORE_MAX = 100;
 const MIN_SCORE_STEP = 5;
 
-const MAX_SUGG_MAX = 40;
-const MAX_SUGG_STEP = 1;
+const MAX_SUGG_MAX = 200;
+const MAX_SUGG_STEP = 5;
 
 export type TerritoryMode = "national" | "custom";
 
@@ -80,7 +80,7 @@ interface CoverageSimulatorPanelProps {
   /** Toggles visibility of rejected (discarded) city markers on the map. */
   showRejectedOnMap?: boolean;
   onShowRejectedOnMapChange?: (v: boolean) => void;
-  /** Minimum distance (km) enforced between suggested branches and existing ones. 0 = automatic. */
+  /** Minimum distance (km) enforced between suggested branches and existing ones. Minimum 1 km. */
   minSeparation?: number;
   onMinSeparationChange?: (v: number) => void;
   /** Minimum Logistics Viability Score (1–100) a candidate must reach. 0 = no filter. */
@@ -131,7 +131,7 @@ export function CoverageSimulatorPanel({
   industrialZoneResult = null,
   showRejectedOnMap = true,
   onShowRejectedOnMapChange,
-  minSeparation = 0,
+  minSeparation = 20,
   onMinSeparationChange,
   minScore = 0,
   onMinScoreChange,
@@ -149,7 +149,7 @@ export function CoverageSimulatorPanel({
 
   const [minPopulation, setMinPopulation] = useState(MIN_POP_DEFAULT);
   const [densityInput, setDensityInput] = useState("0");
-  const [sepInput, setSepInput] = useState("0");
+  const [sepInput, setSepInput] = useState(() => String(minSeparation));
   const [scoreInput, setScoreInput] = useState("0");
 
   // Draft strings for the number inputs — decoupled from the controlled slider
@@ -356,31 +356,29 @@ export function CoverageSimulatorPanel({
         <div className="flex items-center gap-1">
           <input
             type="number"
-            min={0}
+            min={1}
             max={MAX_SUGG_MAX}
             step={MAX_SUGG_STEP}
             value={maxSugInput}
             onChange={(e) => setMaxSugInput(e.target.value)}
             onBlur={() => {
               const raw = Number(maxSugInput);
-              const v = isNaN(raw) ? 0 : Math.max(0, Math.min(MAX_SUGG_MAX, Math.round(raw)));
+              const v = isNaN(raw) ? 40 : Math.max(1, Math.min(MAX_SUGG_MAX, Math.round(raw)));
               onMaxSuggestionsChange?.(v);
               setMaxSugInput(String(v));
             }}
             disabled={isDisabled}
-            placeholder="0"
+            placeholder="40"
             className="w-16 text-right text-xs font-mono font-semibold px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            aria-label="Cantidad máxima de sucursales sugeridas (0 = sin límite)"
+            aria-label="Cantidad máxima de sucursales sugeridas"
           />
-          <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0 w-14">
-            {maxSuggestions === 0 ? "sin límite" : "máx."}
-          </span>
+          <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0 w-8">máx.</span>
         </div>
       </div>
 
       <input
         type="range"
-        min={0}
+        min={1}
         max={MAX_SUGG_MAX}
         step={MAX_SUGG_STEP}
         value={maxSuggestions}
@@ -393,7 +391,6 @@ export function CoverageSimulatorPanel({
         className="w-full accent-indigo-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         aria-label="Cantidad máxima de sucursales sugeridas"
       />
-
       {/* Modo de diagnóstico */}
       <div className="space-y-1.5 pt-1">
         <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -462,7 +459,7 @@ export function CoverageSimulatorPanel({
                 >
                   <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${applyTerrainFriction ? "translate-x-4" : "translate-x-0"}`} />
                 </button>
-                <span className="text-[11px] text-slate-600 dark:text-slate-300">⛰️ Considerar fricción de terreno</span>
+                <span className="text-[11px] text-slate-600 dark:text-slate-300">⛰️ Penalizar terreno</span>
               </label>
             </div>
 
@@ -521,17 +518,17 @@ export function CoverageSimulatorPanel({
                 <div className="flex items-center gap-1">
                   <input
                     type="number"
-                    min={0}
+                    min={1}
                     max={MIN_SEP_MAX}
                     step={MIN_SEP_STEP}
                     value={sepInput}
                     onChange={(e) => {
                       setSepInput(e.target.value);
-                      const v = Math.max(0, Math.min(MIN_SEP_MAX, Number(e.target.value) || 0));
+                      const v = Math.max(1, Math.min(MIN_SEP_MAX, Number(e.target.value) || 1));
                       onMinSeparationChange?.(v);
                     }}
                     onBlur={() => {
-                      const v = Math.max(0, Math.min(MIN_SEP_MAX, Number(sepInput) || 0));
+                      const v = Math.max(1, Math.min(MIN_SEP_MAX, Number(sepInput) || 1));
                       setSepInput(String(v));
                       onMinSeparationChange?.(v);
                     }}
@@ -543,7 +540,7 @@ export function CoverageSimulatorPanel({
               </div>
               <input
                 type="range"
-                min={0}
+                min={1}
                 max={MIN_SEP_MAX}
                 step={MIN_SEP_STEP}
                 value={minSeparation}
@@ -556,7 +553,7 @@ export function CoverageSimulatorPanel({
                 className="w-full h-1.5 accent-rose-500 disabled:opacity-50"
               />
               <div className="flex justify-between text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">
-                <span>Automático</span>
+                <span>1 km</span>
                 <span>{MIN_SEP_MAX.toLocaleString("es-AR")} km</span>
               </div>
             </div>
