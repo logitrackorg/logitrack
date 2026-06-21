@@ -45,7 +45,7 @@ export function DriverNav({ title, subtitle }: DriverNavProps) {
       {logoUrl ? (
         <img src={logoUrl} alt={orgName} className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white/10" />
       ) : (
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--brand)] to-[var(--sidebar-bg)] flex items-center justify-center text-white font-extrabold text-sm shrink-0">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-extrabold text-sm shrink-0">
           {orgName.slice(0, 2).toUpperCase()}
         </div>
       )}
@@ -64,7 +64,7 @@ export function DriverNav({ title, subtitle }: DriverNavProps) {
       <div className="relative shrink-0" ref={menuRef}>
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className="min-h-[44px] min-w-[44px] rounded-full bg-[var(--brand)] flex items-center justify-center text-white font-bold text-sm cursor-pointer border-0"
+          className="min-h-[44px] min-w-[44px] rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm cursor-pointer border-0"
           aria-label="Abrir menú de usuario"
         >
           {initials}
