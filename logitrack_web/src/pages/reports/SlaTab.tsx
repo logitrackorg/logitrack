@@ -4,7 +4,7 @@ import {
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
   ChevronDown, ChevronUp, UserPlus, UserMinus, Info, MapPin,
   Eye, EyeOff, X, AlertTriangle, Gauge, Maximize2, Minimize2, Target, Trash2, ExternalLink,
-  Power, RotateCcw, Building2,
+  Power, RotateCcw, Building2, Settings,
 } from "lucide-react";
 import type { FleetStatus, FleetDiagnosis, BranchFleetDiagnosis } from "../../api/slaMetrics";
 import {
@@ -972,6 +972,10 @@ export function CoberturaTab() {
   const [error, setError] = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
 
+  // Pesos del Índice de Viabilidad (configurables por el usuario desde el ícono ⚙️).
+  const [scoreWeights, setScoreWeights] = useState<ScoreWeightsConfig>(DEFAULT_SCORE_WEIGHTS);
+  const [showScoreSettings, setShowScoreSettings] = useState(false);
+
   // Simulador de cobertura: visualArea sigue al slider al instante (sin
   // llamar al servidor); simResult refleja el último diagnóstico confirmado.
   const [visualArea, setVisualArea] = useState(SIM_AREA_DEFAULT);
@@ -1019,8 +1023,6 @@ export function CoberturaTab() {
   const [diagnosisMode, setDiagnosisMode] = useState<DiagnosisMode>("area");
   const diagnosisModeRef = useRef<DiagnosisMode>("area");
   const snapMinPopulationRef = useRef(0);
-  const [rankingMode, setRankingMode] = useState<"population" | "gap_area">("population");
-  const rankingModeRef = useRef<"population" | "gap_area">("population");
   const [minDensity, setMinDensity] = useState(0);
   const minDensityRef = useRef(0);
   const [prioritizeIndustrial, setPrioritizeIndustrial] = useState(false);
@@ -1080,7 +1082,6 @@ export function CoberturaTab() {
   useEffect(() => { includeInactiveRef.current = includeInactive; }, [includeInactive]);
   useEffect(() => { closedBranchIdsRef.current = closedBranchIds; }, [closedBranchIds]);
   useEffect(() => { diagnosisModeRef.current = diagnosisMode; }, [diagnosisMode]);
-  useEffect(() => { rankingModeRef.current = rankingMode; }, [rankingMode]);
   useEffect(() => { minDensityRef.current = minDensity; }, [minDensity]);
   useEffect(() => { prioritizeIndustrialRef.current = prioritizeIndustrial; }, [prioritizeIndustrial]);
   useEffect(() => { applyTerrainFrictionRef.current = applyTerrainFriction; }, [applyTerrainFriction]);
@@ -1310,7 +1311,6 @@ export function CoberturaTab() {
           ? {
               minPopulation: minPop > 0 ? minPop : undefined,
               minDensity: minDensityRef.current > 0 ? minDensityRef.current : undefined,
-              rankingMode: rankingModeRef.current !== "population" ? rankingModeRef.current : undefined,
               prioritizeIndustrial: prioritizeIndustrialRef.current || undefined,
               applyTerrainFriction: applyTerrainFrictionRef.current || undefined,
               minSeparation: minSeparationRef.current > 0 ? minSeparationRef.current : undefined,
@@ -1417,7 +1417,6 @@ export function CoberturaTab() {
           ? {
               minPopulation: minPop > 0 ? minPop : undefined,
               minDensity: minDensityRef.current > 0 ? minDensityRef.current : undefined,
-              rankingMode: rankingModeRef.current !== "population" ? rankingModeRef.current : undefined,
               excludedCities: newExcluded.length > 0 ? newExcluded : undefined,
               additionalSites: currentSuggestionSites.length > 0 ? currentSuggestionSites : undefined,
               prioritizeIndustrial: prioritizeIndustrialRef.current || undefined,
@@ -1945,8 +1944,6 @@ export function CoberturaTab() {
                 onEditRegion={handleStartEditRegion}
                 diagnosisMode={diagnosisMode}
                 onDiagnosisModeChange={setDiagnosisMode}
-                rankingMode={rankingMode}
-                onRankingModeChange={setRankingMode}
                 minDensity={minDensity}
                 onMinDensityChange={setMinDensity}
                 prioritizeIndustrial={prioritizeIndustrial}
@@ -2054,6 +2051,10 @@ export function CoberturaTab() {
                             {snappedCities
                               .map((c, i) => ({ city: c, index: i }))
                               .filter(({ city }) => city.is_snapped)
+                              .sort((a, b) =>
+                                computeWeightedScore(simResult.suggested_locations[b.index], scoreWeights) -
+                                computeWeightedScore(simResult.suggested_locations[a.index], scoreWeights)
+                              )
                               .map(({ city, index }) => (
                                 <SuggestionCard
                                   key={`${city.city_name}-${index}`}
@@ -2063,6 +2064,7 @@ export function CoberturaTab() {
                                   onTogglePause={() => togglePauseSuggestion(index)}
                                   onBlacklist={(name) => blacklistCity(index, name)}
                                   onFlyTo={handleFlyToLocation}
+                                  weights={scoreWeights}
                                 />
                               ))}
                           </ul>
@@ -2284,6 +2286,14 @@ export function CoberturaTab() {
           </p>
         </div>
         <button
+          onClick={() => setShowScoreSettings(true)}
+          title="Configurar pesos del Índice de Viabilidad"
+          aria-label="Configurar puntuación"
+          className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-gray-700 cursor-pointer"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+        <button
           onClick={() => setIsFullscreen((v) => !v)}
           title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
           aria-label={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
@@ -2293,6 +2303,67 @@ export function CoberturaTab() {
         </button>
       </div>
       {body}
+
+      {/* ── Modal: configuración de pesos del Índice de Viabilidad ─────────── */}
+      {showScoreSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowScoreSettings(false)}>
+          <div
+            className="w-full max-w-sm mx-4 rounded-xl bg-white dark:bg-gray-900 shadow-2xl border border-slate-200 dark:border-gray-700 p-6 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <Settings className="w-4 h-4 text-violet-500" />
+                Pesos del Índice de Viabilidad
+              </h3>
+              <button onClick={() => setShowScoreSettings(false)} className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Ajustá la importancia de cada factor. El score final se normaliza automáticamente a 100.
+            </p>
+            {(
+              [
+                { key: "pop",      label: "👥 Población",   max: 60 },
+                { key: "density",  label: "🏙 Densidad",    max: 60 },
+                { key: "area",     label: "📦 Área útil",   max: 60 },
+                { key: "industry", label: "🏭 Industrial",  max: 40 },
+              ] as { key: keyof ScoreWeightsConfig; label: string; max: number }[]
+            ).map(({ key, label, max }) => (
+              <div key={key} className="space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-600 dark:text-slate-300 font-medium">{label}</span>
+                  <span className="tabular-nums font-semibold text-violet-600 dark:text-violet-400">{scoreWeights[key]} pts</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={max}
+                  step={1}
+                  value={scoreWeights[key]}
+                  onChange={(e) => setScoreWeights((prev) => ({ ...prev, [key]: Number(e.target.value) }))}
+                  className="w-full accent-violet-600"
+                />
+                <div className="flex justify-between text-[9px] text-slate-400">
+                  <span>0</span><span>{max}</span>
+                </div>
+              </div>
+            ))}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-gray-700">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Total: <strong className="text-slate-700 dark:text-slate-200">{scoreWeights.pop + scoreWeights.density + scoreWeights.area + scoreWeights.industry} pts</strong>
+              </span>
+              <button
+                onClick={() => setScoreWeights(DEFAULT_SCORE_WEIGHTS)}
+                className="text-[11px] text-violet-600 dark:text-violet-400 hover:underline cursor-pointer"
+              >
+                Restaurar valores
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal: guardar zona dibujada ─────────────────────────────────────── */}
       {showSaveRegionModal && (
@@ -2478,6 +2549,9 @@ function SeverityPill({
   );
 }
 
+type ScoreWeightsConfig = { pop: number; density: number; area: number; industry: number };
+const DEFAULT_SCORE_WEIGHTS: ScoreWeightsConfig = { pop: 20, density: 20, area: 35, industry: 15 };
+
 /** Returns Tailwind color classes based on the 1–100 Logistics Viability Score. */
 function scoreColor(score: number): { ring: string; bg: string; text: string } {
   if (score >= 80) return { ring: "ring-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400" };
@@ -2487,7 +2561,7 @@ function scoreColor(score: number): { ring: string; bg: string; text: string } {
 
 type ScoreBreakdown = { popPts: number; densPts: number; areaPts: number; industryPts: number; friction: number };
 
-function computeScoreBreakdown(loc: SuggestedLocation): ScoreBreakdown {
+function computeScoreBreakdown(loc: SuggestedLocation, w: ScoreWeightsConfig = DEFAULT_SCORE_WEIGHTS): ScoreBreakdown {
   const pop = loc.population ?? 0;
   const density = loc.density ?? 0;
   const area = loc.actual_added_km2 ?? loc.gap_area_km2 ?? 0;
@@ -2495,20 +2569,29 @@ function computeScoreBreakdown(loc: SuggestedLocation): ScoreBreakdown {
     "Llano": 1.0, "Llano-Ventoso": 1.1, "Semi-montañoso": 1.25, "Serrano": 1.35, "Montañoso": 1.5,
   };
   const friction = frictionMap[loc.terrain_type ?? ""] ?? 1.0;
-  const popPts = pop > 0 ? Math.min(20, Math.log10(pop) / Math.log10(3_000_000) * 20) : 0;
-  const densPts = density > 0 ? Math.min(20, density / 300 * 20) : 0;
-  const areaPts = area > 0 ? Math.min(35, Math.log10(area + 1) / Math.log10(300_001) * 35) : 0;
-  const industryPts = (loc.has_industrial_zone ?? false) ? 15 : 0;
+  const popPts = pop > 0 ? Math.min(w.pop, Math.log10(pop) / Math.log10(3_000_000) * w.pop) : 0;
+  const densPts = density > 0 ? Math.min(w.density, density / 300 * w.density) : 0;
+  const areaPts = area > 0 ? Math.min(w.area, Math.log10(area + 1) / Math.log10(300_001) * w.area) : 0;
+  const industryPts = (loc.has_industrial_zone ?? false) ? w.industry : 0;
   return { popPts, densPts, areaPts, industryPts, friction };
+}
+
+function computeWeightedScore(loc: SuggestedLocation, w: ScoreWeightsConfig): number {
+  const b = computeScoreBreakdown(loc, w);
+  const totalMax = w.pop + w.density + w.area + w.industry;
+  if (totalMax <= 0) return 1;
+  const raw = (b.popPts + b.densPts + b.areaPts + b.industryPts) / b.friction;
+  return Math.round(Math.min(100, Math.max(1, raw * (100 / totalMax))));
 }
 
 /** Compact circular badge that shows the Logistics Viability Index.
  *  When `loc` is provided, hovering shows a breakdown of how the score was computed. */
-function ScoreBadge({ score, size = "md", loc }: { score: number; size?: "sm" | "md"; loc?: SuggestedLocation }) {
+function ScoreBadge({ score, size = "md", loc, weights = DEFAULT_SCORE_WEIGHTS }: { score: number; size?: "sm" | "md"; loc?: SuggestedLocation; weights?: ScoreWeightsConfig }) {
   const [hovered, setHovered] = useState(false);
-  const { ring, bg, text } = scoreColor(score);
+  const breakdown = loc ? computeScoreBreakdown(loc, weights) : null;
+  const displayScore = breakdown ? computeWeightedScore(loc!, weights) : score;
+  const { ring, bg, text } = scoreColor(displayScore);
   const dim = size === "sm" ? "w-8 h-8 text-[10px]" : "w-10 h-10 text-xs";
-  const breakdown = loc ? computeScoreBreakdown(loc) : null;
   return (
     <div
       className="relative shrink-0"
@@ -2518,31 +2601,31 @@ function ScoreBadge({ score, size = "md", loc }: { score: number; size?: "sm" | 
       <div
         className={`flex flex-col items-center justify-center rounded-full ring-2 font-bold leading-none cursor-help ${dim} ${ring} ${bg} ${text}`}
       >
-        <span>{score}</span>
+        <span>{displayScore}</span>
         <span className="text-[8px] font-normal opacity-70">/100</span>
       </div>
       {hovered && breakdown && (
         <div className="absolute left-full top-0 ml-2 z-50 w-56 rounded-lg shadow-xl border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-2.5 pointer-events-none">
           <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-2">
-            Índice de Viabilidad: {score}/100
+            Índice de Viabilidad: {displayScore}/100
           </p>
           <div className="space-y-1 text-[10px]">
             <div className="flex justify-between items-center">
               <span className="text-slate-500 dark:text-slate-400">👥 Población</span>
-              <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.popPts.toFixed(1)}<span className="text-slate-400">/20</span></span>
+              <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.popPts.toFixed(1)}<span className="text-slate-400">/{weights.pop}</span></span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-slate-500 dark:text-slate-400">🏙 Densidad</span>
-              <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.densPts.toFixed(1)}<span className="text-slate-400">/20</span></span>
+              <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.densPts.toFixed(1)}<span className="text-slate-400">/{weights.density}</span></span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-slate-500 dark:text-slate-400">📦 Área útil</span>
-              <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.areaPts.toFixed(1)}<span className="text-slate-400">/35</span></span>
+              <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.areaPts.toFixed(1)}<span className="text-slate-400">/{weights.area}</span></span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-slate-500 dark:text-slate-400">🏭 Industrial</span>
               <span className={`font-medium tabular-nums ${breakdown.industryPts > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-400"}`}>
-                {breakdown.industryPts.toFixed(0)}<span className="text-slate-400">/15</span>
+                {breakdown.industryPts.toFixed(0)}<span className="text-slate-400">/{weights.industry}</span>
               </span>
             </div>
             {breakdown.friction > 1 && (
@@ -2574,6 +2657,7 @@ function SuggestionCard({
   onTogglePause,
   onBlacklist,
   onFlyTo,
+  weights = DEFAULT_SCORE_WEIGHTS,
 }: {
   city: SnappedCity;
   loc: SuggestedLocation;
@@ -2581,6 +2665,7 @@ function SuggestionCard({
   onTogglePause: () => void;
   onBlacklist: (cityName: string) => void;
   onFlyTo: (lat: number, lng: number) => void;
+  weights?: ScoreWeightsConfig;
 }) {
   const [blacklistChecked, setBlacklistChecked] = useState(false);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${city.lat},${city.lng}`;
@@ -2618,7 +2703,7 @@ function SuggestionCard({
         </button>
       </div>
       <div className="flex items-start gap-2">
-        {(loc.score ?? 0) > 0 && <ScoreBadge score={loc.score!} loc={loc} />}
+        {(loc.score ?? 0) > 0 && <ScoreBadge score={loc.score!} loc={loc} weights={weights} />}
         <div className="min-w-0">
           <button
             type="button"

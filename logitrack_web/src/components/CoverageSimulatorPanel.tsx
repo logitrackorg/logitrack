@@ -59,9 +59,6 @@ interface CoverageSimulatorPanelProps {
   /** Diagnosis ranking mode: "area" (geographic gaps) or "density" (population density). */
   diagnosisMode?: DiagnosisMode;
   onDiagnosisModeChange?: (mode: DiagnosisMode) => void;
-  /** Density-mode ranking criterion. */
-  rankingMode?: "population" | "gap_area";
-  onRankingModeChange?: (mode: "population" | "gap_area") => void;
   /** Minimum population density filter for density mode (hab./km²). */
   minDensity?: number;
   onMinDensityChange?: (v: number) => void;
@@ -120,8 +117,6 @@ export function CoverageSimulatorPanel({
   onEditRegion,
   diagnosisMode = "area",
   onDiagnosisModeChange,
-  rankingMode = "population",
-  onRankingModeChange,
   minDensity = 0,
   onMinDensityChange,
   prioritizeIndustrial = false,
@@ -435,42 +430,6 @@ export function CoverageSimulatorPanel({
             <p className="text-[10px] text-slate-400 dark:text-slate-500">
               Prioriza zonas con más habitantes por km². Ideal para detectar demanda urbana no atendida (ej. AMBA).
             </p>
-
-            {/* Ranking criterion */}
-            <div className="mt-2">
-              <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-1">Priorizar por</p>
-              <div className="flex rounded-md border border-slate-200 dark:border-gray-600 overflow-hidden text-[11px]">
-                <button
-                  type="button"
-                  disabled={isDisabled}
-                  onClick={() => onRankingModeChange?.("population")}
-                  className={`flex-1 px-2 py-1 transition-colors cursor-pointer disabled:cursor-not-allowed ${
-                    rankingMode === "population"
-                      ? "bg-violet-600 text-white font-medium"
-                      : "bg-white dark:bg-gray-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  Densidad pobl.
-                </button>
-                <button
-                  type="button"
-                  disabled={isDisabled}
-                  onClick={() => onRankingModeChange?.("gap_area")}
-                  className={`flex-1 px-2 py-1 border-l border-slate-200 dark:border-gray-600 transition-colors cursor-pointer disabled:cursor-not-allowed ${
-                    rankingMode === "gap_area"
-                      ? "bg-violet-600 text-white font-medium"
-                      : "bg-white dark:bg-gray-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  Área libre
-                </button>
-              </div>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-                {rankingMode === "population"
-                  ? "Primero las zonas con mayor cantidad de habitantes sin cobertura."
-                  : "Primero los huecos geográficos más grandes sin cobertura."}
-              </p>
-            </div>
 
             {/* Logistic scoring modifiers */}
             <div className="mt-2 space-y-1.5">

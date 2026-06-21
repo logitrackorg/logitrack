@@ -783,10 +783,21 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 	})
 
 	// ── Step 3: greedy spatial dedup (minSepKm) ──────────────────────────────
+	// Seed placed with existing branches and additionalSites so the minimum
+	// separation also applies relative to them — a suggestion too close to an
+	// existing branch is dropped just like one too close to another suggestion.
+	placed := make([]model.SuggestedLocation, 0, len(coverageCells)+len(density.AdditionalSites)+len(candidates))
+	for _, cell := range coverageCells {
+		placed = append(placed, model.SuggestedLocation{LatLng: model.LatLng{Lat: cell.Site.Lat, Lng: cell.Site.Lng}})
+	}
+	for _, a := range density.AdditionalSites {
+		placed = append(placed, model.SuggestedLocation{LatLng: model.LatLng{Lat: a.Lat, Lng: a.Lng}})
+	}
 	deduped := make([]model.SuggestedLocation, 0, len(candidates))
 	for _, c := range candidates {
-		if !tooCloseToExisting(c, deduped, minSepKm) {
+		if !tooCloseToExisting(c, placed, minSepKm) {
 			deduped = append(deduped, c)
+			placed = append(placed, c)
 		}
 	}
 	candidates = deduped
