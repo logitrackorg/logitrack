@@ -663,13 +663,14 @@ func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCe
 	}
 }
 
-// densityModeMaxCandidates caps the number of fragment candidates sent to
-// the Overpass snap API in density mode. Candidates are pre-sorted by
-// uncovered-fragment area descending so the largest (most likely populated)
-// ones are evaluated first. Each batch of 5 costs ~1.5 s of Overpass
-// rate-limiting: 25 candidates ≈ 5 batches ≈ 7.5 s — acceptable for an
-// interactive request while giving large zones a wider geographic sample.
-const densityModeMaxCandidates = 25
+// densityModeMaxCandidates caps the number of fragment candidates carried into
+// the snap stage in density mode. Candidates are pre-sorted by uncovered-fragment
+// area descending so the largest (most likely populated) ones are evaluated
+// first. Snapping is now a local in-memory lookup (embedded INDEC/Georef
+// dataset), so this cap is generous — it bounds work, not a rate-limited API.
+// A high ceiling lets large zones surface many more suggestions than the old
+// Overpass-bound limit of 25.
+const densityModeMaxCandidates = 200
 
 // densityModeMinFragAreaKm2 is the minimum uncovered-fragment area (km²)
 // considered in density mode. Smaller than coverageSuggestionMinFragmentAreaKm2
@@ -729,6 +730,12 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 	} else {
 		minSepKm = math.Max(radiusKm, coverageSuggestionMinSeparationKm)
 		perFragCap = coverageSuggestionMaxPerFragment
+	}
+	// Operator override: an explicit minimum separation replaces the automatic
+	// value above (in both scopes), letting the user pack suggestions closer
+	// together (more suggestions) or spread them out.
+	if density.MinSeparationKm > 0 {
+		minSepKm = density.MinSeparationKm
 	}
 
 	branchSites := make([]model.LatLng, len(coverageCells))
@@ -989,39 +996,6 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 			}
 		}
 		candidates = useful
-	}
-
-	// Max-distance-from-network filter: reject candidates that are farther than
-	// MaxDistFromNetworkKm from every existing branch AND every additional site
-	// (suggestions placed in prior "Buscar más" rounds). This prevents isolated
-	// outposts far from the current delivery network.
-	if density.MaxDistFromNetworkKm > 0 {
-		inRange := candidates[:0]
-		for _, c := range candidates {
-			minDist := math.MaxFloat64
-			for _, cell := range coverageCells {
-				if d := ml.HaversineKm(c.Lat, c.Lng, cell.Site.Lat, cell.Site.Lng); d < minDist {
-					minDist = d
-				}
-			}
-			for _, site := range density.AdditionalSites {
-				if d := ml.HaversineKm(c.Lat, c.Lng, site.Lat, site.Lng); d < minDist {
-					minDist = d
-				}
-			}
-			if minDist <= density.MaxDistFromNetworkKm {
-				inRange = append(inRange, c)
-			} else {
-				rejected = append(rejected, model.RejectedLocation{
-					CityName:     c.CityName,
-					Lat:          c.Lat,
-					Lng:          c.Lng,
-					RejectReason: fmt.Sprintf("Demasiado lejos de la red: %.0f km de la sucursal más cercana (máximo: %.0f km)", minDist, density.MaxDistFromNetworkKm),
-					Score:        rejectedScore(c, c.ActualAddedKm2),
-				})
-			}
-		}
-		candidates = inRange
 	}
 
 	// Density = population / uncovered-fragment area (hab./km²).

@@ -14,13 +14,13 @@ const MIN_POP_DEFAULT = 0;
 const MIN_DENSITY_MAX = 5_000;
 const MIN_DENSITY_STEP = 50;
 
-const MAX_DIST_NETWORK_MAX = 2_000;
-const MAX_DIST_NETWORK_STEP = 50;
+const MIN_SEP_MAX = 500;
+const MIN_SEP_STEP = 5;
 
 const MIN_SCORE_MAX = 100;
 const MIN_SCORE_STEP = 5;
 
-const MAX_SUGG_MAX = 20;
+const MAX_SUGG_MAX = 40;
 const MAX_SUGG_STEP = 1;
 
 export type TerritoryMode = "national" | "custom";
@@ -83,9 +83,9 @@ interface CoverageSimulatorPanelProps {
   /** Toggles visibility of rejected (discarded) city markers on the map. */
   showRejectedOnMap?: boolean;
   onShowRejectedOnMapChange?: (v: boolean) => void;
-  /** Max distance (km) a suggestion can be from the nearest existing branch. 0 = no limit. */
-  maxDistFromNetwork?: number;
-  onMaxDistFromNetworkChange?: (v: number) => void;
+  /** Minimum distance (km) enforced between suggested branches and existing ones. 0 = automatic. */
+  minSeparation?: number;
+  onMinSeparationChange?: (v: number) => void;
   /** Minimum Logistics Viability Score (1–100) a candidate must reach. 0 = no filter. */
   minScore?: number;
   onMinScoreChange?: (v: number) => void;
@@ -136,22 +136,25 @@ export function CoverageSimulatorPanel({
   industrialZoneResult = null,
   showRejectedOnMap = true,
   onShowRejectedOnMapChange,
-  maxDistFromNetwork = 0,
-  onMaxDistFromNetworkChange,
+  minSeparation = 0,
+  onMinSeparationChange,
   minScore = 0,
   onMinScoreChange,
 }: CoverageSimulatorPanelProps) {
   const isDisabled = disabled || isDiagnosing;
 
-  // Adaptive slider bounds: 0.1 % – 25 % of the active zone area.
+  // Adaptive slider bounds: floor stays at SIM_AREA_MIN (~4 km radius) even
+  // nationally so dense metros (AMBA) can use a tight radius that exposes
+  // uncovered demand; max scales to 25 % of the active zone. Use the number
+  // input for precise small values — the linear slider is coarse at the low end.
   const effectiveZoneArea = zoneAreaKm2 ?? SIM_AREA_MAX;
-  const simAreaMin = Math.max(SIM_AREA_MIN, Math.round(effectiveZoneArea * 0.001));
-  const simAreaMax = Math.min(SIM_AREA_MAX, Math.round(effectiveZoneArea * 0.25));
-  const simAreaStep = Math.max(1, Math.round((simAreaMax - simAreaMin) / 200));
+  const simAreaMin = SIM_AREA_MIN;
+  const simAreaMax = Math.max(simAreaMin, Math.min(SIM_AREA_MAX, Math.round(effectiveZoneArea * 0.25)));
+  const simAreaStep = Math.max(10, Math.round((simAreaMax - simAreaMin) / 1000));
 
   const [minPopulation, setMinPopulation] = useState(MIN_POP_DEFAULT);
   const [densityInput, setDensityInput] = useState("0");
-  const [distInput, setDistInput] = useState("0");
+  const [sepInput, setSepInput] = useState("0");
   const [scoreInput, setScoreInput] = useState("0");
 
   // Draft strings for the number inputs — decoupled from the controlled slider
@@ -550,28 +553,28 @@ export function CoverageSimulatorPanel({
               </div>
             </div>
 
-            {/* Max distance from network filter */}
+            {/* Minimum separation between branches */}
             <div className="mt-2">
               <div className="flex items-center justify-between mb-1">
                 <label className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                  Dist. máx. a la red logística
+                  Dist. mín. entre sucursales
                 </label>
                 <div className="flex items-center gap-1">
                   <input
                     type="number"
                     min={0}
-                    max={MAX_DIST_NETWORK_MAX}
-                    step={MAX_DIST_NETWORK_STEP}
-                    value={distInput}
+                    max={MIN_SEP_MAX}
+                    step={MIN_SEP_STEP}
+                    value={sepInput}
                     onChange={(e) => {
-                      setDistInput(e.target.value);
-                      const v = Math.max(0, Math.min(MAX_DIST_NETWORK_MAX, Number(e.target.value) || 0));
-                      onMaxDistFromNetworkChange?.(v);
+                      setSepInput(e.target.value);
+                      const v = Math.max(0, Math.min(MIN_SEP_MAX, Number(e.target.value) || 0));
+                      onMinSeparationChange?.(v);
                     }}
                     onBlur={() => {
-                      const v = Math.max(0, Math.min(MAX_DIST_NETWORK_MAX, Number(distInput) || 0));
-                      setDistInput(String(v));
-                      onMaxDistFromNetworkChange?.(v);
+                      const v = Math.max(0, Math.min(MIN_SEP_MAX, Number(sepInput) || 0));
+                      setSepInput(String(v));
+                      onMinSeparationChange?.(v);
                     }}
                     disabled={isDisabled}
                     className="w-16 text-right text-xs border border-slate-200 dark:border-gray-600 rounded px-1.5 py-0.5 bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -582,20 +585,20 @@ export function CoverageSimulatorPanel({
               <input
                 type="range"
                 min={0}
-                max={MAX_DIST_NETWORK_MAX}
-                step={MAX_DIST_NETWORK_STEP}
-                value={maxDistFromNetwork}
+                max={MIN_SEP_MAX}
+                step={MIN_SEP_STEP}
+                value={minSeparation}
                 onChange={(e) => {
                   const v = Number(e.target.value);
-                  setDistInput(String(v));
-                  onMaxDistFromNetworkChange?.(v);
+                  setSepInput(String(v));
+                  onMinSeparationChange?.(v);
                 }}
                 disabled={isDisabled}
                 className="w-full h-1.5 accent-rose-500 disabled:opacity-50"
               />
               <div className="flex justify-between text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">
-                <span>Sin filtro</span>
-                <span>{MAX_DIST_NETWORK_MAX.toLocaleString("es-AR")} km</span>
+                <span>Automático</span>
+                <span>{MIN_SEP_MAX.toLocaleString("es-AR")} km</span>
               </div>
             </div>
 

@@ -248,11 +248,12 @@ type DensityOptions struct {
 	// rank lower even when their population density is high.
 	ApplyTerrainFriction bool `json:"apply_terrain_friction,omitempty"`
 
-	// MaxDistFromNetworkKm, when > 0, rejects candidates farther than this
-	// distance (km) from the nearest existing branch or accepted suggestion from
-	// a prior "Buscar más" round. Prevents placing logistics points that are
-	// completely isolated from the current delivery network. 0 = no filter.
-	MaxDistFromNetworkKm float64 `json:"max_dist_from_network_km,omitempty"`
+	// MinSeparationKm, when > 0, overrides the automatic minimum distance (km)
+	// enforced between a suggested branch and (a) every existing branch and
+	// (b) every other suggestion. Lower values pack suggestions closer together
+	// (more suggestions); higher values spread them out. 0 = automatic default
+	// (max(radius×2, 20) inside a custom zone; max(radius, 150) nationally).
+	MinSeparationKm float64 `json:"min_separation_km,omitempty"`
 
 	// MinScore rejects candidates whose Logistics Viability Index (1–100) is
 	// strictly below this value. Applied after the full score is computed

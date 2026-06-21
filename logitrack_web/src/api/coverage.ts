@@ -213,7 +213,7 @@ export const coverageApi = {
       additionalSites?: LatLng[];
       prioritizeIndustrial?: boolean;
       applyTerrainFriction?: boolean;
-      maxDistFromNetwork?: number;
+      minSeparation?: number;
       minScore?: number;
     },
   ) =>
@@ -236,7 +236,7 @@ export const coverageApi = {
                 ...(density.additionalSites?.length ? { additional_sites: density.additionalSites } : {}),
                 ...(density.prioritizeIndustrial ? { prioritize_industrial: true } : {}),
                 ...(density.applyTerrainFriction ? { apply_terrain_friction: true } : {}),
-                ...(density.maxDistFromNetwork && density.maxDistFromNetwork > 0 ? { max_dist_from_network_km: density.maxDistFromNetwork } : {}),
+                ...(density.minSeparation && density.minSeparation > 0 ? { min_separation_km: density.minSeparation } : {}),
                 ...(density.minScore && density.minScore > 0 ? { min_score: density.minScore } : {}),
               },
             }

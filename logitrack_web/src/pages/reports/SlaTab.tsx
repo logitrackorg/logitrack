@@ -1027,8 +1027,8 @@ export function CoberturaTab() {
   const prioritizeIndustrialRef = useRef(false);
   const [applyTerrainFriction, setApplyTerrainFriction] = useState(false);
   const applyTerrainFrictionRef = useRef(false);
-  const [maxDistFromNetwork, setMaxDistFromNetwork] = useState(0);
-  const maxDistFromNetworkRef = useRef(0);
+  const [minSeparation, setMinSeparation] = useState(0);
+  const minSeparationRef = useRef(0);
   const [minScore, setMinScore] = useState(0);
   const minScoreRef = useRef(0);
   const [showRejectedOnMap, setShowRejectedOnMap] = useState(true);
@@ -1084,7 +1084,7 @@ export function CoberturaTab() {
   useEffect(() => { minDensityRef.current = minDensity; }, [minDensity]);
   useEffect(() => { prioritizeIndustrialRef.current = prioritizeIndustrial; }, [prioritizeIndustrial]);
   useEffect(() => { applyTerrainFrictionRef.current = applyTerrainFriction; }, [applyTerrainFriction]);
-  useEffect(() => { maxDistFromNetworkRef.current = maxDistFromNetwork; }, [maxDistFromNetwork]);
+  useEffect(() => { minSeparationRef.current = minSeparation; }, [minSeparation]);
   useEffect(() => { minScoreRef.current = minScore; }, [minScore]);
 
   // Fetch all branches (including inactive) for the simulation panel.
@@ -1313,7 +1313,7 @@ export function CoberturaTab() {
               rankingMode: rankingModeRef.current !== "population" ? rankingModeRef.current : undefined,
               prioritizeIndustrial: prioritizeIndustrialRef.current || undefined,
               applyTerrainFriction: applyTerrainFrictionRef.current || undefined,
-              maxDistFromNetwork: maxDistFromNetworkRef.current > 0 ? maxDistFromNetworkRef.current : undefined,
+              minSeparation: minSeparationRef.current > 0 ? minSeparationRef.current : undefined,
               minScore: minScoreRef.current > 0 ? minScoreRef.current : undefined,
             }
           : undefined,
@@ -1422,7 +1422,7 @@ export function CoberturaTab() {
               additionalSites: currentSuggestionSites.length > 0 ? currentSuggestionSites : undefined,
               prioritizeIndustrial: prioritizeIndustrialRef.current || undefined,
               applyTerrainFriction: applyTerrainFrictionRef.current || undefined,
-              maxDistFromNetwork: maxDistFromNetworkRef.current > 0 ? maxDistFromNetworkRef.current : undefined,
+              minSeparation: minSeparationRef.current > 0 ? minSeparationRef.current : undefined,
               minScore: minScoreRef.current > 0 ? minScoreRef.current : undefined,
             }
           : undefined,
@@ -1536,7 +1536,7 @@ export function CoberturaTab() {
       }
 
       if (step < locsToProcess.length - 1) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 500));
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
       }
     }
 
@@ -1730,9 +1730,13 @@ export function CoberturaTab() {
   }, [customBoundary]);
 
   // Clamp the coverage-radius slider whenever the zone area changes.
+  // The floor stays at SIM_AREA_MIN (~4 km radius) even nationally so dense
+  // metros (AMBA) can use a tight radius that exposes uncovered demand — a
+  // larger floor would let a single central branch blanket the whole metro and
+  // suppress all suggestions there.
   useEffect(() => {
-    const minA = Math.max(SIM_AREA_MIN, Math.round(zoneAreaKm2 * 0.001));
-    const maxA = Math.min(SIM_AREA_MAX, Math.round(zoneAreaKm2 * 0.25));
+    const minA = SIM_AREA_MIN;
+    const maxA = Math.max(minA, Math.min(SIM_AREA_MAX, Math.round(zoneAreaKm2 * 0.25)));
     setVisualArea((prev) => Math.max(minA, Math.min(maxA, prev)));
   }, [zoneAreaKm2]);
 
@@ -1949,8 +1953,8 @@ export function CoberturaTab() {
                 onPrioritizeIndustrialChange={setPrioritizeIndustrial}
                 applyTerrainFriction={applyTerrainFriction}
                 onApplyTerrainFrictionChange={setApplyTerrainFriction}
-                maxDistFromNetwork={maxDistFromNetwork}
-                onMaxDistFromNetworkChange={setMaxDistFromNetwork}
+                minSeparation={minSeparation}
+                onMinSeparationChange={setMinSeparation}
                 minScore={minScore}
                 onMinScoreChange={setMinScore}
                 showRejectedOnMap={showRejectedOnMap}
