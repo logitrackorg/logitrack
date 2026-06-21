@@ -24,9 +24,10 @@ interface Props {
   values: PublicClaimFormValues;
   onChange: (patch: Partial<PublicClaimFormValues>) => void;
   disabled?: boolean;
+  shipmentDelivered?: boolean;
 }
 
-export function PublicClaimFormFields({ values, onChange, disabled }: Props) {
+export function PublicClaimFormFields({ values, onChange, disabled, shipmentDelivered = true }: Props) {
   const [evidenceError, setEvidenceError] = useState<string>("");
 
   const toggleDamageSubtype = (subtype: DamageSubtype) => {
@@ -72,33 +73,54 @@ export function PublicClaimFormFields({ values, onChange, disabled }: Props) {
   const labelClasses = "block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1";
   const hintClasses = "text-xs text-gray-400 dark:text-gray-500";
 
+  // Si el envío no fue entregado, las opciones "Entrega incompleta o dañada" y
+  // "Problema con la entrega" no están disponibles.
+  const deliveryRequiredOptions = new Set(["incomplete_damage", "delivery_problem"]);
+  const optionDisabled = (optValue: string) =>
+    disabled || (!shipmentDelivered && deliveryRequiredOptions.has(optValue));
+
   return (
     <div className="flex flex-col gap-4">
       <fieldset className={fieldsetClasses}>
         <legend className={legendClasses}>¿Qué problema tuviste con el envío?</legend>
+        {!shipmentDelivered && (
+          <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg px-3 py-2 mb-3">
+            Tu envío todavía no ha sido entregado.
+          </p>
+        )}
         <div className="flex flex-col gap-2" role="radiogroup" aria-label="Tipo de problema">
-          {CLAIM_MAIN_OPTIONS.map((opt) => (
-            <label key={opt.value} className={choiceLabelClasses}>
-              <input
-                type="radio"
-                name="claim-main-category"
-                value={opt.value}
-                checked={values.category === opt.value}
-                onChange={() =>
-                  onChange({
-                    category: opt.value,
-                    damageSubtypes: [],
-                    deliverySubtype: "",
-                    staffDescription: "",
-                    evidence: null,
-                  })
-                }
-                disabled={disabled}
-                className="shrink-0 accent-[var(--sidebar-bg)]"
-              />
-              <span className={choiceTextClasses}>{opt.label}</span>
-            </label>
-          ))}
+          {CLAIM_MAIN_OPTIONS.map((opt) => {
+            const isDisabled = optionDisabled(opt.value);
+            return (
+              <label
+                key={opt.value}
+                className={`${choiceLabelClasses} ${
+                  isDisabled
+                    ? "opacity-50 cursor-not-allowed hover:border-gray-200 dark:hover:border-gray-700"
+                    : ""
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="claim-main-category"
+                  value={opt.value}
+                  checked={values.category === opt.value}
+                  onChange={() =>
+                    onChange({
+                      category: opt.value,
+                      damageSubtypes: [],
+                      deliverySubtype: "",
+                      staffDescription: "",
+                      evidence: null,
+                    })
+                  }
+                  disabled={isDisabled}
+                  className="shrink-0 accent-[var(--sidebar-bg)]"
+                />
+                <span className={choiceTextClasses}>{opt.label}</span>
+              </label>
+            );
+          })}
         </div>
       </fieldset>
 
