@@ -1,0 +1,85 @@
+logitrack_core/internal/projection/postgres_shipment.go
+  s_1490f0f8e462f7::t_a405cedbe055e1 587
+  s_1490f0f8e462f7::t_11e4aefb06151d 484-485,521-523,536
+  s_1490f0f8e462f7::t_8a60f733da6609 653
+  s_1490f0f8e462f7::t_91ca5d2b3f0d45 563
+  s_1490f0f8e462f7::t_adb76b7f408119 812
+  s_1490f0f8e462f7::t_1e6805cf82feac 1130
+  s_1490f0f8e462f7::t_cc354f5bdc2867 1228
+logitrack_core/internal/service/system_config.go
+  s_1490f0f8e462f7::t_e4e6be221514e0 79-85
+logitrack_core/cmd/server/main.go
+  s_1490f0f8e462f7::t_f2cb36934bc35b 799-801,803-805,807
+  s_1490f0f8e462f7::t_8e3f65ce779c05 802,806
+  s_1490f0f8e462f7::t_f9837529063c32 177-178
+  s_1490f0f8e462f7::t_d61d6115e7edc7 154-158
+logitrack_web/src/components/Sidebar.tsx
+  s_6f4df44ae4a3f0::t_27b31c79ec8dc5 122,130-132,134-135,138-139
+  s_6f4df44ae4a3f0::t_cc0c9e52c79c38 133,136-137
+logitrack_core/internal/model/system_config.go
+  s_1490f0f8e462f7::t_cd92598d716fad 93-94
+  s_1490f0f8e462f7::t_ceae345c8a41ff 63-71
+logitrack_core/internal/db/migrate.go
+  s_1490f0f8e462f7::t_aa2713f4bf9172 892-896
+logitrack_core/internal/handler/delivery_photo.go
+  s_1490f0f8e462f7::t_1420acf4a57c11 29-37
+logitrack_core/internal/model/shipment.go
+  s_1490f0f8e462f7::t_c7c3d33572ee7b 150-158
+logitrack_core/internal/repository/photo_lifecycle.go
+  s_1490f0f8e462f7::t_c8570b57e58d87 1-128
+logitrack_web/src/pages/reports/EmpleadoMesTab.tsx
+  s_b2f711158b876e::t_12cae1d5273bb5 124-146,152,158-172,177,183,190,200-237,239,242-263
+  s_b2f711158b876e::t_8937f437c9577b 3
+logitrack_web/src/pages/SystemConfig.tsx
+  s_1490f0f8e462f7::t_b5b438f3ba1758 341,345-456
+  s_1490f0f8e462f7::t_fc65453873ba4c 158-160
+  s_1490f0f8e462f7::t_d5fcb9a6e535a0 2
+logitrack_core/internal/service/photo_lifecycle.go
+  s_1490f0f8e462f7::t_c24a2e05672f06 1-70
+logitrack_core/internal/service/scheduler.go
+  s_1490f0f8e462f7::t_f265dedc784468 65-107
+logitrack_core/internal/repository/system_config.go
+  s_1490f0f8e462f7::t_ff034af3ba92d7 68-70,89-90
+  s_1490f0f8e462f7::t_85ca6c26672fe1 30-31,37-38
+logitrack_web/src/api/systemConfig.ts
+  s_1490f0f8e462f7::t_b985f425836589 44-47
+logitrack_web/src/pages/UserProfile.tsx
+  s_6f4df44ae4a3f0::t_045de2ac7f610f 6
+  s_6f4df44ae4a3f0::t_73a2b530ddcfe3 370-376,379-391
+  s_6f4df44ae4a3f0::t_150255481d3567 442
+  s_6f4df44ae4a3f0::t_7301d1fd31552b 377-378
+logitrack_core/internal/handler/user.go
+  s_6f4df44ae4a3f0::t_01a7ce1cc844ce 75-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "1e0ea9efa706f10f9fbff84a917a292d0af27719",
+  "prompts": {},
+  "sessions": {
+    "s_1490f0f8e462f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8020a058-1f89-4027-80bf-6874949a9b62",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_6f4df44ae4a3f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a9273ec7-fabe-4154-bf98-d6a00e0faeb8",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_b2f711158b876e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "99d2c3e9-ead0-40de-b404-f657996f146d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
