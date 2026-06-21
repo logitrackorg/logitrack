@@ -2041,7 +2041,7 @@ export function CoberturaTab() {
                 </p>
               )}
               {simResult !== null && simResult.suggested_locations.length === 0 && !simError && (
-                diagnosisModeRef.current === "density" ? (
+                diagnosisMode === "density" ? (
                   <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
                     No se encontraron ciudades sin cobertura en la zona con los filtros actuales. Probá ampliar el área, bajar la población mínima o usá el modo Radio de cobertura.
                   </p>
@@ -2198,7 +2198,7 @@ export function CoberturaTab() {
                           </div>
                         );
                       })()}
-                      {snappedCount > 0 && diagnosisModeRef.current === "density" && (
+                      {snappedCount > 0 && diagnosisMode === "density" && (
                         <button
                           type="button"
                           disabled={isFindingMore || isDiagnosing}

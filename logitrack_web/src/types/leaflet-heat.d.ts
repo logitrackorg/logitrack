@@ -1,5 +1,3 @@
-import type * as L from "leaflet";
-
 declare module "leaflet" {
   interface HeatLayerOptions {
     minOpacity?: number;
