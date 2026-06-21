@@ -2038,9 +2038,12 @@ export function CoberturaTab() {
                       </summary>
                       <ul className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1">
                         {rejectedLocations.map((r, i) => (
-                          <li key={i} className="flex flex-col gap-0.5 p-2 rounded-lg bg-slate-100/70 dark:bg-gray-700/40 border border-slate-200 dark:border-gray-600">
-                            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">{r.city_name}</span>
-                            <span className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug">{r.reject_reason}</span>
+                          <li key={i} className="flex items-start gap-2 p-2 rounded-lg bg-slate-100/70 dark:bg-gray-700/40 border border-slate-200 dark:border-gray-600">
+                            {(r.score ?? 0) > 0 && <ScoreBadge score={r.score!} size="sm" />}
+                            <div className="min-w-0">
+                              <span className="block text-xs font-semibold text-slate-700 dark:text-slate-200">{r.city_name}</span>
+                              <span className="block text-[10px] text-slate-500 dark:text-slate-400 leading-snug">{r.reject_reason}</span>
+                            </div>
                           </li>
                         ))}
                       </ul>
@@ -2335,6 +2338,28 @@ function SeverityPill({
   );
 }
 
+/** Returns Tailwind color classes based on the 1–100 Logistics Viability Score. */
+function scoreColor(score: number): { ring: string; bg: string; text: string } {
+  if (score >= 80) return { ring: "ring-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400" };
+  if (score >= 50) return { ring: "ring-amber-400",   bg: "bg-amber-50 dark:bg-amber-900/30",   text: "text-amber-700 dark:text-amber-400"   };
+  return               { ring: "ring-rose-400",    bg: "bg-rose-50 dark:bg-rose-900/30",     text: "text-rose-700 dark:text-rose-400"     };
+}
+
+/** Compact circular badge that shows the Logistics Viability Index. */
+function ScoreBadge({ score, size = "md" }: { score: number; size?: "sm" | "md" }) {
+  const { ring, bg, text } = scoreColor(score);
+  const dim = size === "sm" ? "w-8 h-8 text-[10px]" : "w-10 h-10 text-xs";
+  return (
+    <div
+      title={`Índice de Viabilidad Logística: ${score}/100`}
+      className={`shrink-0 flex flex-col items-center justify-center rounded-full ring-2 font-bold leading-none ${dim} ${ring} ${bg} ${text}`}
+    >
+      <span>{score}</span>
+      <span className="text-[8px] font-normal opacity-70">/100</span>
+    </div>
+  );
+}
+
 /**
  * Tarjeta de sugerencia "aterrizada": ciudad real candidata a nueva sucursal,
  * con un enlace a Google Maps y el detalle de impacto operativo (cobertura
@@ -2394,22 +2419,27 @@ function SuggestionCard({
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
-      <button
-        type="button"
-        onClick={() => onFlyTo(city.lat, city.lng)}
-        title="Centrar mapa en esta ciudad"
-        className="text-sm font-semibold text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors text-left"
-      >
-        {city.city_name}
-      </button>
-      <a
-        href={mapsUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-0.5 inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-      >
-        <ExternalLink className="w-3 h-3" /> Ver en Google Maps
-      </a>
+      <div className="flex items-start gap-2">
+        {(loc.score ?? 0) > 0 && <ScoreBadge score={loc.score!} />}
+        <div className="min-w-0">
+          <button
+            type="button"
+            onClick={() => onFlyTo(city.lat, city.lng)}
+            title="Centrar mapa en esta ciudad"
+            className="text-sm font-semibold text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors text-left"
+          >
+            {city.city_name}
+          </button>
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-0.5 inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            <ExternalLink className="w-3 h-3" /> Ver en Google Maps
+          </a>
+        </div>
+      </div>
       <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300">
         {(loc.actual_added_km2 ?? 0) > 0 && (
           <>Aportará ~{formatKm2(loc.actual_added_km2)} de cobertura neta. </>

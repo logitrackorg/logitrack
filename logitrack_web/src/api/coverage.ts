@@ -102,6 +102,8 @@ export interface SuggestedLocation {
   has_industrial_zone?: boolean;
   /** Tipo de terreno: "Llano", "Llano-Ventoso", "Semi-montañoso", "Serrano", "Montañoso". */
   terrain_type?: string;
+  /** Índice de Viabilidad Logística (1–100) calculado por el backend. */
+  score?: number;
 }
 
 /** Ciudad candidata que no pasó algún filtro de densidad, población o proximidad. */
@@ -110,6 +112,8 @@ export interface RejectedLocation {
   lat: number;
   lng: number;
   reject_reason: string;
+  /** Índice de Viabilidad Logística (1–100) calculado en el momento del rechazo. */
+  score?: number;
 }
 
 export interface SimulationResult {

@@ -111,6 +111,12 @@ type SuggestedLocation struct {
 	// "Montañoso"). Set by density-mode scoring when ApplyTerrainFriction is
 	// enabled; empty otherwise.
 	TerrainType string `json:"terrain_type,omitempty"`
+
+	// Score is the Logistics Viability Index (1–100) computed by
+	// CalculateViabilityScore. Combines population, density, net coverage area,
+	// industrial-zone presence, and terrain friction into a single number so the
+	// frontend can show at a glance how strong a candidate this city is.
+	Score int `json:"score,omitempty"`
 }
 
 // RejectedLocation is a candidate city evaluated during density-mode diagnosis
@@ -122,6 +128,10 @@ type RejectedLocation struct {
 	Lat          float64 `json:"lat"`
 	Lng          float64 `json:"lng"`
 	RejectReason string  `json:"reject_reason"`
+	// Score is the Logistics Viability Index computed at rejection time, using
+	// whatever data was available (terrain always included; industrial zone
+	// defaults to false for rejected candidates since detection runs later).
+	Score int `json:"score,omitempty"`
 }
 
 // SimulationResult is the response of CoverageService.Diagnose: the per-branch

@@ -609,6 +609,70 @@ func (s *CoverageService) detectIndustrialZones(candidates []model.SuggestedLoca
 	return result
 }
 
+// CalculateViabilityScore returns a Logistics Viability Index in the range
+// [1, 100] that combines four independent signals into a single score:
+//
+//	Population / Density   40 pts  (20 each, log10 / linear normalised)
+//	Net useful area        35 pts  (log10 normalised, 300 000 km² ceiling)
+//	Industrial zone bonus  15 pts  (flat bonus when hasIndustry)
+//	Terrain friction        ÷ f    (1.0 – 1.5; divides the sub-total)
+//
+// The raw sub-total (max 90) is then rescaled to 1–100.
+//
+// This is a pure function with no side-effects and no network calls; terrain
+// friction is passed in by the caller (computed via terrainFriction, which is
+// also a pure coordinate-based heuristic).
+func CalculateViabilityScore(population int, density, usefulAreaKm2 float64, hasIndustry bool, friction float64) int {
+	if friction < 1.0 {
+		friction = 1.0
+	}
+
+	// Population (0–20): log₁₀ scale, Buenos Aires metro (~3M) as ceiling.
+	var popScore float64
+	if population > 0 {
+		popScore = math.Log10(float64(population)) / math.Log10(3_000_000) * 20
+		if popScore > 20 {
+			popScore = 20
+		}
+	}
+
+	// Density (0–20): linear scale, 300 hab./km² as practical ceiling for
+	// Argentine secondary cities (GBA suburbs reach this value; larger values
+	// are capped so urban giants don't dominate the ranking alone).
+	var densityScore float64
+	if density > 0 {
+		densityScore = density / 300.0 * 20
+		if densityScore > 20 {
+			densityScore = 20
+		}
+	}
+
+	// Net useful coverage area (0–35): log₁₀ scale.
+	// 300 000 km² ≈ the area of the Pampas region — a reasonable ceiling for
+	// a single branch's net contribution across the full national scope.
+	var areaScore float64
+	if usefulAreaKm2 > 0 {
+		areaScore = math.Log10(usefulAreaKm2+1) / math.Log10(300_001) * 35
+		if areaScore > 35 {
+			areaScore = 35
+		}
+	}
+
+	// Industrial zone bonus (0 or 15): logistics hubs near industrial areas
+	// are strategically preferable; the bonus lifts them above residential
+	// cities with identical population/density figures.
+	var industryBonus float64
+	if hasIndustry {
+		industryBonus = 15
+	}
+
+	// Combine and apply terrain penalty.
+	// Max raw = (20+20+35+15) / 1.0 = 90; normalise to 1–100.
+	raw := (popScore + densityScore + areaScore + industryBonus) / friction
+	normalized := raw * (100.0 / 90.0)
+	return int(math.Min(100, math.Max(1, math.Round(normalized))))
+}
+
 // snapMathSuggestionsInPlace auto-snaps each MathematicalSuggestion to the
 // nearest real populated place (cache → Overpass → patagoniaFallback) within
 // math.Min(radiusKm/2, snapToCityMaxRadiusKm). Cities inside any dangerous

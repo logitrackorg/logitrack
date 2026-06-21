@@ -710,6 +710,15 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 
 	var rejected []model.RejectedLocation
 
+	// rejectedScore computes the Logistics Viability Index for a candidate at
+	// rejection time. Industrial-zone presence defaults to false because zone
+	// detection (an Overpass call) only runs for candidates that survive to the
+	// final scoring stage. Terrain is always cheap to compute.
+	rejectedScore := func(c model.SuggestedLocation, usefulArea float64) int {
+		f, _ := terrainFriction(c.Lat, c.Lng)
+		return CalculateViabilityScore(c.Population, c.Density, usefulArea, false, f)
+	}
+
 	radiusKm := math.Sqrt(simulatedAreaKm2 / math.Pi)
 	circle := toPolyclip(circlePolygon(radiusKm, coverageSuggestionCircleVertices))
 
@@ -815,6 +824,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 				Lat:          c.Lat,
 				Lng:          c.Lng,
 				RejectReason: c.CityName + " ya fue seleccionada como candidata (ciudad duplicada)",
+				Score:        rejectedScore(c, c.GapAreaKm2),
 			})
 		}
 	}
@@ -833,6 +843,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 					Lat:          c.Lat,
 					Lng:          c.Lng,
 					RejectReason: "Ciudad fuera de la zona de análisis seleccionada",
+					Score:        rejectedScore(c, c.GapAreaKm2),
 				})
 			}
 		}
@@ -860,6 +871,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 					Lat:          c.Lat,
 					Lng:          c.Lng,
 					RejectReason: fmt.Sprintf("Demasiado cerca de una sucursal existente (< %.0f km)", minSepKm),
+					Score:        rejectedScore(c, c.GapAreaKm2),
 				})
 			}
 		}
@@ -881,6 +893,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 				Lat:          c.Lat,
 				Lng:          c.Lng,
 				RejectReason: fmt.Sprintf("Demasiado cerca de otra sugerencia seleccionada (< %.0f km)", minSepKm),
+				Score:        rejectedScore(c, c.GapAreaKm2),
 			})
 		}
 	}
@@ -906,6 +919,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 					Lat:          c.Lat,
 					Lng:          c.Lng,
 					RejectReason: reason,
+					Score:        1, // no city found — minimum viability
 				})
 			}
 		}
@@ -975,6 +989,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 					Lat:          c.Lat,
 					Lng:          c.Lng,
 					RejectReason: fmt.Sprintf("Cobertura neta insuficiente: %.0f km² (mínimo: %.0f km²)", c.ActualAddedKm2, minUsefulKm2),
+					Score:        rejectedScore(c, c.ActualAddedKm2),
 				})
 			}
 		}
@@ -1000,6 +1015,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 					Lat:          c.Lat,
 					Lng:          c.Lng,
 					RejectReason: fmt.Sprintf("Densidad insuficiente: %.0f hab./km² (mínimo: %.0f hab./km²)", c.Density, density.MinDensity),
+					Score:        rejectedScore(c, c.ActualAddedKm2),
 				})
 			}
 		}
@@ -1018,6 +1034,19 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		for i := range candidates {
 			candidates[i].HasIndustrialZone = industrial[i]
 		}
+	}
+
+	// Viability Score: full signal (population + density + area + industry + terrain)
+	// now that all attributes are set for surviving candidates.
+	for i := range candidates {
+		f, _ := terrainFriction(candidates[i].Lat, candidates[i].Lng)
+		candidates[i].Score = CalculateViabilityScore(
+			candidates[i].Population,
+			candidates[i].Density,
+			candidates[i].ActualAddedKm2,
+			candidates[i].HasIndustrialZone,
+			f,
+		)
 	}
 
 	// Final ranking via composite score:
