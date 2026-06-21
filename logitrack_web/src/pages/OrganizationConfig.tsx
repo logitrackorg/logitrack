@@ -13,9 +13,6 @@ const inputClass =
 
 const labelClass = "text-sm font-semibold text-slate-700 dark:text-slate-300";
 
-const colorPickerClass =
-  "h-10 w-10 rounded-lg border border-slate-200 bg-white cursor-pointer p-0 dark:bg-slate-800 dark:border-slate-600";
-
 export function OrganizationConfig() {
   const [config, setConfig] = useState<OrganizationConfigType | null>(null);
   const [form, setForm] = useState({
@@ -183,66 +180,39 @@ export function OrganizationConfig() {
               sidebarColor={form.sidebar_color || undefined}
             />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="grid gap-1.5">
                 <label className={labelClass}>Color primario</label>
-                <div className="flex gap-2">
-                  <input
-                    type="color"
-className={colorPickerClass}
-                     value={form.primary_color || "#2563eb"}
-                    onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
-                  />
-                  <input
-                    className={inputClass}
-                    value={form.primary_color}
-                    onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
-                    placeholder="#2563eb"
-                    maxLength={7}
-                  />
-                </div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Botones, links, focus rings. Default: azul #2563eb</p>
+                <input
+                  type="color"
+                  className="w-full h-10 rounded-lg border border-slate-200 bg-white cursor-pointer dark:bg-slate-800 dark:border-slate-600"
+                  value={form.primary_color || "#2563eb"}
+                  onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
+                />
+                <p className="text-xs text-slate-400 dark:text-slate-500">Botones, links, focus rings</p>
               </div>
 
               <div className="grid gap-1.5">
                 <label className={labelClass}>Color de acento</label>
-                <div className="flex gap-2">
-                  <input
-                    type="color"
-className={colorPickerClass}
-                     value={form.accent_color || "#f97316"}
-                    onChange={(e) => setForm({ ...form, accent_color: e.target.value })}
-                  />
-                  <input
-                    className={inputClass}
-                    value={form.accent_color}
-                    onChange={(e) => setForm({ ...form, accent_color: e.target.value })}
-                    placeholder="#f97316"
-                    maxLength={7}
-                  />
-                </div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Badges de prioridad, indicadores. Default: naranja #f97316</p>
-              </div>
-            </div>
-
-            <div className="grid gap-1.5">
-              <label className={labelClass}>Color del sidebar</label>
-              <div className="flex gap-2">
                 <input
                   type="color"
-                  className={colorPickerClass}
-                    value={form.sidebar_color || "#1e3a5f"}
-                    onChange={(e) => setForm({ ...form, sidebar_color: e.target.value })}
-                  />
-                  <input
-                    className={inputClass}
-                    value={form.sidebar_color}
-                    onChange={(e) => setForm({ ...form, sidebar_color: e.target.value })}
-                    placeholder="#1e3a5f"
-                    maxLength={7}
-                  />
-                </div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Fondo de la barra lateral. Default: azul oscuro #1e3a5f</p>
+                  className="w-full h-10 rounded-lg border border-slate-200 bg-white cursor-pointer dark:bg-slate-800 dark:border-slate-600"
+                  value={form.accent_color || "#f97316"}
+                  onChange={(e) => setForm({ ...form, accent_color: e.target.value })}
+                />
+                <p className="text-xs text-slate-400 dark:text-slate-500">Badges, indicadores</p>
+              </div>
+
+              <div className="grid gap-1.5">
+                <label className={labelClass}>Color del sidebar</label>
+                <input
+                  type="color"
+                  className="w-full h-10 rounded-lg border border-slate-200 bg-white cursor-pointer dark:bg-slate-800 dark:border-slate-600"
+                  value={form.sidebar_color || "#1e3a5f"}
+                  onChange={(e) => setForm({ ...form, sidebar_color: e.target.value })}
+                />
+                <p className="text-xs text-slate-400 dark:text-slate-500">Fondo de la barra lateral</p>
+              </div>
             </div>
 
             {/* Palette selector */}
