@@ -523,7 +523,7 @@ export function PublicTracking() {
       {/* ═══════════════════════════════════════════════════════════
           HEADER — branded strip like Login left panel
           ═══════════════════════════════════════════════════════════ */}
-      <header className="relative bg-blue-950 overflow-hidden px-4 pb-10 pt-8">
+      <header className="relative bg-[var(--sidebar-bg)] overflow-hidden px-4 pb-10 pt-8">
         {/* Theme toggle — top right */}
         <div className="absolute top-3 right-3 z-10">
           <ThemeToggle />
@@ -532,8 +532,8 @@ export function PublicTracking() {
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:48px_48px]" />
 
         {/* Círculos de fondo */}
-        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full bg-blue-500/5 -translate-x-1/2 translate-y-1/2" />
-        <div className="absolute top-0 right-0 w-[300px] h-[300px] rounded-full bg-orange-500/5 translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full bg-[var(--brand)]/5 -translate-x-1/2 translate-y-1/2" />
+        <div className="absolute top-0 right-0 w-[300px] h-[300px] rounded-full bg-[var(--accent)]/5 translate-x-1/2 -translate-y-1/2" />
 
         <div className="relative max-w-3xl mx-auto">
           {/* Logo + branding */}

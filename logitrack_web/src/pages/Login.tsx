@@ -486,15 +486,15 @@ export function Login() {
     <div className="min-h-screen grid lg:grid-cols-[1fr_480px] bg-gradient-to-br from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
 
       {/* ── Panel izquierdo — branding ── */}
-      <div className="hidden lg:flex flex-col justify-between p-12 bg-blue-950 relative overflow-hidden">
+      <div className="hidden lg:flex flex-col justify-between p-12 bg-[var(--sidebar-bg)] relative overflow-hidden">
 
         {/* Red neuronal interactiva — sucursales interconectadas que siguen al mouse */}
         <NeuralBranchNetwork />
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:48px_48px]" />
 
         {/* Círculos de fondo */}
-        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full bg-blue-500/5 -translate-x-1/2 translate-y-1/2" />
-        <div className="absolute top-0 right-0 w-[300px] h-[300px] rounded-full bg-orange-500/5 translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full bg-[var(--brand)]/5 -translate-x-1/2 translate-y-1/2" />
+        <div className="absolute top-0 right-0 w-[300px] h-[300px] rounded-full bg-[var(--accent)]/5 translate-x-1/2 -translate-y-1/2" />
 
         {/* Logo */}
         <div className="relative flex items-center gap-3">
