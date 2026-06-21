@@ -4,7 +4,7 @@ import {
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
   ChevronDown, ChevronUp, UserPlus, UserMinus, Info, MapPin,
   Eye, EyeOff, X, AlertTriangle, Gauge, Maximize2, Minimize2, Target, Trash2, ExternalLink,
-  Power, RotateCcw, Building2, Settings,
+  Power, RotateCcw, Building2, Settings, FileDown,
 } from "lucide-react";
 import type { FleetStatus, FleetDiagnosis, BranchFleetDiagnosis } from "../../api/slaMetrics";
 import {
@@ -985,6 +985,7 @@ export function CoberturaTab() {
   // Modo pantalla completa: superpone el mapa + panel lateral sobre toda la
   // ventana (incluyendo el topbar) para aprovechar el espacio al analizar el mapa.
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // "Aterrizar sugerencias en ciudades reales": ciudades reales (dataset oficial
   // INDEC/Georef) resueltas para simResult.suggested_locations, en el mismo
@@ -1434,6 +1435,180 @@ export function CoberturaTab() {
     setHighlighted(id);
     diagnoseCore(visualAreaRef.current, closedBranchIdsRef.current);
   }, [diagram, diagnoseCore]);
+
+  const handleExportPdf = useCallback(async () => {
+    if (!simResult || !snappedCities) return;
+    setIsExportingPdf(true);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const html2canvas = (await import("html2canvas")).default;
+
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageW = 210;
+      const pageH = 297;
+      const marginX = 14;
+      const contentW = pageW - marginX * 2;
+      let curY = 0;
+
+      // ── Header ────────────────────────────────────────────────────────────────
+      doc.setFillColor(30, 58, 138);
+      doc.rect(0, 0, pageW, 22, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(255, 255, 255);
+      doc.text("LogiTrack", marginX, 10);
+      doc.setFontSize(9.5);
+      doc.setFont("helvetica", "normal");
+      doc.text("Reporte de Sugerencias de Expansión de Red de Sucursales", marginX, 17);
+      const dateStr = new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" });
+      doc.text(dateStr, pageW - marginX, 14, { align: "right" });
+      curY = 28;
+
+      // ── Metadata ─────────────────────────────────────────────────────────────
+      doc.setFontSize(8.5);
+      doc.setTextColor(60, 60, 60);
+      const modeLabel = diagnosisMode === "density" ? "Habitantes por km² (densidad)" : "Cobertura geográfica (área)";
+      const areaKm2 = simResult.simulated_area_km2 ?? 0;
+      const areaLabel = areaKm2 >= 1000
+        ? `${(areaKm2 / 1000).toFixed(1).replace(".", ",")} mil km²`
+        : `${areaKm2.toFixed(0)} km²`;
+      const scopeLabel = highlighted
+        ? (diagram?.cells.find((c) => c.branch_id === highlighted)?.branch_name ?? "Sucursal seleccionada")
+        : "Todas las sucursales";
+      const confirmedCount = snappedCities.filter((c) => c.is_snapped).length;
+
+      const metaRows: [string, string, string, string][] = [
+        ["Modo de análisis:", modeLabel, "Área de simulación:", areaLabel],
+        ["Alcance:", scopeLabel, "Candidatas confirmadas:", String(confirmedCount)],
+      ];
+      for (const [k1, v1, k2, v2] of metaRows) {
+        doc.setFont("helvetica", "bold"); doc.text(k1, marginX, curY);
+        doc.setFont("helvetica", "normal"); doc.text(v1, marginX + 36, curY);
+        doc.setFont("helvetica", "bold"); doc.text(k2, marginX + 96, curY);
+        doc.setFont("helvetica", "normal"); doc.text(v2, marginX + 132, curY);
+        curY += 5.5;
+      }
+      curY += 3;
+
+      // ── Map screenshot ────────────────────────────────────────────────────────
+      const mapEl = coverageMapRef.current?.getContainer();
+      if (mapEl) {
+        const canvas = await html2canvas(mapEl, {
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: "#f8fafc",
+          scale: 1.5,
+          logging: false,
+        });
+        const mapImgH = 88;
+        const mapImgW = Math.min(contentW, mapImgH * (canvas.width / canvas.height));
+        const mapX = marginX + (contentW - mapImgW) / 2;
+        doc.addImage(canvas.toDataURL("image/jpeg", 0.88), "JPEG", mapX, curY, mapImgW, mapImgH);
+        curY += mapImgH + 7;
+      }
+
+      // ── Divider ───────────────────────────────────────────────────────────────
+      doc.setDrawColor(200, 210, 230);
+      doc.setLineWidth(0.3);
+      doc.line(marginX, curY, pageW - marginX, curY);
+      curY += 6;
+
+      // ── Candidates table ──────────────────────────────────────────────────────
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(30, 58, 138);
+      doc.text("CIUDADES CANDIDATAS CONFIRMADAS", marginX, curY);
+      curY += 6;
+
+      type ColDef = { label: string; x: number; w: number };
+      const cols: ColDef[] = [
+        { label: "#",         x: marginX,       w: 7  },
+        { label: "Ciudad",    x: marginX + 7,   w: 50 },
+        { label: "Población", x: marginX + 57,  w: 30 },
+        { label: "Dens. h/km²", x: marginX + 87,  w: 28 },
+        { label: "km² netos", x: marginX + 115, w: 28 },
+        { label: "Terreno",   x: marginX + 143, w: 22 },
+        { label: "Score",     x: marginX + 165, w: 17 },
+      ];
+
+      // Header row
+      doc.setFillColor(241, 245, 249);
+      doc.rect(marginX, curY - 4, contentW, 6.5, "F");
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(50, 60, 80);
+      cols.forEach((col) => doc.text(col.label, col.x + 1, curY));
+      curY += 4;
+
+      // Data rows
+      const candidates = snappedCities
+        .map((city, i) => ({ city, loc: simResult.suggested_locations[i] }))
+        .filter(({ city }) => city.is_snapped)
+        .sort((a, b) =>
+          computeWeightedScore(b.loc, effectiveWeights, simResult.simulated_area_km2) -
+          computeWeightedScore(a.loc, effectiveWeights, simResult.simulated_area_km2),
+        );
+
+      candidates.forEach(({ city, loc }, rank) => {
+        if (curY > pageH - 18) {
+          doc.addPage();
+          curY = 20;
+        }
+        if (rank % 2 === 0) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(marginX, curY - 3.5, contentW, 6, "F");
+        }
+        const score = computeWeightedScore(loc, effectiveWeights, simResult.simulated_area_km2);
+        const pop = loc.population ?? 0;
+        const popStr = pop >= 1_000_000
+          ? `${(pop / 1_000_000).toFixed(2)}M`
+          : pop >= 1_000 ? `${(pop / 1000).toFixed(0)}k` : String(pop);
+        const densStr = (loc.density ?? 0) > 0 ? `${(loc.density!).toFixed(0)}` : "-";
+        const areaStr = (loc.actual_added_km2 ?? 0) >= 1000
+          ? `${((loc.actual_added_km2 ?? 0) / 1000).toFixed(1)}k`
+          : `${(loc.actual_added_km2 ?? 0).toFixed(0)}`;
+        const terrainStr = loc.terrain_type === "mountainous" ? "Montañoso"
+          : loc.terrain_type === "flat" ? "Llano" : (loc.terrain_type ?? "-");
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(30, 30, 30);
+        doc.text(String(rank + 1), cols[0].x + 1, curY);
+        doc.text(city.city_name, cols[1].x + 1, curY);
+        doc.text(popStr, cols[2].x + 1, curY);
+        doc.text(densStr, cols[3].x + 1, curY);
+        doc.text(areaStr, cols[4].x + 1, curY);
+        doc.text(terrainStr, cols[5].x + 1, curY);
+
+        const [sr, sg, sb] = score >= 70 ? [22, 163, 74] : score >= 50 ? [217, 119, 6] : [220, 50, 50];
+        doc.setTextColor(sr, sg, sb);
+        doc.setFont("helvetica", "bold");
+        doc.text(String(score), cols[6].x + 1, curY);
+
+        curY += 6;
+      });
+
+      // ── Footer on every page ──────────────────────────────────────────────────
+      const totalPages = (doc.internal as unknown as { getNumberOfPages(): number }).getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFontSize(7);
+        doc.setTextColor(160, 160, 160);
+        doc.setFont("helvetica", "normal");
+        doc.text(
+          `Generado por LogiTrack · ${new Date().toLocaleString("es-AR")}`,
+          marginX, pageH - 7,
+        );
+        doc.text(`Pág. ${p} / ${totalPages}`, pageW - marginX, pageH - 7, { align: "right" });
+      }
+
+      doc.save(`logitrack-expansion-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (err) {
+      console.error("Error al generar PDF:", err);
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }, [simResult, snappedCities, effectiveWeights, diagnosisMode, highlighted, diagram]);
 
   // "Buscar más sugerencias": llama al backend con las ciudades ya mostradas
   // como blacklist, y ACUMULA (en lugar de reemplazar) los resultados nuevos.
@@ -2385,6 +2560,18 @@ export function CoberturaTab() {
             Diagrama de cobertura por sucursal (Voronoi) y detección de zonas sub-cubiertas
           </p>
         </div>
+        <button
+          onClick={() => void handleExportPdf()}
+          disabled={!simResult || !snappedCities || isExportingPdf}
+          title="Exportar sugerencias a PDF"
+          aria-label="Exportar PDF"
+          className="shrink-0 inline-flex items-center gap-1.5 px-2.5 h-8 rounded-md text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+        >
+          {isExportingPdf
+            ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            : <FileDown className="w-3.5 h-3.5" />}
+          <span>PDF</span>
+        </button>
         <button
           onClick={() => setShowScoreSettings(true)}
           title="Configurar pesos del Índice de Viabilidad"

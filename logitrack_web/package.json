@@ -31,6 +31,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dom-to-image-more": "^3.7.2",
+    "html2canvas": "^1.4.1",
     "html5-qrcode": "^2.3.8",
     "idb": "^8.0.3",
     "jspdf": "^4.2.1",

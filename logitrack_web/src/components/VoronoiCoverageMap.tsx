@@ -16,6 +16,8 @@ export interface VoronoiCoverageMapHandle {
   flyTo(lat: number, lng: number, zoom?: number): void;
   /** Fit the viewport to a polygon (e.g. a selected region boundary). */
   fitBoundsToPolygon(points: [number, number][]): void;
+  /** Returns the map's root DOM element, used by html2canvas for PDF export. */
+  getContainer(): HTMLElement | null;
 }
 
 interface VoronoiCoverageMapProps {
@@ -155,6 +157,9 @@ function VoronoiCoverageMap({
         mapRef.current.fitBounds(L.latLngBounds(points), { padding: [24, 24], animate: true });
       }
     },
+    getContainer() {
+      return containerRef.current;
+    },
   }));
   const cellsLayer = useRef<L.LayerGroup | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
@@ -202,10 +207,12 @@ function VoronoiCoverageMap({
     const osmLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
+      crossOrigin: true,
     }).addTo(map);
     const topoLayer = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
       attribution: '© <a href="https://opentopomap.org">OpenTopoMap</a>, © OpenStreetMap',
       maxZoom: 17,
+      crossOrigin: true,
     });
     L.control.layers(
       { "🏙 Vista Urbana": osmLayer, "🗺 Vista Topográfica": topoLayer },
