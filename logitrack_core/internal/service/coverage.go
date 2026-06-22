@@ -1267,17 +1267,21 @@ func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, fr
 			break
 		}
 		next := largestFragment(remainder)
-		// Area-shrink guard: if the DIFFERENCE removed less than 0.1 km²,
-		// polyclip returned degenerate/identical geometry — stop to avoid
-		// an infinite loop. A ratio-based guard (e.g. 1%) would fire on
-		// national-scale fragments where a 44 km circle shrinks a 1.2 M km²
-		// void by only ~0.36%, which is a genuine reduction.
-		if area-next.Area() < 0.1 {
-			log.Printf("[MathSugg] fillFragmentIteratively[%d]: fragment didn't shrink (%.2f→%.2f km²) — breaking",
+		// Area-shrink guard: when polyclip represents the subtracted region as a
+		// separate hole contour (rather than merging it into the outer ring), the
+		// largest-fragment pick returns the unchanged outer ring and the area
+		// appears not to have shrunk. This is common for small circles entirely
+		// inside a large polygon. In that case, don't update current — the next
+		// iteration's bestInteriorPoint will still pick a new location because
+		// *sites and addedPoints grow, pushing the PoI search away from already-
+		// placed suggestions. Only break when the subtraction truly returned
+		// degenerate geometry (remainder was empty, caught above).
+		if area-next.Area() >= 0.1 {
+			current = next
+		} else {
+			log.Printf("[MathSugg] fillFragmentIteratively[%d]: fragment didn't shrink (%.2f→%.2f km²) — relying on sites repulsion",
 				i, area, next.Area())
-			break
 		}
-		current = next
 	}
 	return out
 }

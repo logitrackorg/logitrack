@@ -206,10 +206,16 @@ func computeMathematicalSuggestions(
 		}
 		log.Printf("[MathSugg] fragment[%d]: area=%.3f km² ≥ threshold %.3f → calling fillFragmentIteratively", i, area, minFragAreaKm2)
 		before := len(out)
+		iterCap := coverageSuggestionMaxPerFragment
+		if maxSuggestions > 0 {
+			if remaining := maxSuggestions - len(out); remaining > iterCap {
+				iterCap = remaining
+			}
+		}
 		newSuggs := fillFragmentIteratively(
 			globalCell, proj, frag, radiusKm,
 			&projSites, tierraFertil, otherCells,
-			minFragAreaKm2, coverageSuggestionMaxPerFragment,
+			minFragAreaKm2, iterCap,
 		)
 		if maxSuggestions > 0 && len(out)+len(newSuggs) > maxSuggestions {
 			newSuggs = newSuggs[:maxSuggestions-len(out)]
