@@ -19,6 +19,12 @@ const MaxClaimEvidenceSize int64 = 1 << 20 // 1 MB
 // `isAllowedClaimEvidenceFile`) y en ChatInput.tsx (atributo `accept`).
 var AllowedClaimEvidenceExtensions = []string{".pdf", ".txt"}
 
+// allowedClaimEvidenceImageExtensions enumera las extensiones de imagen que se
+// aceptan cuando el cliente no envía un MIME (p.ej. algunos navegadores mandan
+// el archivo sin Content-Type). Cubre el caso "imágenes (cualquier subtipo)"
+// cuando solo tenemos el nombre del archivo.
+var allowedClaimEvidenceImageExtensions = []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+
 // IsAllowedClaimEvidence valida si el archivo (por nombre + MIME) entra en el
 // set único de tipos permitidos: imágenes (cualquier subtipo) + PDF + TXT.
 func IsAllowedClaimEvidence(filename, mimeType string) bool {
@@ -28,6 +34,12 @@ func IsAllowedClaimEvidence(filename, mimeType string) bool {
 	}
 	ext := strings.ToLower(filepath.Ext(filename))
 	for _, allowed := range AllowedClaimEvidenceExtensions {
+		if ext == allowed {
+			return true
+		}
+	}
+	// Imágenes sin MIME: aceptarlas por extensión.
+	for _, allowed := range allowedClaimEvidenceImageExtensions {
 		if ext == allowed {
 			return true
 		}

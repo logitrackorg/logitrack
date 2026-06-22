@@ -135,7 +135,7 @@ func TestDamageRequiresEvidence(t *testing.T) {
 
 func TestParseDamageSubtypes_FiltersUnknown(t *testing.T) {
 	got := ParseDamageSubtypes([]string{"product_damaged", "missing_products", "  ", "packaging_damaged", "garbage"})
-	want := []DamageSubtype{DamageProductDamaged, DamagePackagingDamaged}
+	want := []DamageSubtype{DamageProductDamaged, DamageMissingProducts, DamagePackagingDamaged}
 	if len(got) != len(want) {
 		t.Fatalf("len=%d, want %d (%v)", len(got), len(want), got)
 	}

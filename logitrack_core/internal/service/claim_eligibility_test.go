@@ -124,9 +124,9 @@ func TestCreatePublicClaim_AllowsBadTreatmentEvenWhenIneligible(t *testing.T) {
 }
 
 func TestCreatePublicClaim_MissingTypeFirstClassWithHighPriority(t *testing.T) {
-	withEligibleClock(t)
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	deliverShipment(t, ts, ship.TrackingID)
 
 	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
 		TrackingID:  ship.TrackingID,

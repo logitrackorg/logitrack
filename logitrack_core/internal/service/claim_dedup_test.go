@@ -13,9 +13,9 @@ import (
 // recibe el mismo rechazo (ActiveClaimExistsError). Antes solo el chatbot lo
 // hacía en su handler; el formulario público permitía duplicados.
 func TestCreatePublicClaim_RejectsDuplicateActiveClaim(t *testing.T) {
-	withEligibleClock(t)
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	withEligibleClock(t)
 
 	first, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
 		TrackingID:  ship.TrackingID,
@@ -59,9 +59,9 @@ func TestIsActiveClaimExistsError_HelperMatchesWrappedError(t *testing.T) {
 // Otra parte (otro DNI) puede abrir reclamos en paralelo: sender vs
 // recipient sobre el mismo envío no se bloquean entre sí.
 func TestCreatePublicClaim_AllowsClaimFromDifferentDNI(t *testing.T) {
-	withEligibleClock(t)
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	withEligibleClock(t)
 
 	_, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
 		TrackingID:  ship.TrackingID,
@@ -89,9 +89,9 @@ func TestCreatePublicClaim_AllowsClaimFromDifferentDNI(t *testing.T) {
 // La validación de evidencia obligatoria para producto dañado se enforce desde
 // el servicio (antes vivía en cada handler/parser). Probamos sin evidencia.
 func TestCreatePublicClaim_RequiresEvidenceForProductDamaged(t *testing.T) {
-	withEligibleClock(t)
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	withEligibleClock(t)
 
 	_, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
 		TrackingID:     ship.TrackingID,
@@ -112,9 +112,9 @@ func TestCreatePublicClaim_RequiresEvidenceForProductDamaged(t *testing.T) {
 
 // Mismo escenario pero con evidencia adjunta: debe pasar.
 func TestCreatePublicClaim_AcceptsProductDamagedWithEvidence(t *testing.T) {
-	withEligibleClock(t)
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	withEligibleClock(t)
 	chdir(t)
 
 	_, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
@@ -140,9 +140,9 @@ func TestCreatePublicClaim_AcceptsProductDamagedWithEvidence(t *testing.T) {
 // `ClaimType=damage` se persiste como wrong_data — el caller no puede
 // contradecir el árbol de decisión.
 func TestCreatePublicClaim_NormalizesClaimTypeFromCategory(t *testing.T) {
-	withEligibleClock(t)
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	withEligibleClock(t)
 
 	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
 		TrackingID:      ship.TrackingID,
