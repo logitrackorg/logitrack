@@ -22,6 +22,7 @@ import {
 import { fmtDateTime, fmtRelative, fmtDate } from "../utils/date";
 import { ChatbotWidget } from "../components/chatbot/ChatbotWidget";
 import { useOrganizationTheme } from "../context/OrganizationThemeContext";
+import { NeuralBranchNetwork } from "../components/NeuralBranchNetwork";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { Button } from "../components/ui/button";
 import {
@@ -524,6 +525,7 @@ export function PublicTracking() {
           HEADER — branded strip like Login left panel
           ═══════════════════════════════════════════════════════════ */}
       <header className="relative bg-[var(--sidebar-bg)] overflow-hidden px-4 pb-10 pt-8">
+        <NeuralBranchNetwork />
         {/* Theme toggle — top right */}
         <div className="absolute top-3 right-3 z-10">
           <ThemeToggle />
