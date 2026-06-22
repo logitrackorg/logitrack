@@ -365,7 +365,7 @@ export function PublicTracking() {
         document.head.removeChild(umamiScriptRef.current);
         umamiScriptRef.current = null;
       }
-      delete (window as any).umami;
+      delete (window as Window & { umami?: unknown }).umami;
     };
   }, []);
   /* useEffect(() => {
