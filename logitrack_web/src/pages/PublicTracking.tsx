@@ -312,23 +312,23 @@ function describeEvent(
   const { from_status: from, to_status: to } = ev;
 
   if (!from && to === "at_origin_hub") return { icon: <Package className={icnEv} />, title: "Envío registrado", subtitle: cityLine };
-  if (!from && to === "draft")          return { icon: <Package className={icnEv} />, title: "Borrador creado" };
+  if (!from && to === "draft") return { icon: <Package className={icnEv} />, title: "Borrador creado" };
   if (from === "draft" && to === "at_origin_hub") return { icon: <CheckCircle2 className={icnEv} />, title: "Envío confirmado", subtitle: cityLine };
-  if (to === "loaded")                  return { icon: <Truck className={icnEv} />, title: "Cargado y listo para despachar", subtitle: cityLine };
-  if (to === "in_transit")              return { icon: <Truck className={icnEv} />, title: "Despachado — en tránsito" };
+  if (to === "loaded") return { icon: <Truck className={icnEv} />, title: "Cargado y listo para despachar", subtitle: cityLine };
+  if (to === "in_transit") return { icon: <Truck className={icnEv} />, title: "Despachado — en tránsito" };
   if (to === "at_hub" || to === "at_origin_hub") return { icon: <Building2 className={icnEv} />, title: "Llegó al centro logístico", subtitle: cityLine };
-  if (to === "out_for_delivery")        return { icon: <Bike className={icnEv} />, title: "En camino a domicilio", subtitle: cityLine };
-  if (to === "delivered")               return { icon: <PackageCheck className={icnEv} />, title: "Envío entregado" };
-  if (to === "delivery_failed")         return { icon: <AlertTriangle className={icnEv} />, title: "El intento de entrega no fue exitoso" };
-  if (to === "redelivery_scheduled")    return { icon: <RefreshCw className={icnEv} />, title: "Reentrega programada" };
-  if (to === "no_entregado")            return { icon: <Ban className={icnEv} />, title: "No pudo ser entregado" };
-  if (to === "rechazado")               return { icon: <Ban className={icnEv} />, title: "Envío rechazado por el destinatario" };
-  if (to === "ready_for_pickup")        return { icon: <Store className={icnEv} />, title: "Disponible para retiro en sucursal", subtitle: cityLine };
-  if (to === "ready_for_return")        return { icon: <CornerUpLeft className={icnEv} />, title: "En espera de devolución al remitente", subtitle: cityLine };
-  if (to === "returned")                return { icon: <Undo2 className={icnEv} />, title: "Devuelto al remitente" };
-  if (to === "cancelled")               return { icon: <Ban className={icnEv} />, title: "Envío cancelado" };
-  if (to === "lost")                    return { icon: <Search className={icnEv} />, title: "Envío extraviado" };
-  if (to === "destroyed")               return { icon: <Flame className={icnEv} />, title: "Daño total — envío destruido" };
+  if (to === "out_for_delivery") return { icon: <Bike className={icnEv} />, title: "En camino a domicilio", subtitle: cityLine };
+  if (to === "delivered") return { icon: <PackageCheck className={icnEv} />, title: "Envío entregado" };
+  if (to === "delivery_failed") return { icon: <AlertTriangle className={icnEv} />, title: "El intento de entrega no fue exitoso" };
+  if (to === "redelivery_scheduled") return { icon: <RefreshCw className={icnEv} />, title: "Reentrega programada" };
+  if (to === "no_entregado") return { icon: <Ban className={icnEv} />, title: "No pudo ser entregado" };
+  if (to === "rechazado") return { icon: <Ban className={icnEv} />, title: "Envío rechazado por el destinatario" };
+  if (to === "ready_for_pickup") return { icon: <Store className={icnEv} />, title: "Disponible para retiro en sucursal", subtitle: cityLine };
+  if (to === "ready_for_return") return { icon: <CornerUpLeft className={icnEv} />, title: "En espera de devolución al remitente", subtitle: cityLine };
+  if (to === "returned") return { icon: <Undo2 className={icnEv} />, title: "Devuelto al remitente" };
+  if (to === "cancelled") return { icon: <Ban className={icnEv} />, title: "Envío cancelado" };
+  if (to === "lost") return { icon: <Search className={icnEv} />, title: "Envío extraviado" };
+  if (to === "destroyed") return { icon: <Flame className={icnEv} />, title: "Daño total — envío destruido" };
   return { icon: <Circle className={icnEv} />, title: STATUS_FRIENDLY_LABELS[to] ?? to, subtitle: cityLine };
 }
 
@@ -339,29 +339,56 @@ function describeEvent(
 export function PublicTracking() {
   const umamiScriptRef = useRef<HTMLScriptElement | null>(null);
   useEffect(() => {
-    // data-auto-track="false" prevents Umami from hooking into SPA history navigation,
-    // which would otherwise keep tracking internal dashboard pages after unmount.
-    // We fire a single manual pageview instead.
+    if (document.getElementById("umami-script")) return;
+
     const script = document.createElement("script");
+    script.id = "umami-script";
     script.src = "https://cloud.umami.is/script.js";
     script.defer = true;
-    script.dataset.websiteId = "be594592-0d61-4d35-97ae-7edf5b40a000";
-    script.dataset.autoTrack = "false";
+    script.setAttribute("data-website-id", "be594592-0d61-4d35-97ae-7edf5b40a000");
+
     script.onload = () => {
-      console.info("[umami] script cargado");
-      const w = window as unknown as { umami?: { track: (event: string) => void } };
-      w.umami?.track("pageview");
+      console.info("[umami] script cargado y tracking activo ✅");
     };
-    script.onerror = () => console.warn("[umami] no se pudo cargar (¿adblocker?)");
+    script.onerror = () => {
+      console.warn("[umami] no se pudo cargar (¿adblocker?)");
+    };
+
     document.head.appendChild(script);
     umamiScriptRef.current = script;
+
     return () => {
       if (umamiScriptRef.current) {
         document.head.removeChild(umamiScriptRef.current);
         umamiScriptRef.current = null;
       }
+      delete (window as any).umami;
     };
   }, []);
+  /* useEffect(() => {
+     // data-auto-track="false" prevents Umami from hooking into SPA history navigation,
+     // which would otherwise keep tracking internal dashboard pages after unmount.
+     // We fire a single manual pageview instead.
+     const script = document.createElement("script");
+     script.src = "https://cloud.umami.is/script.js";
+     script.defer = true;
+     script.dataset.websiteId = "be594592-0d61-4d35-97ae-7edf5b40a000";
+     script.dataset.autoTrack = "false";
+     script.onload = () => {
+       console.info("[umami] script cargado");
+       const w = window as unknown as { umami?: { track: (event: string) => void } };
+       w.umami?.track("pageview");
+     };
+     script.onerror = () => console.warn("[umami] no se pudo cargar (¿adblocker?)");
+     document.head.appendChild(script);
+     umamiScriptRef.current = script;
+     return () => {
+       if (umamiScriptRef.current) {
+         document.head.removeChild(umamiScriptRef.current);
+         umamiScriptRef.current = null;
+       }
+     };
+   }, []);*/
 
   const { config: org } = useOrganizationTheme();
   const orgName = org?.name?.trim() || "LogiTrack";
@@ -381,7 +408,7 @@ export function PublicTracking() {
 
   // Fetch public branches on mount
   useEffect(() => {
-    publicTrackingApi.getBranches().then(setBranches).catch(() => {});
+    publicTrackingApi.getBranches().then(setBranches).catch(() => { });
   }, []);
 
   // Search from URL param on mount / param change
@@ -699,39 +726,39 @@ export function PublicTracking() {
 
             {/* <AlertTriangle size={14} className="inline text-amber-500" /> Delivery attempts banner */}
             {(shipment.delivery_attempts ?? 0) > 0 &&
-             shipment.status !== "delivered" &&
-             shipment.status !== "returned" && (
-              <AlertBanner
-                variant="warning"
-                title={
-                  shipment.delivery_attempts === 1
-                    ? "Intento de entrega N°1"
-                    : `Intento de entrega N°${shipment.delivery_attempts}`
-                }
-              >
-                <p>
-                  {shipment.status === "redelivery_scheduled"
-                    ? "Vamos a hacer un nuevo intento de entrega."
-                    : shipment.status === "ready_for_pickup"
-                      ? "Tu envío te espera para retiro en sucursal."
-                      : shipment.max_delivery_attempts != null &&
-                        shipment.delivery_attempts != null &&
-                        shipment.delivery_attempts >= shipment.max_delivery_attempts
-                        ? null
-                        : "Coordinaremos los próximos pasos según el estado actual."}
-                </p>
-                {shipment.max_delivery_attempts != null &&
-                 shipment.delivery_attempts != null && (
-                  <p className="text-sm mt-1 opacity-80">
-                    {(() => {
-                      const left = Math.max(0, shipment.max_delivery_attempts - shipment.delivery_attempts);
-                      if (left === 0) return "Disponible para retiro en sucursal.";
-                      return `${left} ${left === 1 ? "intento restante" : "intentos restantes"}.`;
-                    })()}
+              shipment.status !== "delivered" &&
+              shipment.status !== "returned" && (
+                <AlertBanner
+                  variant="warning"
+                  title={
+                    shipment.delivery_attempts === 1
+                      ? "Intento de entrega N°1"
+                      : `Intento de entrega N°${shipment.delivery_attempts}`
+                  }
+                >
+                  <p>
+                    {shipment.status === "redelivery_scheduled"
+                      ? "Vamos a hacer un nuevo intento de entrega."
+                      : shipment.status === "ready_for_pickup"
+                        ? "Tu envío te espera para retiro en sucursal."
+                        : shipment.max_delivery_attempts != null &&
+                          shipment.delivery_attempts != null &&
+                          shipment.delivery_attempts >= shipment.max_delivery_attempts
+                          ? null
+                          : "Coordinaremos los próximos pasos según el estado actual."}
                   </p>
-                )}
-              </AlertBanner>
-            )}
+                  {shipment.max_delivery_attempts != null &&
+                    shipment.delivery_attempts != null && (
+                      <p className="text-sm mt-1 opacity-80">
+                        {(() => {
+                          const left = Math.max(0, shipment.max_delivery_attempts - shipment.delivery_attempts);
+                          if (left === 0) return "Disponible para retiro en sucursal.";
+                          return `${left} ${left === 1 ? "intento restante" : "intentos restantes"}.`;
+                        })()}
+                      </p>
+                    )}
+                </AlertBanner>
+              )}
 
             {/* 📊 Progress card */}
             {!isFailed && (
@@ -751,27 +778,24 @@ export function PublicTracking() {
                           <div className="relative w-full flex items-center">
                             {i > 0 && (
                               <div
-                                className={`absolute right-1/2 left-0 h-1 rounded-full ${
-                                  isDone ? "bg-emerald-500" : "bg-gray-200 dark:bg-gray-700"
-                                }`}
+                                className={`absolute right-1/2 left-0 h-1 rounded-full ${isDone ? "bg-emerald-500" : "bg-gray-200 dark:bg-gray-700"
+                                  }`}
                               />
                             )}
                             {i < PROGRESS_STEPS.length - 1 && (
                               <div
-                                className={`absolute left-1/2 right-0 h-1 rounded-full ${
-                                  isDone ? "bg-emerald-500" : "bg-gray-200 dark:bg-gray-700"
-                                }`}
+                                className={`absolute left-1/2 right-0 h-1 rounded-full ${isDone ? "bg-emerald-500" : "bg-gray-200 dark:bg-gray-700"
+                                  }`}
                               />
                             )}
                             {/* Dot */}
                             <div
-                              className={`relative z-10 mx-auto w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                                isDone
+                              className={`relative z-10 mx-auto w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${isDone
                                   ? "bg-emerald-500 border-emerald-500"
                                   : isActive
                                     ? "bg-blue-600 border-blue-600 animate-pulse motion-reduce:animate-none"
                                     : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600"
-                              }`}
+                                }`}
                             >
                               {isDone && (
                                 <CheckCircle2 className="w-3 h-3 text-white" />
@@ -783,11 +807,10 @@ export function PublicTracking() {
                           </div>
                           {/* Label */}
                           <span
-                            className={`text-xs font-semibold text-center leading-tight ${
-                              isDone || isActive
+                            className={`text-xs font-semibold text-center leading-tight ${isDone || isActive
                                 ? "text-slate-900 dark:text-white"
                                 : "text-slate-400 dark:text-slate-500"
-                            }`}
+                              }`}
                           >
                             {step.label}
                           </span>
@@ -921,11 +944,10 @@ export function PublicTracking() {
                           {/* Dot */}
                           <div
                             className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center z-10
-                                        border-2 transition-colors ${
-                                          isCurrent
-                                            ? "bg-blue-600 border-blue-600 shadow-sm shadow-blue-500/20"
-                                            : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-600"
-                                        }`}
+                                        border-2 transition-colors ${isCurrent
+                                ? "bg-blue-600 border-blue-600 shadow-sm shadow-blue-500/20"
+                                : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-600"
+                              }`}
                             aria-current={isCurrent ? "step" : undefined}
                           >
                             <span className={isCurrent ? "text-white" : "text-slate-500 dark:text-slate-400"}>
@@ -935,11 +957,10 @@ export function PublicTracking() {
                           {/* Content */}
                           <div className="pt-1 min-w-0">
                             <div
-                              className={`text-sm leading-snug ${
-                                isCurrent
+                              className={`text-sm leading-snug ${isCurrent
                                   ? "font-bold text-slate-900 dark:text-white"
                                   : "font-medium text-slate-700 dark:text-slate-300"
-                              }`}
+                                }`}
                             >
                               {desc.title}
                             </div>
