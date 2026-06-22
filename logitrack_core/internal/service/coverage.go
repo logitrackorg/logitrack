@@ -633,14 +633,23 @@ func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCe
 		// Pole-of-Inaccessibility passes over the *same* uncovered void, so they
 		// can land near-on-top of each other (a math suggestion whose coverage
 		// circle heavily overlaps a per-cell one barely adds new terrain). Drop
-		// any math suggestion within minSeparationKm of a per-cell suggestion or
+		// any math suggestion within mathDeoverlapKm of a per-cell suggestion or
 		// of an already-kept math suggestion. Per-cell suggestions win ties — they
 		// carry concrete branch attribution ("descomprimirá las zonas de…").
+		//
+		// For national scope the 150 km per-cell floor (coverageSuggestionMinSeparationKm)
+		// is too aggressive for math suggestions: the PoI algorithm already spaces
+		// them globally, so only direct-overlap prevention (≥ 2× radiusKm, min 20 km)
+		// is needed. For custom zones, minSeparationKm (already adaptive) is used.
+		mathDeoverlapKm := minSeparationKm
+		if len(customBoundary) < 3 {
+			mathDeoverlapKm = math.Max(radiusKm*2, 20.0)
+		}
 		if len(mathSuggestions) > 0 {
 			kept := make([]model.SuggestedLocation, 0, len(mathSuggestions))
 			for _, ms := range mathSuggestions {
-				if tooCloseToExisting(ms, suggestions, minSeparationKm) || tooCloseToExisting(ms, kept, minSeparationKm) {
-					log.Printf("[MathSugg] de-overlap: dropping suggestion at (%.4f, %.4f) — within %.0f km of an existing suggestion", ms.Lat, ms.Lng, minSeparationKm)
+				if tooCloseToExisting(ms, suggestions, mathDeoverlapKm) || tooCloseToExisting(ms, kept, mathDeoverlapKm) {
+					log.Printf("[MathSugg] de-overlap: dropping suggestion at (%.4f, %.4f) — within %.0f km of an existing suggestion", ms.Lat, ms.Lng, mathDeoverlapKm)
 					continue
 				}
 				kept = append(kept, ms)
