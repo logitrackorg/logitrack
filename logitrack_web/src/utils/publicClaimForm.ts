@@ -42,7 +42,9 @@ export const emptyClaimFormValues: PublicClaimFormValues = {
   dni: "",
   category: "",
   damageSubtypes: [],
+  damageDescription: "",
   deliverySubtype: "",
+  deliveryDescription: "",
   staffDescription: "",
   delayDescription: "",
   otherDescription: "",
@@ -60,7 +62,9 @@ export function resolveClaimType(
 export interface BuildDescriptionInput {
   category: ClaimCategory;
   damageSubtypes: DamageSubtype[];
+  damageDescription: string;
   deliverySubtype: DeliverySubtype | "";
+  deliveryDescription: string;
   staffDescription: string;
   delayDescription: string;
   otherDescription: string;
@@ -81,6 +85,8 @@ export function buildClaimDescription(input: BuildDescriptionInput): string {
         DELIVERY_SUBTYPE_OPTIONS.find((o) => o.value === input.deliverySubtype)?.label ??
         input.deliverySubtype;
       let text = `Problema con la entrega: ${label}.`;
+      const comment = input.deliveryDescription.trim();
+      if (comment) text += ` ${comment}`;
       if (input.evidenceName) text += ` Evidencia adjunta: ${input.evidenceName}.`;
       return text;
     }
@@ -89,6 +95,8 @@ export function buildClaimDescription(input: BuildDescriptionInput): string {
         .map((s) => DAMAGE_SUBTYPE_OPTIONS.find((o) => o.value === s)?.label)
         .filter(Boolean);
       let text = `Daño / Faltante: ${labels.join(", ")}.`;
+      const comment = input.damageDescription.trim();
+      if (comment) text += ` ${comment}`;
       if (input.evidenceName) text += ` Evidencia adjunta: ${input.evidenceName}.`;
       return text;
     }
@@ -98,7 +106,9 @@ export function buildClaimDescription(input: BuildDescriptionInput): string {
 export interface ValidatePublicClaimInput {
   category: ClaimCategory | "";
   damageSubtypes: DamageSubtype[];
+  damageDescription: string;
   deliverySubtype: DeliverySubtype | "";
+  deliveryDescription: string;
   staffDescription: string;
   delayDescription: string;
   otherDescription: string;
@@ -111,7 +121,9 @@ export function validatePublicClaimForm(input: ValidatePublicClaimInput): string
   const {
     category,
     damageSubtypes,
+    damageDescription,
     deliverySubtype,
+    deliveryDescription,
     staffDescription,
     delayDescription,
     otherDescription,
@@ -139,6 +151,10 @@ export function validatePublicClaimForm(input: ValidatePublicClaimInput): string
 
   if (category === "incomplete_damage") {
     if (damageSubtypes.length === 0) return "Seleccioná al menos un subtipo.";
+    if (!damageDescription.trim()) return "Contanos qué pasó con el envío.";
+    if (damageDescription.trim().length < 10 || damageDescription.trim().length > 400) {
+      return "La descripción debe tener entre 10 y 400 caracteres.";
+    }
     if (damageSubtypeRequiresEvidence(damageSubtypes) && !evidence) {
       return "Adjuntá un archivo TXT, PDF o una imagen pequeña como evidencia (obligatorio para producto dañado).";
     }
@@ -151,13 +167,15 @@ export function validatePublicClaimForm(input: ValidatePublicClaimInput): string
     const desc = buildClaimDescription({
       category,
       damageSubtypes,
+      damageDescription,
       deliverySubtype: "",
+      deliveryDescription: "",
       staffDescription: "",
       delayDescription: "",
       otherDescription: "",
       evidenceName: evidence?.name,
     });
-    if (!desc || desc.length < 10 || desc.length > 400) {
+    if (!desc || desc.length > 400) {
       return "No se pudo armar la descripción del reclamo.";
     }
     return null;
@@ -165,16 +183,22 @@ export function validatePublicClaimForm(input: ValidatePublicClaimInput): string
 
   if (category === "delivery_problem") {
     if (!deliverySubtype) return "Seleccioná qué problema tuviste con la entrega.";
+    if (!deliveryDescription.trim()) return "Contanos qué pasó con la entrega.";
+    if (deliveryDescription.trim().length < 10 || deliveryDescription.trim().length > 400) {
+      return "La descripción debe tener entre 10 y 400 caracteres.";
+    }
     const desc = buildClaimDescription({
       category,
       damageSubtypes: [],
+      damageDescription: "",
       deliverySubtype,
+      deliveryDescription,
       staffDescription: "",
       delayDescription: "",
       otherDescription: "",
       evidenceName: evidence?.name,
     });
-    if (!desc || desc.length < 10 || desc.length > 400) {
+    if (!desc || desc.length > 400) {
       return "No se pudo armar la descripción del reclamo.";
     }
     return null;

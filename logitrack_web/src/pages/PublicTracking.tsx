@@ -365,7 +365,7 @@ export function PublicTracking() {
         document.head.removeChild(umamiScriptRef.current);
         umamiScriptRef.current = null;
       }
-      delete (window as any).umami;
+      delete (window as Window & { umami?: unknown }).umami;
     };
   }, []);
   /* useEffect(() => {
@@ -573,7 +573,9 @@ export function PublicTracking() {
     const description = buildClaimDescription({
       category: claimForm.category,
       damageSubtypes: claimForm.damageSubtypes,
+      damageDescription: claimForm.damageDescription,
       deliverySubtype: claimForm.deliverySubtype,
+      deliveryDescription: claimForm.deliveryDescription,
       staffDescription: claimForm.staffDescription,
       delayDescription: claimForm.delayDescription,
       otherDescription: claimForm.otherDescription,

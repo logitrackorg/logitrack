@@ -22,11 +22,52 @@ export interface PublicClaimFormValues {
   dni: string;
   category: ClaimMainCategory | "";
   damageSubtypes: DamageSubtype[];
+  damageDescription: string;
   deliverySubtype: DeliverySubtype | "";
+  deliveryDescription: string;
   staffDescription: string;
   delayDescription: string;
   otherDescription: string;
   evidence: File | null;
+}
+
+// Límites compartidos por todas las descripciones de texto libre del reclamo.
+export const CLAIM_DESC_MIN = 10;
+export const CLAIM_DESC_MAX = 400;
+
+// Contador de caracteres en vivo: muestra cuántos faltan para el mínimo y el
+// total sobre el máximo. Mismo patrón usado en otras partes (ConfirmDialog,
+// Claims) para mantener coherencia.
+function CharCounter({ value }: { value: string }) {
+  const len = value.trim().length;
+  const missing = CLAIM_DESC_MIN - len;
+  const overflow = value.length - CLAIM_DESC_MAX;
+  return (
+    <div className="flex justify-between items-center text-xs mt-1">
+      <span
+        className={
+          missing > 0 || overflow > 0
+            ? "text-amber-600 dark:text-amber-400"
+            : "text-emerald-600 dark:text-emerald-400"
+        }
+      >
+        {len === 0
+          ? `Mínimo ${CLAIM_DESC_MIN} caracteres`
+          : missing > 0
+            ? `Te faltan ${missing} ${missing === 1 ? "carácter" : "caracteres"}`
+            : "Listo ✓"}
+      </span>
+      <span
+        className={
+          value.length > CLAIM_DESC_MAX
+            ? "text-red-500"
+            : "text-gray-400 dark:text-gray-500"
+        }
+      >
+        {value.length}/{CLAIM_DESC_MAX}
+      </span>
+    </div>
+  );
 }
 
 interface Props {
@@ -124,7 +165,9 @@ export function PublicClaimFormFields({ values, onChange, disabled, shipment, pr
                     onChange({
                       category: opt.value,
                       damageSubtypes: [],
+                      damageDescription: "",
                       deliverySubtype: "",
+                      deliveryDescription: "",
                       staffDescription: "",
                       delayDescription: "",
                       otherDescription: "",
@@ -161,6 +204,19 @@ export function PublicClaimFormFields({ values, onChange, disabled, shipment, pr
                   </label>
                 ))}
               </div>
+              <label className="flex flex-col gap-1.5 mt-3">
+                <span className={labelClasses}>Contanos qué pasó</span>
+                <textarea
+                  className={textareaClasses}
+                  rows={4}
+                  maxLength={CLAIM_DESC_MAX}
+                  value={values.damageDescription}
+                  onChange={(e) => onChange({ damageDescription: e.target.value })}
+                  placeholder="Ej.: la caja llegó aplastada y el producto de adentro está roto"
+                  disabled={disabled}
+                />
+                <CharCounter value={values.damageDescription} />
+              </label>
               <label className="flex flex-col gap-1.5 mt-3">
                 <span className={labelClasses}>
                   Adjuntar evidencia
@@ -204,6 +260,19 @@ export function PublicClaimFormFields({ values, onChange, disabled, shipment, pr
                   </label>
                 ))}
               </div>
+              <label className="flex flex-col gap-1.5 mt-3">
+                <span className={labelClasses}>Contanos qué pasó</span>
+                <textarea
+                  className={textareaClasses}
+                  rows={4}
+                  maxLength={CLAIM_DESC_MAX}
+                  value={values.deliveryDescription}
+                  onChange={(e) => onChange({ deliveryDescription: e.target.value })}
+                  placeholder="Ej.: figura entregado pero nunca recibí el paquete, ni vecinos ni portería lo tienen"
+                  disabled={disabled}
+                />
+                <CharCounter value={values.deliveryDescription} />
+              </label>
             </fieldset>
           )}
 
@@ -213,12 +282,13 @@ export function PublicClaimFormFields({ values, onChange, disabled, shipment, pr
               <textarea
                 className={textareaClasses}
                 rows={4}
+                maxLength={CLAIM_DESC_MAX}
                 value={values.delayDescription}
                 onChange={(e) => onChange({ delayDescription: e.target.value })}
                 placeholder="Cuándo debió llegar y cuánto tiempo lleva demorado"
                 disabled={disabled}
               />
-              <span className={hintClasses}>Entre 10 y 400 caracteres.</span>
+              <CharCounter value={values.delayDescription} />
             </label>
           )}
 
@@ -228,12 +298,13 @@ export function PublicClaimFormFields({ values, onChange, disabled, shipment, pr
               <textarea
                 className={textareaClasses}
                 rows={4}
+                maxLength={CLAIM_DESC_MAX}
                 value={values.staffDescription}
                 onChange={(e) => onChange({ staffDescription: e.target.value })}
                 placeholder="Contanos qué pasó con la atención o conducta del personal"
                 disabled={disabled}
               />
-              <span className={hintClasses}>Entre 10 y 400 caracteres.</span>
+              <CharCounter value={values.staffDescription} />
             </label>
           )}
 
@@ -243,12 +314,13 @@ export function PublicClaimFormFields({ values, onChange, disabled, shipment, pr
               <textarea
                 className={textareaClasses}
                 rows={4}
+                maxLength={CLAIM_DESC_MAX}
                 value={values.otherDescription}
                 onChange={(e) => onChange({ otherDescription: e.target.value })}
                 placeholder="Describí brevemente el motivo del reclamo"
                 disabled={disabled}
               />
-              <span className={hintClasses}>Entre 10 y 400 caracteres.</span>
+              <CharCounter value={values.otherDescription} />
             </label>
           )}
 
