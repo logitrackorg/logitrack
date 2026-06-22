@@ -573,6 +573,7 @@ export function PublicTracking() {
     const description = buildClaimDescription({
       category: claimForm.category,
       damageSubtypes: claimForm.damageSubtypes,
+      damageDescription: claimForm.damageDescription,
       deliverySubtype: claimForm.deliverySubtype,
       deliveryDescription: claimForm.deliveryDescription,
       staffDescription: claimForm.staffDescription,

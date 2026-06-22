@@ -22,6 +22,7 @@ export interface PublicClaimFormValues {
   dni: string;
   category: ClaimMainCategory | "";
   damageSubtypes: DamageSubtype[];
+  damageDescription: string;
   deliverySubtype: DeliverySubtype | "";
   deliveryDescription: string;
   staffDescription: string;
@@ -164,6 +165,7 @@ export function PublicClaimFormFields({ values, onChange, disabled, shipment, pr
                     onChange({
                       category: opt.value,
                       damageSubtypes: [],
+                      damageDescription: "",
                       deliverySubtype: "",
                       deliveryDescription: "",
                       staffDescription: "",
@@ -202,6 +204,19 @@ export function PublicClaimFormFields({ values, onChange, disabled, shipment, pr
                   </label>
                 ))}
               </div>
+              <label className="flex flex-col gap-1.5 mt-3">
+                <span className={labelClasses}>Contanos qué pasó</span>
+                <textarea
+                  className={textareaClasses}
+                  rows={4}
+                  maxLength={CLAIM_DESC_MAX}
+                  value={values.damageDescription}
+                  onChange={(e) => onChange({ damageDescription: e.target.value })}
+                  placeholder="Ej.: la caja llegó aplastada y el producto de adentro está roto"
+                  disabled={disabled}
+                />
+                <CharCounter value={values.damageDescription} />
+              </label>
               <label className="flex flex-col gap-1.5 mt-3">
                 <span className={labelClasses}>
                   Adjuntar evidencia
