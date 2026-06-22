@@ -92,7 +92,7 @@ export function Gauge({
   const needleLength = ARC_RADIUS - ARC_STROKE_WIDTH / 2 - 6;
 
   // Calculate needle tip position at the shorter length
-  const svgAngle = (180 + needleAngle) * (Math.PI / 180);
+  const svgAngle = (180 - needleAngle) * (Math.PI / 180);
   const tipX = ARC_CENTER_X + needleLength * Math.cos(svgAngle);
   const tipY = ARC_CENTER_Y - needleLength * Math.sin(svgAngle);
 
