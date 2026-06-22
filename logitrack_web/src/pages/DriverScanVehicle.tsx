@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Truck, QrCode, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Truck, QrCode, AlertCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { interBranchTripsApi } from "../api/interBranchTrips";
 import { driverApi, type DriverRouteResponse } from "../api/driver";
@@ -32,6 +32,13 @@ export function DriverScanVehicle() {
   const [showGate, setShowGate] = useState(false);
   const [requiresSleepData, setRequiresSleepData] = useState(false);
   const [pendingToken, setPendingToken] = useState<string | null>(null);
+
+  // Bloqueo por puntuación de fatiga elevada. Cuando el backend bloquea al
+  // conductor tras un check-in con riesgo ROJO, se muestra un overlay fijo y
+  // se hace polling hasta que el supervisor desbloquee la ruta.
+  const [fatigueBlocked, setFatigueBlocked] = useState(false);
+  const [fatigueUnblockedBy, setFatigueUnblockedBy] = useState<string | null>(null);
+  const pendingAckRef = useRef<string | null>(null);
 
   // Si el chofer ya tiene una ruta activa (last-mile) o un viaje intersucursal
   // activo, mandarlo directo a esa pantalla sin pedirle que vuelva a escanear.
@@ -92,6 +99,36 @@ export function DriverScanVehicle() {
       .catch(() => {})
       .finally(() => setShowGate(true));
   }, [user]);
+
+  // Polling de bloqueo por fatiga: corre cada 5 s mientras el conductor está
+  // bloqueado por puntuación ROJA. Cuando el supervisor desbloquea, se muestra
+  // el cartel de autorización y luego se completa el claim del vehículo.
+  useEffect(() => {
+    if (!fatigueBlocked) return;
+    const poll = async () => {
+      try {
+        const data = await driverApi.getFatigueBlockStatus();
+        if (!data.blocked) {
+          setFatigueBlocked(false);
+          if (data.recently_unblocked && data.unblocked_by) {
+            pendingAckRef.current = data.unblocked_at ?? "seen";
+            setFatigueUnblockedBy(data.unblocked_by);
+          } else if (pendingToken) {
+            // Desbloqueado sin cartelito — proceder directamente.
+            const token = pendingToken;
+            setPendingToken(null);
+            void claimAndNavigate(token);
+          }
+        }
+      } catch {
+        // Error de red → conservar estado bloqueado
+      }
+    };
+    void poll();
+    const interval = setInterval(() => void poll(), 5000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fatigueBlocked]);
 
   const goToRoute = async (successMsg: string) => {
     setSuccess(successMsg);
@@ -249,6 +286,52 @@ export function DriverScanVehicle() {
     };
   }, []);
 
+  // Overlay de bloqueo por puntuación ROJA de fatiga.
+  if (fatigueBlocked) {
+    return (
+      <div className="fixed inset-0 z-[9999] bg-[var(--sidebar-bg)] flex flex-col items-center justify-center p-8 text-center gap-6">
+        <AlertTriangle size={64} className="text-[var(--danger-c)]" />
+        <h2 className="text-white text-[22px] font-bold m-0">
+          Alerta de fatiga detectada
+        </h2>
+        <p className="text-[var(--text-muted)] text-base leading-relaxed m-0">
+          Tu supervisor fue notificado.<br />
+          Esperá su indicación antes de continuar.
+        </p>
+      </div>
+    );
+  }
+
+  // Cartelito de autorización cuando el supervisor desbloquea la ruta.
+  if (fatigueUnblockedBy) {
+    return (
+      <div className="fixed inset-0 z-[9999] bg-[var(--sidebar-bg)] flex flex-col items-center justify-center p-8 text-center gap-6">
+        <CheckCircle2 size={64} className="text-[var(--ok)]" />
+        <h2 className="text-white text-[22px] font-bold m-0">
+          Ruta autorizada
+        </h2>
+        <p className="text-[var(--text-secondary)] text-base leading-relaxed m-0">
+          Tu supervisor <strong className="text-white">{fatigueUnblockedBy}</strong> autorizó<br />
+          que continúes la ruta.
+        </p>
+        <Button
+          onClick={() => {
+            if (pendingAckRef.current) sessionStorage.setItem("lt_fatigue_ack", pendingAckRef.current);
+            setFatigueUnblockedBy(null);
+            if (pendingToken) {
+              const token = pendingToken;
+              setPendingToken(null);
+              void claimAndNavigate(token);
+            }
+          }}
+          className="mt-2 px-9 py-3 rounded-xl text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white"
+        >
+          Continuar
+        </Button>
+      </div>
+    );
+  }
+
   // Gate de fatiga post-escaneo. requiresSleepData es true en la primera ruta del
   // día (el chofer aún no registró horas de sueño) y false en el re-test posterior
   // (ya quedaron registradas en el check-in matutino).
@@ -258,7 +341,7 @@ export function DriverScanVehicle() {
         driverId={user.id}
         misfireCount={0}
         requiresSleepData={requiresSleepData}
-        onDone={() => {
+        onDone={async () => {
           driverDebug("gate_done", {
             driverId: user.id,
             driverType: user.driver_type,
@@ -266,8 +349,20 @@ export function DriverScanVehicle() {
           });
           setShowGate(false);
           if (pendingToken) {
-            void claimAndNavigate(pendingToken);
+            // Verificar si el check-in resultó en un bloqueo por puntuación ROJA
+            // antes de dejar que el chofer acceda a la ruta.
+            try {
+              const blockStatus = await driverApi.getFatigueBlockStatus();
+              if (blockStatus.blocked) {
+                setFatigueBlocked(true);
+                return; // pendingToken se conserva; el polling lo usará al desbloquear
+              }
+            } catch {
+              // Si no se puede determinar el estado, dejar pasar (fail-open)
+            }
+            const token = pendingToken;
             setPendingToken(null);
+            void claimAndNavigate(token);
           }
         }}
       />

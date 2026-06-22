@@ -173,6 +173,11 @@ function LastMileView() {
   const { getMisfires, resetMisfires, triggerCheckin, closeCheckin } =
     useMisfireTracking();
 
+  // Bloqueo por puntuación ROJA de fatiga (LOGITRACK-499 last-mile).
+  const [fatigueBlocked, setFatigueBlocked] = useState(false);
+  // Nombre del supervisor que desbloqueó — se auto-descarta en 5 s.
+  const [unblockedByBanner, setUnblockedByBanner] = useState<string | null>(null);
+
   useEffect(() => {
     if (!deliveryPhoto) { setPhotoPreviewUrl(undefined); return; }
     const url = URL.createObjectURL(deliveryPhoto);
@@ -299,6 +304,39 @@ function LastMileView() {
   }, []);
   useEffect(() => { zoneApi.list().then(setZones).catch(() => {}); }, []);
 
+  // Polling de bloqueo por fatiga cada 5 s. Activo durante toda la ruta para
+  // detectar tanto el bloqueo inicial (check-in con score ROJO) como desbloqueos
+  // posteriores del supervisor.
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const data = await driverApi.getFatigueBlockStatus();
+        const nowBlocked = data.blocked ?? false;
+        setFatigueBlocked(nowBlocked);
+        if (!nowBlocked && data.recently_unblocked && data.unblocked_by) {
+          const ackKey = data.unblocked_at ?? "seen";
+          if (ackKey !== sessionStorage.getItem("lt_fatigue_ack")) {
+            // Guardar ACK inmediatamente para que polls consecutivos no repitan el banner.
+            sessionStorage.setItem("lt_fatigue_ack", ackKey);
+            setUnblockedByBanner(data.unblocked_by);
+          }
+        }
+      } catch {
+        // Error de red → mantener estado actual
+      }
+    };
+    void poll();
+    const id = setInterval(() => void poll(), 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Auto-descarte del banner de autorización luego de 5 s.
+  useEffect(() => {
+    if (!unblockedByBanner) return;
+    const t = setTimeout(() => setUnblockedByBanner(null), 5000);
+    return () => clearTimeout(t);
+  }, [unblockedByBanner]);
+
   // Reconciliación de la cola offline. Corre en cada montaje y cada vez que
   // cambia la conectividad:
   //   1. Lee la cola persistida en IndexedDB y la refleja en pendingSyncIds
@@ -367,6 +405,7 @@ function LastMileView() {
   // Opens a sheet after checking geofence. If outside radius, shows the warning
   // first and only opens the sheet if the driver confirms.
   const openDeliverSheet = (shipment: Shipment) => {
+    if (fatigueBlocked) return;
     // Resetear antes de cargar para evitar que queden intentos de un envío anterior.
     setOfflineKeywordAttempts(0);
     getKeywordAttempts(shipment.tracking_id).then(setOfflineKeywordAttempts).catch(() => {});
@@ -382,6 +421,7 @@ function LastMileView() {
   };
 
   const openFailedSheet = (shipment: Shipment) => {
+    if (fatigueBlocked) return;
     const coords = driverCoords();
     const distM = checkGeofence(shipment);
     if (distM !== null && distM > GEOFENCE_RADIUS_M) {
@@ -394,6 +434,7 @@ function LastMileView() {
   };
 
   const openRejectedSheet = (shipment: Shipment) => {
+    if (fatigueBlocked) return;
     const coords = driverCoords();
     const distM = checkGeofence(shipment);
     if (distM !== null && distM > GEOFENCE_RADIUS_M) {
@@ -826,6 +867,22 @@ function LastMileView() {
         </div>
       )}
 
+      {/* Banner de bloqueo por fatiga */}
+      {fatigueBlocked && (
+        <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top,0px))] z-40 -mx-4 md:-mx-6 flex items-center gap-2 px-4 py-3 text-sm font-semibold bg-red-600 text-white">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span className="flex-1">Ruta bloqueada por alerta de fatiga — esperá la indicación de tu supervisor.</span>
+        </div>
+      )}
+
+      {/* Banner de autorización (auto-descartable en 5 s) */}
+      {!fatigueBlocked && unblockedByBanner && (
+        <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top,0px))] z-40 -mx-4 md:-mx-6 flex items-center gap-2 px-4 py-3 text-sm font-semibold bg-emerald-600 text-white">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span className="flex-1">Ruta autorizada por {unblockedByBanner}. Podés continuar.</span>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-3 mb-2 px-4 max-w-2xl mx-auto pt-2">
         {/* Toggle Lista/Mapa */}
@@ -916,6 +973,17 @@ function LastMileView() {
 
         {/* Renderizado condicional Lista o Mapa */}
         {viewMode === 'map' ? (
+          fatigueBlocked ? (
+            <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center mb-4">
+                <Ban className="w-8 h-8 text-red-500" />
+              </div>
+              <p className="text-base font-bold text-[var(--text-primary)]">Mapa no disponible</p>
+              <p className="mt-1.5 text-sm text-[var(--text-secondary)] leading-relaxed max-w-xs">
+                Tu supervisor fue notificado y debe autorizar la ruta antes de que puedas continuar.
+              </p>
+            </div>
+          ) : (
           <>
             <MapView
               waypoints={waypoints}
@@ -937,6 +1005,7 @@ function LastMileView() {
             />
             <ZoneAlert zones={activeDangerZones} onDismissedChange={setIsDangerDismissed} />
           </>
+          )
         ) : (
           <>
             {visibleList.length === 0 ? (
@@ -1112,6 +1181,7 @@ function LastMileView() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
