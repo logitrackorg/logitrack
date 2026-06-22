@@ -574,6 +574,7 @@ export function PublicTracking() {
       category: claimForm.category,
       damageSubtypes: claimForm.damageSubtypes,
       deliverySubtype: claimForm.deliverySubtype,
+      deliveryDescription: claimForm.deliveryDescription,
       staffDescription: claimForm.staffDescription,
       delayDescription: claimForm.delayDescription,
       otherDescription: claimForm.otherDescription,
