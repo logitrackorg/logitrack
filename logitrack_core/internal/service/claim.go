@@ -195,9 +195,44 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 	if err != nil {
 		return model.Claim{}, fmt.Errorf("envio no encontrado")
 	}
+
+	// Normalización de claim_type — single source of truth.
+	// Si el caller proveyó Category, recalculamos ClaimType desde el árbol de
+	// decisión (ClassifyClaimType) y descartamos el ClaimType crudo. Sin
+	// Category caemos al ClaimType del request (compat con clientes legacy).
+	parsedDamageSubtypes := ParseDamageSubtypes(req.DamageSubtypes)
+	if req.Category != "" {
+		classification := ClaimClassificationInput{
+			Category:        ClaimCategoryInput(req.Category),
+			DamageSubtypes:  parsedDamageSubtypes,
+			DeliverySubtype: DeliverySubtype(req.DeliverySubtype),
+		}
+		if normalized, ok := ClassifyClaimType(classification); ok {
+			req.ClaimType = normalized
+		} else {
+			return model.Claim{}, fmt.Errorf("categoria de reclamo no valida")
+		}
+	}
+
 	if !model.ValidClaimTypes[req.ClaimType] {
 		return model.Claim{}, fmt.Errorf("tipo de reclamo no valido")
 	}
+	if !CanFileClaimOfType(shipment, req.ClaimType) {
+		return model.Claim{}, fmt.Errorf("%s", ClaimIneligibleMessage)
+	}
+
+	// Evidencia obligatoria: producto dañado exige adjunto. Aplica a AMBOS
+	// canales — antes esto vivía duplicado en parseMultipartPublicClaimRequest
+	// y FileClaim del chatbot.
+	if req.ClaimType == model.ClaimTypeDamage && DamageRequiresEvidence(parsedDamageSubtypes) && evidence == nil {
+		return model.Claim{}, fmt.Errorf("la evidencia es obligatoria para producto dañado")
+	}
+
+	// Tipo y tamaño de archivo — set único: imágenes + pdf + txt.
+	if err := validateEvidenceUpload(evidence); err != nil {
+		return model.Claim{}, err
+	}
+
 	description := strings.TrimSpace(req.Description)
 	if description == "" {
 		return model.Claim{}, fmt.Errorf("la descripcion es requerida")
@@ -218,6 +253,17 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 	}
 	if !s.ValidateClaimant(&shipment, createdBy, claimantDNI) {
 		return model.Claim{}, fmt.Errorf("el dni y el nombre no coinciden con el remitente o destinatario del envio")
+	}
+
+	// Dedup centralizada: bloquea un segundo reclamo activo del mismo DNI sobre
+	// el mismo envío. Un reclamo de otra parte (ej. remitente vs destinatario)
+	// no bloquea. Antes esto vivía solo en el handler del chatbot — el form
+	// público permitía duplicados.
+	if existing, dupErr := s.GetLatestActiveClaimByTrackingIDAndDNI(trackingID, claimantDNI); dupErr == nil {
+		return model.Claim{}, &ActiveClaimExistsError{
+			ExistingClaimID: existing.ID,
+			ExistingStatus:  string(existing.Status),
+		}
 	}
 
 

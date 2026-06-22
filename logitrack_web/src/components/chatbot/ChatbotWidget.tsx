@@ -14,6 +14,22 @@ import type {
   DamageSubtype,
   ActiveClaimInfo,
 } from '../../types/chatbot';
+import { canFileClaimOfType, CLAIM_INELIGIBLE_MESSAGE } from '../../utils/claimEligibility';
+import {
+  CLAIM_CATEGORIES,
+  DELIVERY_SUBTYPE_OPTIONS,
+  DAMAGE_SUBTYPE_OPTIONS,
+  classifyClaimType,
+  type ClaimCategory,
+  type DeliverySubtype,
+} from '../../utils/claimDecisionTree';
+import {
+  getPreFilterRoot,
+  isLeaf,
+  type PreFilterNode,
+  type PreFilterLeaf,
+  type PreFilterCtx,
+} from '../../utils/claimPreFilter';
 
 type ChatState =
   | 'initial'
@@ -24,6 +40,7 @@ type ChatState =
   | 'claim_response'
   | 'claim_response_evidence'
   | 'claim_damage_subtypes'
+  | 'claim_delivery_subtype'
   | 'claim_description'
   | 'claim_evidence';
 
@@ -47,12 +64,18 @@ export function ChatbotWidget() {
   const [claimResponseText, setClaimResponseText] = useState<string>('');
   const [pendingClaimId, setPendingClaimId] = useState<string>('');
   const [pendingEvidenceFile, setPendingEvidenceFile] = useState<File | null>(null);
-  // US5: estado del reclamo en construcción
+  // US5: estado del reclamo en construcción.
+  const [claimCategory, setClaimCategory] = useState<ClaimCategory | null>(null);
   const [claimType, setClaimType] = useState<ClaimType | null>(null);
   const [damageSubtypes, setDamageSubtypes] = useState<DamageSubtype[]>([]);
+  const [deliverySubtype, setDeliverySubtype] = useState<DeliverySubtype | ''>('');
   const [claimDescription, setClaimDescription] = useState<string>('');
   const [claimEvidenceFile, setClaimEvidenceFile] = useState<File | null>(null);
   const [evidenceRequired, setEvidenceRequired] = useState(false);
+  // Pre-filtro guiado: nodo activo del árbol de decisión
+  const [preFilterNode, setPreFilterNode] = useState<PreFilterNode | null>(null);
+  // Sucursal de origen (para mensaje de cierre en árbol "otro")
+  const [originBranch, setOriginBranch] = useState<{ name: string; address: string; hours: string } | null>(null);
 
   const sessionTimeoutRef = useRef<number | null>(null);
   const SESSION_DURATION = 60000; // 1 minuto en milisegundos
@@ -115,6 +138,7 @@ export function ChatbotWidget() {
       setRecipientName(response.recipient_name);
       setTrackingId(trackingId);
       setActiveClaim(response.active_claim ?? null);
+      setOriginBranch(response.origin_branch ?? null);
       posthog.capture('chatbot_authenticated', {
         user_type: 'recipient',
         shipment_status: response.shipment.status,
@@ -206,6 +230,7 @@ export function ChatbotWidget() {
       setSenderDni(dni);
       setTrackingId(trackingId);
       setActiveClaim(response.active_claim ?? null);
+      setOriginBranch(response.origin_branch ?? null);
       posthog.capture('chatbot_authenticated', {
         user_type: 'sender',
         shipment_status: response.shipment.status,
@@ -378,7 +403,7 @@ export function ChatbotWidget() {
       const desc = input.trim();
       setClaimDescription(desc);
 
-      const needsEvidence = claimType === 'damage' && damageSubtypes.includes('product_damaged');
+      const needsEvidence = claimCategory === 'incomplete_damage' && damageSubtypes.includes('product_damaged');
       setEvidenceRequired(needsEvidence);
 
       if (needsEvidence) {
@@ -386,7 +411,7 @@ export function ChatbotWidget() {
         addBotMessage(
           '📎 Para este tipo de reclamo es **obligatorio** adjuntar una foto o documento del daño.\n\nUsá el botón 📎 para adjuntarlo.',
         );
-      } else if (claimType === 'damage') {
+      } else if (claimCategory === 'incomplete_damage') {
         setState('claim_evidence');
         addBotMessage(
           '¿Querés adjuntar una foto o documento de respaldo? (opcional)\n\nPodés usar el botón 📎 o continuar sin adjunto.',
@@ -509,19 +534,32 @@ export function ChatbotWidget() {
   };
 
   const handleSubmitClaim = async (evidence: File | null, descriptionOverride?: string) => {
-    if (!claimType || !trackingId) return;
+    if (!claimCategory || !trackingId) return;
     const name = userType === 'sender'
       ? (shipment?.sender.name ?? '')
       : (recipientName || shipment?.recipient.name || '');
     const dni = userType === 'sender' ? senderDni : recipientDni;
     // Usar el override si se pasó (evita race condition con setClaimDescription)
     const desc = descriptionOverride ?? claimDescription;
+    // El backend normalizará el claim_type con ClassifyClaimType desde la
+    // categoría + subtipos. Mandamos el claim_type derivado como fallback de
+    // compat (clientes legacy que no manejen `category` en el server).
+    const resolvedClaimType = claimType ?? classifyClaimType(claimCategory, damageSubtypes, deliverySubtype);
     try {
-      const res = await chatbotService.fileClaim(
-        trackingId, dni, name, claimType, damageSubtypes, desc, evidence ?? undefined
-      );
+      const res = await chatbotService.fileClaim({
+        trackingId,
+        claimantDni: dni,
+        claimantName: name,
+        claimType: resolvedClaimType,
+        category: claimCategory,
+        damageSubtypes,
+        deliverySubtype: deliverySubtype || undefined,
+        description: desc,
+        evidenceFile: evidence ?? undefined,
+      });
       posthog.capture('chatbot_claim_submitted', {
-        claim_type: claimType,
+        claim_type: resolvedClaimType,
+        claim_category: claimCategory,
         user_type: userType,
         shipment_status: shipment?.status,
       });
@@ -534,14 +572,116 @@ export function ChatbotWidget() {
       const apiErr = err as { response?: { data?: { error?: string } } };
       addBotMessage('❌ ' + (apiErr.response?.data?.error || 'No se pudo registrar el reclamo. Intentá de nuevo.'));
     } finally {
+      setClaimCategory(null);
       setClaimType(null);
       setDamageSubtypes([]);
+      setDeliverySubtype('');
       setClaimDescription('');
       setClaimEvidenceFile(null);
       setEvidenceRequired(false);
       setState('authenticated');
     }
   };
+
+  // ─── Pre-filtro ────────────────────────────────────────────────────────────
+
+  const preFilterCtx = (): PreFilterCtx => ({
+    status: shipment?.status ?? '',
+    estimated_delivery_at: shipment?.estimated_delivery_at,
+  });
+
+  const branchContact = originBranch
+    ? `${originBranch.name} — ${originBranch.address}`
+    : undefined;
+
+  /** Avanza al formulario de reclamo después de que el pre-filtro pasó. */
+  const continueToClaimForm = (category: ClaimCategory, prefillSubtypes?: DamageSubtype[]) => {
+    const catDef = CLAIM_CATEGORIES.find(c => c.value === category);
+    if (!catDef) return;
+
+    if (catDef.requiresDamageSubtype) {
+      const current = prefillSubtypes ?? damageSubtypes;
+      if (current.length > 0) {
+        // Subtipo ya pre-llenado por el pre-filtro — saltar directo a descripción
+        if (prefillSubtypes) setDamageSubtypes(prefillSubtypes);
+        setState('claim_description');
+        addBotMessage('Describí brevemente el problema (mínimo 10 caracteres, máximo 400):');
+      } else {
+        setState('claim_damage_subtypes');
+        const opts = DAMAGE_SUBTYPE_OPTIONS.map(opt => ({
+          label: opt.label,
+          value: opt.value,
+          action: 'toggle_damage_subtype' as const,
+        }));
+        addBotMessage('¿Qué tipo de daño o faltante? (podés elegir más de uno)', [
+          ...opts,
+          { label: '✅ Listo, continuar', value: 'done', action: 'confirm_damage_subtypes' as const },
+        ]);
+      }
+    } else if (catDef.requiresDeliverySubtype) {
+      setState('claim_delivery_subtype');
+      addBotMessage(
+        '¿Cuál fue el problema con la entrega?',
+        DELIVERY_SUBTYPE_OPTIONS.map(opt => ({
+          label: opt.label,
+          value: opt.value,
+          action: 'select_delivery_subtype' as const,
+        })),
+      );
+    } else {
+      setState('claim_description');
+      addBotMessage('Describí brevemente el problema (mínimo 10 caracteres, máximo 400):');
+    }
+  };
+
+  /** Maneja un resultado leaf del árbol de pre-filtro. */
+  const handlePreFilterLeaf = (leaf: PreFilterLeaf, category: ClaimCategory) => {
+    setPreFilterNode(null);
+    if (leaf.kind === 'resolved') {
+      addBotMessage(`ℹ️ ${leaf.message}`, [
+        { label: '🏠 Volver al inicio', value: 'menu', action: 'restart' as const },
+      ]);
+      setState('authenticated');
+      return;
+    }
+    if (leaf.kind === 'redirect') {
+      // not_delivered → redirigir al árbol de demora
+      const newCat = leaf.to;
+      setClaimCategory(newCat);
+      setClaimType('delay');
+      const step = getPreFilterRoot(newCat, preFilterCtx(), branchContact);
+      if (isLeaf(step)) {
+        handlePreFilterLeaf(step, newCat);
+      } else {
+        setPreFilterNode(step);
+        addBotMessage(step.question, step.options.map(o => ({
+          label: o.label, value: o.value, action: 'prefilter_answer' as const,
+        })));
+      }
+      return;
+    }
+    // kind === 'continue'
+    const prefill = leaf.prefillDamageSubtypes;
+    if (leaf.noteMessage) {
+      addBotMessage(`ℹ️ ${leaf.noteMessage}`);
+    }
+    continueToClaimForm(category, prefill);
+  };
+
+  /** Inicia el pre-filtro para la categoría elegida. */
+  const startClaimPreFilter = (category: ClaimCategory) => {
+    const step = getPreFilterRoot(category, preFilterCtx(), branchContact);
+    if (isLeaf(step)) {
+      handlePreFilterLeaf(step, category);
+    } else {
+      setPreFilterNode(step);
+      addBotMessage(step.question, step.options.map(o => ({
+        label: o.label, value: o.value, action: 'prefilter_answer' as const,
+      })));
+    }
+  };
+
+  // ───────────────────────────────────────────────────────────────────────────
 
   const handleOptionClick = async (action: string, value: string) => {
     if (!sessionActive) {
@@ -611,43 +751,89 @@ export function ChatbotWidget() {
           await handleSubmitClaimResponse(pendingEvidenceFile);
           break;
 
-        // US5: flujo de reclamo
-        case 'file_claim':
+        // US5: flujo de reclamo — el menú deriva del árbol compartido
+        // (CLAIM_CATEGORIES). Cada categoría conoce su defaultClaimType, qué
+        // subtipos pide y qué descripción usa.
+        case 'file_claim': {
           posthog.capture('chatbot_option_selected', { action: 'file_claim', shipment_status: shipment?.status, user_type: userType });
-          addBotMessage(
-            '📋 Vamos a registrar tu reclamo.\n\n¿Cuál es el motivo?',
-            [
-              { label: '📦 Daño / Faltante', value: 'damage', action: 'select_claim_type' as const },
-              { label: '🕐 Demora en entrega', value: 'delay', action: 'select_claim_type' as const },
-              { label: '🚫 No lo recibí', value: 'not_delivered', action: 'select_claim_type' as const },
-              { label: '😡 Maltrato del personal', value: 'bad_treatment', action: 'select_claim_type' as const },
-              { label: '📝 Datos incorrectos', value: 'wrong_data', action: 'select_claim_type' as const },
-              { label: '❓ Otro', value: 'other', action: 'select_claim_type' as const },
-            ]
-          );
+          const allEligible = shipment
+            ? CLAIM_CATEGORIES.every(cat => canFileClaimOfType(shipment, cat.defaultClaimType))
+            : true;
+          const options: ChatOption[] = CLAIM_CATEGORIES.map(cat => {
+            const eligible = !shipment || canFileClaimOfType(shipment, cat.defaultClaimType);
+            return eligible
+              ? { label: cat.chatbotLabel, value: cat.value, action: 'select_claim_type' as const }
+              : { label: `🔒 ${cat.chatbotLabel}`, value: cat.value, action: 'claim_type_blocked' as const };
+          });
+          const prompt = allEligible
+            ? '📋 Vamos a registrar tu reclamo.\n\n¿Cuál es el motivo?'
+            : `📋 Vamos a registrar tu reclamo.\n\n⚠️ ${CLAIM_INELIGIBLE_MESSAGE}\n\nPor ahora solo podés iniciar un reclamo de **Maltrato del personal**. ¿Cuál es el motivo?`;
+          addBotMessage(prompt, options);
+          setState('authenticated');
+          break;
+        }
+
+        case 'claim_type_blocked':
+          addBotMessage(`⚠️ ${CLAIM_INELIGIBLE_MESSAGE}`);
           setState('authenticated');
           break;
 
         case 'select_claim_type': {
-          const selectedType = value as ClaimType;
-          posthog.capture('chatbot_claim_type_selected', { claim_type: selectedType, user_type: userType });
-          setClaimType(selectedType);
-          setDamageSubtypes([]);
-          if (selectedType === 'damage') {
-            setState('claim_damage_subtypes');
-            addBotMessage(
-              '¿Qué tipo de daño o faltante?  (podés elegir más de uno)',
-              [
-                { label: '📦 Producto dañado', value: 'product_damaged', action: 'toggle_damage_subtype' as const },
-                { label: '📉 Falta mercadería', value: 'missing_products', action: 'toggle_damage_subtype' as const },
-                { label: '📫 Embalaje dañado', value: 'packaging_damaged', action: 'toggle_damage_subtype' as const },
-                { label: '✅ Listo, continuar', value: 'done', action: 'confirm_damage_subtypes' as const },
-              ]
-            );
-          } else {
-            setState('claim_description');
-            addBotMessage('Describí brevemente el problema (mínimo 10 caracteres, máximo 400):');
+          const selectedCategory = value as ClaimCategory;
+          const categoryDef = CLAIM_CATEGORIES.find(c => c.value === selectedCategory);
+          if (!categoryDef) {
+            addBotMessage('Opción no reconocida. Por favor intenta de nuevo.');
+            setState('authenticated');
+            break;
           }
+          if (shipment && !canFileClaimOfType(shipment, categoryDef.defaultClaimType)) {
+            addBotMessage(`⚠️ ${CLAIM_INELIGIBLE_MESSAGE}`);
+            setState('authenticated');
+            break;
+          }
+          posthog.capture('chatbot_claim_type_selected', {
+            claim_category: selectedCategory,
+            claim_type: categoryDef.defaultClaimType,
+            user_type: userType,
+          });
+          setClaimCategory(selectedCategory);
+          setClaimType(categoryDef.defaultClaimType);
+          setDamageSubtypes([]);
+          setDeliverySubtype('');
+          setState('authenticated');
+          startClaimPreFilter(selectedCategory);
+          break;
+        }
+
+        case 'prefilter_answer': {
+          if (!preFilterNode || !claimCategory) {
+            addBotMessage('Opción no reconocida. Por favor intenta de nuevo.');
+            setState('authenticated');
+            break;
+          }
+          const next = preFilterNode.next(value, preFilterCtx());
+          if (isLeaf(next)) {
+            handlePreFilterLeaf(next, claimCategory);
+          } else {
+            setPreFilterNode(next);
+            addBotMessage(next.question, next.options.map(o => ({
+              label: o.label, value: o.value, action: 'prefilter_answer' as const,
+            })));
+          }
+          break;
+        }
+
+        case 'select_delivery_subtype': {
+          const sub = value as DeliverySubtype;
+          setDeliverySubtype(sub);
+          // wrong_address mapea a wrong_data, el resto a not_delivered. Lo
+          // resolvemos local para coherencia del estado, pero el backend
+          // recalcula con ClassifyClaimType.
+          if (claimCategory) {
+            setClaimType(classifyClaimType(claimCategory, damageSubtypes, sub));
+          }
+          setState('claim_description');
+          addBotMessage('Describí brevemente el problema (mínimo 10 caracteres, máximo 400):');
           break;
         }
 
@@ -659,16 +845,21 @@ export function ChatbotWidget() {
           setDamageSubtypes(newSubtypes);
           setState('claim_damage_subtypes');
 
-          const label = (s: DamageSubtype, base: string) =>
-            newSubtypes.includes(s) ? `✅ ${base}` : `⬜ ${base}`;
+          const label = (s: DamageSubtype) => {
+            const opt = DAMAGE_SUBTYPE_OPTIONS.find(o => o.value === s);
+            const base = opt?.label ?? s;
+            return newSubtypes.includes(s) ? `✅ ${base}` : `⬜ ${base}`;
+          };
           addBotMessage(
             newSubtypes.length === 0
               ? '¿Qué tipo de daño o faltante? (podés elegir más de uno)'
               : `Seleccionados: ${newSubtypes.length}. ¿Alguno más o continuás?`,
             [
-              { label: label('product_damaged', 'Producto dañado'), value: 'product_damaged', action: 'toggle_damage_subtype' as const },
-              { label: label('missing_products', 'Falta mercadería'), value: 'missing_products', action: 'toggle_damage_subtype' as const },
-              { label: label('packaging_damaged', 'Embalaje dañado'), value: 'packaging_damaged', action: 'toggle_damage_subtype' as const },
+              ...DAMAGE_SUBTYPE_OPTIONS.map(opt => ({
+                label: label(opt.value),
+                value: opt.value,
+                action: 'toggle_damage_subtype' as const,
+              })),
               { label: '✅ Listo, continuar', value: 'done', action: 'confirm_damage_subtypes' as const },
             ]
           );
@@ -819,7 +1010,9 @@ export function ChatbotWidget() {
         }
         if (activeClaim?.status === 'pending_customer') {
           senderActions.push('respond_claim');
-        } else if (!activeClaim && !isTerminalStatus(shipment.status)) {
+        } else if (!activeClaim && shipment.status !== 'draft') {
+          // file_claim siempre disponible (excepto draft): bad_treatment es
+          // reclamable en cualquier estado; el resto se bloquea al elegir tipo.
           senderActions.push('file_claim');
         }
         const menuOptions = buildMenuOptions(senderActions);
@@ -889,6 +1082,12 @@ export function ChatbotWidget() {
     if (shipment.status !== 'out_for_delivery' &&
       !isTerminalStatus(shipment.status)) {
       actions.push('cancel');
+    }
+
+    // file_claim siempre disponible (excepto draft): bad_treatment se puede
+    // iniciar en cualquier estado; los demás tipos se bloquean al seleccionar.
+    if (!activeClaim && shipment.status !== 'draft') {
+      actions.push('file_claim');
     }
 
     return actions;

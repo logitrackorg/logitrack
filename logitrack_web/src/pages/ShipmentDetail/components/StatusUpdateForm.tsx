@@ -102,8 +102,9 @@ export function StatusUpdateForm({
             <FormField label="DNI del destinatario" required>
               <input
                 value={recipientDni}
-                onChange={(e) => onRecipientDniChange(e.target.value)}
+                onChange={(e) => onRecipientDniChange(e.target.value.replace(/\s/g, ""))}
                 placeholder="DNI del destinatario (obligatorio)"
+                inputMode="numeric"
                 required
                 className={fieldInputClass}
               />
@@ -114,8 +115,9 @@ export function StatusUpdateForm({
             <FormField label="DNI del remitente" required>
               <input
                 value={senderDni}
-                onChange={(e) => onSenderDniChange(e.target.value)}
+                onChange={(e) => onSenderDniChange(e.target.value.replace(/\s/g, ""))}
                 placeholder="DNI del remitente (obligatorio)"
+                inputMode="numeric"
                 required
                 className={fieldInputClass}
               />
@@ -126,8 +128,9 @@ export function StatusUpdateForm({
             <FormField label="DNI del destinatario (remitente original)" required>
               <input
                 value={recipientDni}
-                onChange={(e) => onRecipientDniChange(e.target.value)}
+                onChange={(e) => onRecipientDniChange(e.target.value.replace(/\s/g, ""))}
                 placeholder="DNI del destinatario -remitente original- (obligatorio)"
+                inputMode="numeric"
                 required
                 className={fieldInputClass}
               />
