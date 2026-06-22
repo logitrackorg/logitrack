@@ -20,7 +20,7 @@ const MIN_SEP_STEP = 5;
 const MIN_SCORE_MAX = 100;
 const MIN_SCORE_STEP = 5;
 
-const MAX_SUGG_MAX = 200;
+const MAX_SUGG_MAX = 300;
 const MAX_SUGG_STEP = 5;
 
 export type TerritoryMode = "national" | "custom";

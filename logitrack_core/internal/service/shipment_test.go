@@ -1928,6 +1928,46 @@ func TestRejected_NoNotifWhenNotConfigured(t *testing.T) {
 	}
 }
 
+// TestDeliveryFailed_RejectedByRecipient_AlsoNotifiesRejection verifica el fix:
+// cuando el destinatario rechaza el envío (delivery_failed + RejectedByRecipient),
+// además del aviso de entrega fallida al destinatario se notifica al remitente el
+// rechazo con su motivo en el mismo paso — sin esperar la posterior transición
+// system delivery_failed→rechazado, que ya no conserva el motivo real.
+func TestDeliveryFailed_RejectedByRecipient_AlsoNotifiesRejection(t *testing.T) {
+	ts := newSetup()
+	rejNotifier := newFakeRejectedNotifier()
+	failNotifier := newFakeDeliveryFailedNotifier()
+	ts.svc.SetRejectedService(rejNotifier)
+	ts.svc.SetDeliveryFailedService(failNotifier)
+
+	ship := mustCreate(t, ts)
+	toInTransit(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
+
+	mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+		Status:              model.StatusDeliveryFailed,
+		ChangedBy:           "driver-01",
+		Notes:               "El destinatario rechazó el paquete",
+		RejectedByRecipient: true,
+	})
+
+	// Aviso de entrega fallida al destinatario (el que "está muy bien").
+	failed, _, _, _ := failNotifier.recv(t)
+	if failed.TrackingID != ship.TrackingID {
+		t.Errorf("delivery_failed: tracking incorrecto: got %s", failed.TrackingID)
+	}
+
+	// Y además la notificación de rechazo al remitente con el motivo real.
+	rejected, notes := rejNotifier.recv(t)
+	if rejected.Sender.DNI != defaultSender().DNI {
+		t.Errorf("rechazo: Sender.DNI incorrecto: got %s", rejected.Sender.DNI)
+	}
+	if notes != "El destinatario rechazó el paquete" {
+		t.Errorf("rechazo: motivo incorrecto: got %q, want %q", notes, "El destinatario rechazó el paquete")
+	}
+}
+
 // ─── LOGITRACK-437: Entrega fallida al destinatario ───────────────────────────
 
 type fakeDeliveryFailedNotifier struct {

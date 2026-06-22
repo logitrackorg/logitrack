@@ -633,14 +633,23 @@ func (s *CoverageService) diagnoseWithCells(simulatedAreaKm2 float64, coverageCe
 		// Pole-of-Inaccessibility passes over the *same* uncovered void, so they
 		// can land near-on-top of each other (a math suggestion whose coverage
 		// circle heavily overlaps a per-cell one barely adds new terrain). Drop
-		// any math suggestion within minSeparationKm of a per-cell suggestion or
+		// any math suggestion within mathDeoverlapKm of a per-cell suggestion or
 		// of an already-kept math suggestion. Per-cell suggestions win ties — they
 		// carry concrete branch attribution ("descomprimirá las zonas de…").
+		//
+		// For national scope the 150 km per-cell floor (coverageSuggestionMinSeparationKm)
+		// is too aggressive for math suggestions: the PoI algorithm already spaces
+		// them globally, so only direct-overlap prevention (≥ 2× radiusKm, min 20 km)
+		// is needed. For custom zones, minSeparationKm (already adaptive) is used.
+		mathDeoverlapKm := minSeparationKm
+		if len(customBoundary) < 3 {
+			mathDeoverlapKm = math.Max(radiusKm*2, 20.0)
+		}
 		if len(mathSuggestions) > 0 {
 			kept := make([]model.SuggestedLocation, 0, len(mathSuggestions))
 			for _, ms := range mathSuggestions {
-				if tooCloseToExisting(ms, suggestions, minSeparationKm) || tooCloseToExisting(ms, kept, minSeparationKm) {
-					log.Printf("[MathSugg] de-overlap: dropping suggestion at (%.4f, %.4f) — within %.0f km of an existing suggestion", ms.Lat, ms.Lng, minSeparationKm)
+				if tooCloseToExisting(ms, suggestions, mathDeoverlapKm) || tooCloseToExisting(ms, kept, mathDeoverlapKm) {
+					log.Printf("[MathSugg] de-overlap: dropping suggestion at (%.4f, %.4f) — within %.0f km of an existing suggestion", ms.Lat, ms.Lng, mathDeoverlapKm)
 					continue
 				}
 				kept = append(kept, ms)
@@ -1267,17 +1276,21 @@ func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, fr
 			break
 		}
 		next := largestFragment(remainder)
-		// Area-shrink guard: if the DIFFERENCE removed less than 0.1 km²,
-		// polyclip returned degenerate/identical geometry — stop to avoid
-		// an infinite loop. A ratio-based guard (e.g. 1%) would fire on
-		// national-scale fragments where a 44 km circle shrinks a 1.2 M km²
-		// void by only ~0.36%, which is a genuine reduction.
-		if area-next.Area() < 0.1 {
-			log.Printf("[MathSugg] fillFragmentIteratively[%d]: fragment didn't shrink (%.2f→%.2f km²) — breaking",
+		// Area-shrink guard: when polyclip represents the subtracted region as a
+		// separate hole contour (rather than merging it into the outer ring), the
+		// largest-fragment pick returns the unchanged outer ring and the area
+		// appears not to have shrunk. This is common for small circles entirely
+		// inside a large polygon. In that case, don't update current — the next
+		// iteration's bestInteriorPoint will still pick a new location because
+		// *sites and addedPoints grow, pushing the PoI search away from already-
+		// placed suggestions. Only break when the subtraction truly returned
+		// degenerate geometry (remainder was empty, caught above).
+		if area-next.Area() >= 0.1 {
+			current = next
+		} else {
+			log.Printf("[MathSugg] fillFragmentIteratively[%d]: fragment didn't shrink (%.2f→%.2f km²) — relying on sites repulsion",
 				i, area, next.Area())
-			break
 		}
-		current = next
 	}
 	return out
 }

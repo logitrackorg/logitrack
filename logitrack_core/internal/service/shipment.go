@@ -1123,9 +1123,12 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	}
 
 	// LOGITRACK-429 CA-01/CA-02: envío rechazado → notificar al remitente (solo) por WhatsApp/email.
-	if targetStatus == model.StatusRechazado && s.rejectedNotifSvc != nil {
-		notes := req.Notes
-		go s.rejectedNotifSvc.SendRejectedNotification(updated, notes)
+	// Solo en transiciones de operador (no system): el path delivery_failed→rechazado que hace
+	// FinalizeLastMileTripReturn es una system transition y NO trae el motivo real (sus notes son
+	// "Recibido en sucursal tras retorno..."). Ese caso se cubre en el bloque de delivery_failed,
+	// donde req.Notes sí contiene el motivo del rechazo. Así evitamos un duplicado con motivo erróneo.
+	if targetStatus == model.StatusRechazado && !req.SystemTransition && s.rejectedNotifSvc != nil {
+		go s.rejectedNotifSvc.SendRejectedNotification(updated, req.Notes)
 	}
 
 	// LOGITRACK-437 CA-01/CA-02: entrega fallida → notificar al destinatario por email + WhatsApp.
@@ -1137,6 +1140,13 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			branch, _ = s.branchRepo.GetByID(updated.ReceivingBranchID)
 		}
 		go s.deliveryFailedNotifSvc.SendDeliveryFailedNotification(updated, attemptsUsed, maxAttempts, branch)
+
+		// Si el destinatario rechazó el envío, además del aviso de entrega fallida (que va al
+		// destinatario) notificamos al remitente el rechazo con su motivo. req.Notes trae el motivo
+		// en este paso; la posterior system transition delivery_failed→rechazado ya no lo conserva.
+		if req.RejectedByRecipient && s.rejectedNotifSvc != nil {
+			go s.rejectedNotifSvc.SendRejectedNotification(updated, req.Notes)
+		}
 	}
 
 	// CA-01: envío transicionó a listo para retiro en sucursal → notificar al destinatario por WhatsApp/email.

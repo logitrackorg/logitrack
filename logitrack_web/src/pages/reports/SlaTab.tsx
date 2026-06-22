@@ -1544,7 +1544,6 @@ export function CoberturaTab() {
     const result = simResultRef.current;
     if (!result || pendingSnapIndexes.length === 0) return;
 
-    // Snapshot lat/lng before the loop so mutations don't invalidate them.
     const locsToProcess = pendingSnapIndexes.map((origIndex) => ({
       origIndex,
       lat: result.suggested_locations[origIndex].lat,
@@ -1553,58 +1552,83 @@ export function CoberturaTab() {
 
     const radiusKm = Math.sqrt(result.simulated_area_km2 / Math.PI);
     const total = locsToProcess.length;
-    let removedSoFar = 0;
 
     setIsFetchingCities(true);
     setSnapError(null);
+    setSnappingProgress({ current: 0, total });
 
-    for (let step = 0; step < locsToProcess.length; step++) {
-      const { origIndex, lat, lng } = locsToProcess[step];
-      const currentIndex = origIndex - removedSoFar;
+    // Send all pending points in a single batch call instead of one per request.
+    // Sequential per-point calls caused browser crashes with large suggestion sets
+    // (hundreds of state updates + Leaflet re-renders in rapid succession).
+    const BATCH = 50;
+    const allSnapResults: Array<{ origIndex: number; lat: number; lng: number; result: SnappedCity }> = [];
 
-      setSnappingProgress({ current: step + 1, total });
-
-      try {
-        const [snapResult] = await coverageApi.snapToCity(
-          [{ lat, lng }],
+    try {
+      for (let start = 0; start < locsToProcess.length; start += BATCH) {
+        const batch = locsToProcess.slice(start, start + BATCH);
+        const snapResults = await coverageApi.snapToCity(
+          batch.map(({ lat, lng }) => ({ lat, lng })),
           radiusKm,
           snapMinPopulationRef.current,
           blacklistedCities.length > 0 ? blacklistedCities : undefined,
         );
-
-        if (snapResult.is_snapped) {
-          // Turn the grey marker green immediately.
-          setSnappedCities((prev) => {
-            const updated = prev ? [...prev] : Array(result.suggested_locations.length).fill({ lat: 0, lng: 0, city_name: "", is_snapped: false });
-            updated[currentIndex] = snapResult;
-            return updated as SnappedCity[];
-          });
-        } else if (snapResult.error_reason === "NO_RESULTS") {
-          // No city found in radius — move to rejected accordion and remove marker.
-          const reason = snapMinPopulationRef.current > 0
-            ? `Sin ciudad con ≥ ${snapMinPopulationRef.current.toLocaleString("es-AR")} hab. en el radio`
-            : "Sin ciudad en el radio de búsqueda";
-          setRejectedLocations((prev) => [...prev, {
-            city_name: `(${lat.toFixed(3)}°, ${lng.toFixed(3)}°)`,
-            lat,
-            lng,
-            reject_reason: reason,
-            score: 1,
-          }]);
-          setSimResult((prev) => prev
-            ? { ...prev, suggested_locations: prev.suggested_locations.filter((_, i) => i !== currentIndex) }
-            : prev);
-          setSnappedCities((prev) => prev ? prev.filter((_, i) => i !== currentIndex) : prev);
-          removedSoFar++;
+        for (let i = 0; i < batch.length; i++) {
+          if (snapResults[i]) {
+            allSnapResults.push({ origIndex: batch[i].origIndex, lat: batch[i].lat, lng: batch[i].lng, result: snapResults[i] });
+          }
         }
-        // TIMEOUT: leave grey — the retry button will pick it up next time.
-      } catch {
-        // Network error for this point — skip silently, leave grey.
+        setSnappingProgress({ current: Math.min(start + BATCH, total), total });
       }
+    } catch {
+      setSnapError("Error al buscar ciudades. Intente nuevamente.");
+      setIsFetchingCities(false);
+      setSnappingProgress(null);
+      return;
+    }
 
-      if (step < locsToProcess.length - 1) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    // Classify each result before touching state.
+    const noResultOrigIndexes = new Set<number>();
+    const snappedUpdates = new Map<number, SnappedCity>();
+    const noResultReason = snapMinPopulationRef.current > 0
+      ? `Sin ciudad con ≥ ${snapMinPopulationRef.current.toLocaleString("es-AR")} hab. en el radio`
+      : "Sin ciudad en el radio de búsqueda";
+    const newRejected: Array<{ city_name: string; lat: number; lng: number; reject_reason: string; score: number }> = [];
+
+    for (const { origIndex, lat, lng, result: snapResult } of allSnapResults) {
+      if (snapResult.is_snapped) {
+        snappedUpdates.set(origIndex, snapResult);
+      } else if (snapResult.error_reason === "NO_RESULTS") {
+        noResultOrigIndexes.add(origIndex);
+        newRejected.push({
+          city_name: `(${lat.toFixed(3)}°, ${lng.toFixed(3)}°)`,
+          lat,
+          lng,
+          reject_reason: noResultReason,
+          score: 1,
+        });
       }
+    }
+
+    // Apply all state changes at once.
+    setSnappedCities((prev) => {
+      const base: SnappedCity[] = prev
+        ? [...prev]
+        : Array(result.suggested_locations.length).fill({ lat: 0, lng: 0, city_name: "", is_snapped: false as const });
+      for (const [idx, city] of snappedUpdates) {
+        base[idx] = city;
+      }
+      return noResultOrigIndexes.size > 0
+        ? base.filter((_, i) => !noResultOrigIndexes.has(i))
+        : base;
+    });
+
+    if (newRejected.length > 0) {
+      setRejectedLocations((prev) => [...prev, ...newRejected]);
+      setSimResult((prev) =>
+        prev
+          ? { ...prev, suggested_locations: prev.suggested_locations.filter((_, i) => !noResultOrigIndexes.has(i)) }
+          : prev,
+      );
     }
 
     setIsFetchingCities(false);

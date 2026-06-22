@@ -21,6 +21,9 @@ import {
 } from "../utils/publicClaimForm";
 import { fmtDateTime, fmtRelative, fmtDate } from "../utils/date";
 import { ChatbotWidget } from "../components/chatbot/ChatbotWidget";
+import { ClaimPreFilter, type PreFilterContinueOpts } from "../components/ClaimPreFilter";
+import { getPreFilterRoot, isLeaf, type PreFilterNode } from "../utils/claimPreFilter";
+import type { ClaimCategory } from "../utils/claimDecisionTree";
 import { useOrganizationTheme } from "../context/OrganizationThemeContext";
 import { NeuralBranchNetwork } from "../components/NeuralBranchNetwork";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -405,6 +408,11 @@ export function PublicTracking() {
   const [claimSubmitting, setClaimSubmitting] = useState(false);
   const [claimError, setClaimError] = useState("");
   const [claimResult, setClaimResult] = useState<PublicClaim | null>(null);
+  // Pre-filtro: null = sin categoría elegida, node = preguntas activas, 'done' = pasó, 'resolved' = resuelto sin ticket
+  const [preFilterNode, setPreFilterNode] = useState<PreFilterNode | null>(null);
+  const [preFilterDone, setPreFilterDone] = useState(false);
+  const [preFilterResolvedMsg, setPreFilterResolvedMsg] = useState("");
+  const [preFilterNoteMsg, setPreFilterNoteMsg] = useState("");
 
   // Fetch public branches on mount
   useEffect(() => {
@@ -418,16 +426,84 @@ export function PublicTracking() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  const resetPreFilter = () => {
+    setPreFilterNode(null);
+    setPreFilterDone(false);
+    setPreFilterResolvedMsg("");
+    setPreFilterNoteMsg("");
+  };
+
   const resetClaimForm = () => {
     setClaimOpen(false);
     setClaimForm(emptyClaimFormValues);
     setClaimSubmitting(false);
     setClaimError("");
     setClaimResult(null);
+    resetPreFilter();
   };
 
   const patchClaimForm = (patch: Partial<PublicClaimFormValues>) => {
+    // Cuando cambia la categoría, reiniciar el pre-filtro
+    if ('category' in patch && patch.category !== claimForm.category) {
+      resetPreFilter();
+      const newCat = patch.category as ClaimCategory | "";
+      if (newCat) {
+        const ctx = {
+          status: shipment?.status ?? '',
+          estimated_delivery_at: shipment?.estimated_delivery_at,
+        };
+        const step = getPreFilterRoot(newCat, ctx);
+        if (isLeaf(step)) {
+          if (step.kind === 'resolved') {
+            setPreFilterResolvedMsg(step.message);
+            setPreFilterDone(false);
+          } else if (step.kind === 'redirect') {
+            // not_delivered → delay: cambiar categoría automáticamente
+            const redirectPatch = { ...patch, category: step.to as ClaimCategory };
+            setClaimForm((prev) => ({ ...prev, ...redirectPatch }));
+            const delayCtx = { status: shipment?.status ?? '', estimated_delivery_at: shipment?.estimated_delivery_at };
+            const delayStep = getPreFilterRoot(step.to, delayCtx);
+            if (isLeaf(delayStep)) {
+              if (delayStep.kind === 'resolved') setPreFilterResolvedMsg(delayStep.message);
+              else if (delayStep.kind === 'continue') {
+                setPreFilterNoteMsg(delayStep.noteMessage ?? '');
+                setPreFilterDone(true);
+              }
+            } else {
+              setPreFilterNode(delayStep);
+            }
+            return;
+          } else {
+            // kind === 'continue'
+            setPreFilterNoteMsg(step.noteMessage ?? '');
+            setPreFilterDone(true);
+          }
+        } else {
+          setPreFilterNode(step);
+        }
+      }
+    }
     setClaimForm((prev) => ({ ...prev, ...patch }));
+  };
+
+  const handlePreFilterContinue = (opts: PreFilterContinueOpts) => {
+    if (opts.prefillDamageSubtypes) {
+      setClaimForm((prev) => ({ ...prev, damageSubtypes: opts.prefillDamageSubtypes! }));
+    }
+    setPreFilterNoteMsg(opts.noteMessage ?? '');
+    setPreFilterNode(null);
+    setPreFilterDone(true);
+  };
+
+  const handlePreFilterResolved = (message: string) => {
+    setPreFilterNode(null);
+    setPreFilterDone(false);
+    setPreFilterResolvedMsg(message);
+  };
+
+  const handlePreFilterBack = () => {
+    resetPreFilter();
+    setClaimForm((prev) => ({ ...prev, category: '', damageSubtypes: [], deliverySubtype: '' }));
   };
 
   const runSearch = async (trackingId: string) => {
@@ -499,6 +575,8 @@ export function PublicTracking() {
       damageSubtypes: claimForm.damageSubtypes,
       deliverySubtype: claimForm.deliverySubtype,
       staffDescription: claimForm.staffDescription,
+      delayDescription: claimForm.delayDescription,
+      otherDescription: claimForm.otherDescription,
       evidenceName: claimForm.evidence?.name,
     });
 
@@ -515,7 +593,12 @@ export function PublicTracking() {
         description,
         created_by: claimForm.createdBy,
         dni: claimForm.dni,
+        // Pasamos el árbol completo: el backend normaliza claim_type vía
+        // ClassifyClaimType y valida subtipos. Así ambos canales convergen en
+        // la misma fuente de verdad.
+        category: claimForm.category || undefined,
         damage_subtypes: claimForm.damageSubtypes.join(","),
+        delivery_subtype: claimForm.deliverySubtype || undefined,
         evidence: claimForm.evidence,
       });
       setClaimResult(createdClaim);
@@ -524,7 +607,7 @@ export function PublicTracking() {
       const e = err as { response?: { data?: { error?: string; message?: string } } };
       const msg = e.response?.data?.error ?? e.response?.data?.message;
       if (msg?.includes("no coinciden")) {
-        setClaimError("Datos incorrectos");
+        setClaimError("El nombre y/o DNI no coinciden con los del envío. Escribí tu nombre tal cual figura en el envío.");
       } else {
         setClaimError(msg ?? "No pudimos registrar el reclamo. Intentá nuevamente.");
       }
@@ -1028,8 +1111,39 @@ export function PublicTracking() {
                         values={claimForm}
                         onChange={patchClaimForm}
                         disabled={claimSubmitting}
-                        shipmentDelivered={shipment?.status === "delivered"}
+                        shipment={shipment}
+                        preFilterSlot={
+                          preFilterNode && !preFilterDone ? (
+                            <ClaimPreFilter
+                              startNode={preFilterNode}
+                              ctx={{
+                                status: shipment?.status ?? '',
+                                estimated_delivery_at: shipment?.estimated_delivery_at,
+                              }}
+                              onContinue={handlePreFilterContinue}
+                              onResolved={handlePreFilterResolved}
+                              onBack={handlePreFilterBack}
+                            />
+                          ) : preFilterResolvedMsg ? (
+                            <div className="rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4 text-sm text-amber-800 dark:text-amber-300">
+                              ℹ️ {preFilterResolvedMsg}
+                              <button
+                                type="button"
+                                onClick={handlePreFilterBack}
+                                className="block mt-2 text-xs underline text-amber-700 dark:text-amber-400"
+                              >
+                                ← Volver a elegir motivo
+                              </button>
+                            </div>
+                          ) : undefined
+                        }
                       />
+
+                      {preFilterNoteMsg && preFilterDone && (
+                        <AlertBanner variant="info" title="A tener en cuenta">
+                          {preFilterNoteMsg}
+                        </AlertBanner>
+                      )}
 
                       {claimError && (
                         <AlertBanner
@@ -1043,9 +1157,12 @@ export function PublicTracking() {
                         <Button variant="outline" className="rounded-xl border-blue-200 text-blue-700" onClick={() => setClaimOpen(false)}>
                           Cancelar
                         </Button>
-                        <Button type="submit" disabled={claimSubmitting} className="rounded-xl shadow-sm shadow-blue-500/20">
-                          {claimSubmitting ? "Enviando..." : "Enviar reclamo"}
-                        </Button>
+                        {/* Enviar solo cuando el pre-filtro pasó (o no hay categoría) y no está resuelto */}
+                        {(!claimForm.category || preFilterDone) && !preFilterResolvedMsg && (
+                          <Button type="submit" disabled={claimSubmitting} className="rounded-xl shadow-sm shadow-blue-500/20">
+                            {claimSubmitting ? "Enviando..." : "Enviar reclamo"}
+                          </Button>
+                        )}
                       </div>
                     </form>
                   </div>
