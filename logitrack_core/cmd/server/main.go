@@ -209,10 +209,14 @@ func main() {
 	// Escalado automático de prioridad de reclamos: cada 15 min sube un nivel
 	// los reclamos no terminales que pasaron el umbral de inactividad. También
 	// se ejecuta cuando el admin mueve el reloj de prueba.
-	claimEscalationSvc := service.NewClaimEscalationService(claimRepo, sysConfigRepo)
+	claimEscalationSvc := service.NewClaimEscalationService(claimRepo, sysConfigRepo, shipmentRepo)
 	claimEscalationScheduler := service.NewClaimEscalationScheduler(claimEscalationSvc)
 	claimEscalationScheduler.Start()
 	claimEscalationRunner = func() { _, _ = claimEscalationSvc.Run() }
+	// Si admin reactiva el escalado desde la config, corremos el job una vez
+	// para "ponernos al día" con los reclamos que acumularon inactividad
+	// mientras el toggle estuvo apagado, sin esperar al próximo tick (15 min).
+	sysConfigSvc.SetOnEscalationEnabled(claimEscalationRunner)
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)

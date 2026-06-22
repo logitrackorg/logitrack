@@ -6,6 +6,7 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -130,12 +131,7 @@ func (s *ClaimService) addTripRouteBranches(trackingID string, route map[string]
 }
 
 func containsStr(list []string, v string) bool {
-	for _, x := range list {
-		if x == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, v)
 }
 
 // TransferTargetBranches returns the active branches a claim may be transferred to:
@@ -771,26 +767,42 @@ func (s *ClaimService) computeClaimPriority(claimType model.ClaimType, hasEviden
 		return priority, note
 	}
 	// Anti-inflación: si la sucursal ya tiene una proporción de urgentes mayor o
-	// igual al cap, degradamos a "alta" y dejamos nota. Si no podemos contar
-	// (sin sucursal de origen o error al consultar), permitimos urgente —
-	// preferimos un falso urgente a perder señal de un caso real.
-	branchID := strings.TrimSpace(shipment.OriginBranchID)
-	if branchID == "" {
-		return priority, note
-	}
-	totalOpen, urgentOpen, err := s.claimRepo.CountOpenAndUrgentByBranch(branchID)
-	if err != nil || totalOpen == 0 {
-		return priority, note
-	}
-	cap := cfg.UrgentClaimsCapPct
-	if cap <= 0 {
-		return priority, note
-	}
-	ratio := float64(urgentOpen) / float64(totalOpen)
-	if ratio >= cap {
-		return model.ClaimPriorityAlta, "El ticket fue clasificado como alta por tope de urgentes en sucursal."
+	// igual al cap, degradamos a "alta" y dejamos nota. Si no podemos evaluar
+	// (sin sucursal de origen, sin reclamos abiertos, cap <= 0 o error al
+	// consultar), permitimos urgente — preferimos un falso urgente a perder
+	// señal de un caso real.
+	if branchUrgentCapReached(s.claimRepo, cfg, shipment.OriginBranchID) {
+		return model.ClaimPriorityAlta, urgentCapNote
 	}
 	return priority, note
+}
+
+// urgentCapNote es la justificación que se anexa al reclamo cuando la regla
+// anti-inflación de urgentes degrada un ticket que habría sido urgente. La
+// misma constante se usa al crear el reclamo y desde el job de escalado
+// automático para que la nota sea idempotente.
+const urgentCapNote = "El ticket fue clasificado como alta por tope de urgentes en sucursal."
+
+// branchUrgentCapReached indica si la sucursal ya alcanzó (o superó) el tope
+// de urgentes abiertos definido en cfg.UrgentClaimsCapPct. Devuelve false si
+// no se puede evaluar (sin sucursal, sin reclamos abiertos, cap <= 0 o error
+// al consultar): en esos casos preferimos permitir el urgente para no perder
+// señal de casos reales.
+func branchUrgentCapReached(claimRepo repository.ClaimRepository, cfg model.SystemConfig, branchID string) bool {
+	branchID = strings.TrimSpace(branchID)
+	if branchID == "" {
+		return false
+	}
+	capPct := cfg.UrgentClaimsCapPct
+	if capPct <= 0 {
+		return false
+	}
+	totalOpen, urgentOpen, err := claimRepo.CountOpenAndUrgentByBranch(branchID)
+	if err != nil || totalOpen == 0 {
+		return false
+	}
+	ratio := float64(urgentOpen) / float64(totalOpen)
+	return ratio >= capPct
 }
 
 func isTerminalOrTransferred(status model.ClaimStatus) bool {
