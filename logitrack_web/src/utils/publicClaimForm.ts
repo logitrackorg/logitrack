@@ -1,43 +1,40 @@
 import type { ClaimType } from "../api/publicTracking";
 import type { PublicClaimFormValues } from "../components/PublicClaimFormFields";
+import {
+  CLAIM_CATEGORIES,
+  DAMAGE_SUBTYPE_OPTIONS,
+  DELIVERY_SUBTYPE_OPTIONS,
+  classifyClaimType,
+  damageRequiresEvidence,
+  isAllowedClaimEvidenceFile,
+  MAX_CLAIM_EVIDENCE_BYTES,
+  type ClaimCategory,
+  type DamageSubtype,
+  type DeliverySubtype,
+} from "./claimDecisionTree";
 
-export type ClaimMainCategory = "incomplete_damage" | "delivery_problem" | "staff_conduct";
+// publicClaimForm.ts es la fachada del formulario público: arma descripción,
+// valida campos y reexporta del árbol de decisión compartido los helpers que
+// usa el form. No define el árbol — ese vive en claimDecisionTree.ts y lo
+// comparte con el chatbot.
 
-export type DamageSubtype = "product_damaged" | "missing_products" | "packaging_damaged";
+export type ClaimMainCategory = ClaimCategory;
 
-export type DeliverySubtype = "marked_delivered" | "wrong_person" | "wrong_address";
+export {
+  DAMAGE_SUBTYPE_OPTIONS,
+  DELIVERY_SUBTYPE_OPTIONS,
+  isAllowedClaimEvidenceFile,
+  MAX_CLAIM_EVIDENCE_BYTES,
+};
+export type { DamageSubtype, DeliverySubtype };
 
-export const CLAIM_MAIN_OPTIONS: { value: ClaimMainCategory; label: string }[] = [
-  { value: "incomplete_damage", label: "Entrega incompleta o dañada" },
-  { value: "delivery_problem", label: "Problema con la entrega" },
-  { value: "staff_conduct", label: "Atención o conducta del personal" },
-];
-
-export const DAMAGE_SUBTYPE_OPTIONS: { value: DamageSubtype; label: string }[] = [
-  { value: "product_damaged", label: "Producto dañado" },
-  { value: "missing_products", label: "Faltan productos" },
-  { value: "packaging_damaged", label: "Embalaje dañado" },
-];
-
-export const DELIVERY_SUBTYPE_OPTIONS: { value: DeliverySubtype; label: string }[] = [
-  { value: "marked_delivered", label: "Figuró entregado pero no lo recibí" },
-  { value: "wrong_person", label: "Entregado a otra persona" },
-  { value: "wrong_address", label: "Dirección incorrecta" },
-];
+// CLAIM_MAIN_OPTIONS deriva del árbol compartido (sin "incomplete_damage" no
+// es "Entrega dañada" porque ahora missing es su propia categoría).
+export const CLAIM_MAIN_OPTIONS: { value: ClaimCategory; label: string }[] =
+  CLAIM_CATEGORIES.map((c) => ({ value: c.value, label: c.label }));
 
 export function damageSubtypeRequiresEvidence(subtypes: DamageSubtype[]): boolean {
-  return subtypes.includes("product_damaged");
-}
-
-export function isAllowedClaimEvidenceFile(file: File): boolean {
-  const lowerName = file.name.toLowerCase();
-  return (
-    lowerName.endsWith(".txt") ||
-    lowerName.endsWith(".pdf") ||
-    file.type === "text/plain" ||
-    file.type === "application/pdf" ||
-    file.type.startsWith("image/")
-  );
+  return damageRequiresEvidence(subtypes);
 }
 
 export const emptyClaimFormValues: PublicClaimFormValues = {
@@ -47,74 +44,89 @@ export const emptyClaimFormValues: PublicClaimFormValues = {
   damageSubtypes: [],
   deliverySubtype: "",
   staffDescription: "",
+  delayDescription: "",
+  otherDescription: "",
   evidence: null,
 };
 
 export function resolveClaimType(
-  category: ClaimMainCategory,
+  category: ClaimCategory,
   damageSubtypes: DamageSubtype[],
   deliverySubtype: DeliverySubtype | "",
 ): ClaimType {
-  if (category === "staff_conduct") return "bad_treatment";
-  if (category === "delivery_problem") {
-    if (deliverySubtype === "wrong_address") return "wrong_data";
-    return "not_delivered";
-  }
-  const onlyMissing =
-    damageSubtypes.includes("missing_products") &&
-    !damageSubtypes.includes("product_damaged") &&
-    !damageSubtypes.includes("packaging_damaged");
-  return onlyMissing ? "missing" : "damage";
+  return classifyClaimType(category, damageSubtypes, deliverySubtype);
 }
 
-export function buildClaimDescription(input: {
-  category: ClaimMainCategory;
+export interface BuildDescriptionInput {
+  category: ClaimCategory;
   damageSubtypes: DamageSubtype[];
   deliverySubtype: DeliverySubtype | "";
   staffDescription: string;
+  delayDescription: string;
+  otherDescription: string;
   evidenceName?: string;
-}): string {
-  const { category, damageSubtypes, deliverySubtype, staffDescription, evidenceName } = input;
-
-  if (category === "staff_conduct") {
-    return staffDescription.trim();
-  }
-
-  if (category === "delivery_problem") {
-    const label = DELIVERY_SUBTYPE_OPTIONS.find((o) => o.value === deliverySubtype)?.label ?? deliverySubtype;
-    let text = `Problema con la entrega: ${label}.`;
-    if (evidenceName) text += ` Evidencia adjunta: ${evidenceName}.`;
-    return text;
-  }
-
-  const labels = damageSubtypes
-    .map((s) => DAMAGE_SUBTYPE_OPTIONS.find((o) => o.value === s)?.label)
-    .filter(Boolean);
-  let text = `Entrega incompleta o dañada: ${labels.join(", ")}.`;
-  if (evidenceName) text += ` Evidencia adjunta: ${evidenceName}.`;
-  return text;
 }
 
-export function validatePublicClaimForm(input: {
-  category: ClaimMainCategory | "";
+export function buildClaimDescription(input: BuildDescriptionInput): string {
+  const { category } = input;
+  switch (category) {
+    case "staff_conduct":
+      return input.staffDescription.trim();
+    case "delivery_delay":
+      return input.delayDescription.trim();
+    case "other":
+      return input.otherDescription.trim();
+    case "delivery_problem": {
+      const label =
+        DELIVERY_SUBTYPE_OPTIONS.find((o) => o.value === input.deliverySubtype)?.label ??
+        input.deliverySubtype;
+      let text = `Problema con la entrega: ${label}.`;
+      if (input.evidenceName) text += ` Evidencia adjunta: ${input.evidenceName}.`;
+      return text;
+    }
+    case "incomplete_damage": {
+      const labels = input.damageSubtypes
+        .map((s) => DAMAGE_SUBTYPE_OPTIONS.find((o) => o.value === s)?.label)
+        .filter(Boolean);
+      let text = `Daño / Faltante: ${labels.join(", ")}.`;
+      if (input.evidenceName) text += ` Evidencia adjunta: ${input.evidenceName}.`;
+      return text;
+    }
+  }
+}
+
+export interface ValidatePublicClaimInput {
+  category: ClaimCategory | "";
   damageSubtypes: DamageSubtype[];
   deliverySubtype: DeliverySubtype | "";
   staffDescription: string;
+  delayDescription: string;
+  otherDescription: string;
   evidence: File | null;
   createdBy: string;
   dni: string;
-}): string | null {
-  const { category, damageSubtypes, deliverySubtype, staffDescription, evidence, createdBy, dni } = input;
+}
 
+export function validatePublicClaimForm(input: ValidatePublicClaimInput): string | null {
+  const {
+    category,
+    damageSubtypes,
+    deliverySubtype,
+    staffDescription,
+    delayDescription,
+    otherDescription,
+    evidence,
+    createdBy,
+    dni,
+  } = input;
+
+  // El nombre debe coincidir exactamente con el del remitente o destinatario
+  // del envío — el backend hace el matching real (matchesCustomer). Acá solo
+  // chequeamos que no esté vacío; no exigimos dos palabras porque una razón
+  // social (ej. "MercadoLocal") es un reclamante válido.
   const normalizedName = createdBy.trim().replace(/\s+/g, " ");
   if (!normalizedName) {
-    return "Ingresá tu nombre y apellido. No es posible crear un reclamo sin esos datos.";
-  }
-  if (!/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ'\s]+$/.test(normalizedName)) {
-    return "El nombre y apellido solo puede contener letras y espacios.";
-  }
-  if (normalizedName.split(" ").length < 2) {
-    return "Ingresá tu nombre y apellido completos.";
+    return "Ingresá tu nombre tal cual figura en el envío. No es posible crear un reclamo sin esos datos.";
   }
   const normalizedDni = dni.trim();
   if (!normalizedDni) {
@@ -133,7 +145,7 @@ export function validatePublicClaimForm(input: {
     if (evidence && !isAllowedClaimEvidenceFile(evidence)) {
       return "La evidencia debe ser un archivo TXT, PDF o una imagen pequeña.";
     }
-    if (evidence && evidence.size > 1024 * 1024) {
+    if (evidence && evidence.size > MAX_CLAIM_EVIDENCE_BYTES) {
       return "La evidencia no puede superar 1 MB.";
     }
     const desc = buildClaimDescription({
@@ -141,9 +153,13 @@ export function validatePublicClaimForm(input: {
       damageSubtypes,
       deliverySubtype: "",
       staffDescription: "",
+      delayDescription: "",
+      otherDescription: "",
       evidenceName: evidence?.name,
     });
-    if (desc.length < 10 || desc.length > 400) return "No se pudo armar la descripción del reclamo.";
+    if (!desc || desc.length < 10 || desc.length > 400) {
+      return "No se pudo armar la descripción del reclamo.";
+    }
     return null;
   }
 
@@ -154,14 +170,25 @@ export function validatePublicClaimForm(input: {
       damageSubtypes: [],
       deliverySubtype,
       staffDescription: "",
+      delayDescription: "",
+      otherDescription: "",
       evidenceName: evidence?.name,
     });
-    if (desc.length < 10 || desc.length > 400) return "No se pudo armar la descripción del reclamo.";
+    if (!desc || desc.length < 10 || desc.length > 400) {
+      return "No se pudo armar la descripción del reclamo.";
+    }
     return null;
   }
 
-  if (!staffDescription.trim()) return "Describí lo ocurrido.";
-  if (staffDescription.trim().length < 10 || staffDescription.trim().length > 400) {
+  // Categorías de texto libre — staff_conduct, delivery_delay, other.
+  const freeText =
+    category === "staff_conduct"
+      ? staffDescription
+      : category === "delivery_delay"
+        ? delayDescription
+        : otherDescription;
+  if (!freeText.trim()) return "Describí lo ocurrido.";
+  if (freeText.trim().length < 10 || freeText.trim().length > 400) {
     return "La descripción debe tener entre 10 y 400 caracteres.";
   }
   return null;

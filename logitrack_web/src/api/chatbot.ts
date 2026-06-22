@@ -86,24 +86,33 @@ export const chatbotService = {
     return response.data;
   },
 
-  // US5: Crear reclamo desde chatbot
-  fileClaim: async (
-    trackingId: string,
-    claimantDni: string,
-    claimantName: string,
-    claimType: ClaimType,
-    damageSubtypes: DamageSubtype[],
-    description: string,
-    evidenceFile?: File
-  ): Promise<FileClaimResponse> => {
+  // US5: Crear reclamo desde chatbot. Acepta el árbol completo (category +
+  // damage_subtypes + delivery_subtype) para que el backend normalice el
+  // claim_type con ClassifyClaimType — única fuente de verdad. claim_type
+  // viaja igual como fallback para clientes/handlers legacy.
+  fileClaim: async (input: {
+    trackingId: string;
+    claimantDni: string;
+    claimantName: string;
+    claimType: ClaimType;
+    category?: string;
+    damageSubtypes?: DamageSubtype[];
+    deliverySubtype?: string;
+    description: string;
+    evidenceFile?: File;
+  }): Promise<FileClaimResponse> => {
     const form = new FormData();
-    form.append('tracking_id', trackingId);
-    form.append('claimant_dni', claimantDni);
-    form.append('claimant_name', claimantName);
-    form.append('claim_type', claimType);
-    form.append('damage_subtypes', damageSubtypes.join(','));
-    form.append('description', description);
-    if (evidenceFile) form.append('evidence', evidenceFile);
+    form.append('tracking_id', input.trackingId);
+    form.append('claimant_dni', input.claimantDni);
+    form.append('claimant_name', input.claimantName);
+    form.append('claim_type', input.claimType);
+    if (input.category) form.append('category', input.category);
+    if (input.damageSubtypes && input.damageSubtypes.length > 0) {
+      form.append('damage_subtypes', input.damageSubtypes.join(','));
+    }
+    if (input.deliverySubtype) form.append('delivery_subtype', input.deliverySubtype);
+    form.append('description', input.description);
+    if (input.evidenceFile) form.append('evidence', input.evidenceFile);
     const response = await chatbotAPI.post<FileClaimResponse>('/claim', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });

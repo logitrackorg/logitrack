@@ -2,7 +2,6 @@ package handler
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -295,6 +294,14 @@ func (h *ClaimHandler) CreatePublicClaim(c *gin.Context) {
 	}
 	claim, err := h.svc.CreatePublicClaim(req, evidence)
 	if err != nil {
+		if existing, ok := service.IsActiveClaimExistsError(err); ok {
+			c.JSON(http.StatusConflict, gin.H{
+				"error":    existing.Error(),
+				"claim_id": existing.ExistingClaimID,
+				"status":   existing.ExistingStatus,
+			})
+			return
+		}
 		if err.Error() == "envio no encontrado" {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
@@ -321,53 +328,46 @@ func parseMultipartPublicClaimRequest(c *gin.Context) (model.CreatePublicClaimRe
 		return model.CreatePublicClaimRequest{}, nil, err
 	}
 	req := model.CreatePublicClaimRequest{
-		TrackingID:  strings.TrimSpace(c.PostForm("tracking_id")),
-		ClaimType:   model.ClaimType(strings.TrimSpace(c.PostForm("claim_type"))),
-		Description: strings.TrimSpace(c.PostForm("description")),
-		CreatedBy:   strings.TrimSpace(c.PostForm("created_by")),
-		DNI:         strings.TrimSpace(c.PostForm("dni")),
+		TrackingID:      strings.TrimSpace(c.PostForm("tracking_id")),
+		ClaimType:       model.ClaimType(strings.TrimSpace(c.PostForm("claim_type"))),
+		Description:     strings.TrimSpace(c.PostForm("description")),
+		CreatedBy:       strings.TrimSpace(c.PostForm("created_by")),
+		DNI:             strings.TrimSpace(c.PostForm("dni")),
+		Category:        strings.TrimSpace(c.PostForm("category")),
+		DamageSubtypes:  splitCSV(strings.TrimSpace(c.PostForm("damage_subtypes"))),
+		DeliverySubtype: strings.TrimSpace(c.PostForm("delivery_subtype")),
 	}
-	damageSubtypes := splitCSV(strings.TrimSpace(c.PostForm("damage_subtypes")))
 	fileHeader, err := c.FormFile("evidence")
 	if err != nil && !errors.Is(err, http.ErrMissingFile) {
 		return model.CreatePublicClaimRequest{}, nil, err
 	}
 	var evidence *service.ClaimEvidenceUpload
 	if fileHeader != nil {
-		if fileHeader.Size > 1<<20 {
-			return model.CreatePublicClaimRequest{}, nil, fmt.Errorf("la evidencia debe pesar como maximo 1 MB")
-		}
-		ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+		// Lectura sin validar tipo/tamaño — el servicio (validateEvidenceUpload)
+		// es el único responsable de aceptar/rechazar el archivo, así ambos
+		// canales aplican exactamente la misma regla. Usamos LimitReader como
+		// safety-net contra archivos enormes que harían OOM el servidor.
 		mimeType := fileHeader.Header.Get("Content-Type")
 		if mimeType == "" {
-			mimeType = mime.TypeByExtension(ext)
+			mimeType = mime.TypeByExtension(strings.ToLower(filepath.Ext(fileHeader.Filename)))
 		}
 		if mimeType == "" {
 			mimeType = "application/octet-stream"
-		}
-		if ext != ".txt" && ext != ".pdf" && !strings.HasPrefix(mimeType, "image/") {
-			return model.CreatePublicClaimRequest{}, nil, fmt.Errorf("la evidencia debe ser un archivo .txt, .pdf o una imagen")
 		}
 		file, err := fileHeader.Open()
 		if err != nil {
 			return model.CreatePublicClaimRequest{}, nil, err
 		}
 		defer file.Close()
-		data, err := io.ReadAll(io.LimitReader(file, 1<<20+1))
+		data, err := io.ReadAll(io.LimitReader(file, service.MaxClaimEvidenceSize+1))
 		if err != nil {
 			return model.CreatePublicClaimRequest{}, nil, err
-		}
-		if int64(len(data)) > 1<<20 {
-			return model.CreatePublicClaimRequest{}, nil, fmt.Errorf("la evidencia debe pesar como maximo 1 MB")
 		}
 		evidence = &service.ClaimEvidenceUpload{
 			FileName: fileHeader.Filename,
 			MimeType: mimeType,
 			Data:     data,
 		}
-	}
-	if req.ClaimType == model.ClaimTypeDamage && containsAny(damageSubtypes, "product_damaged") && evidence == nil {
-		return model.CreatePublicClaimRequest{}, nil, fmt.Errorf("la evidencia es obligatoria para producto dañado")
 	}
 	return req, evidence, nil
 }
@@ -385,15 +385,6 @@ func splitCSV(value string) []string {
 		}
 	}
 	return out
-}
-
-func containsAny(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
 }
 
 // TransferClaim transfers a claim to another branch. Supervisor only.
