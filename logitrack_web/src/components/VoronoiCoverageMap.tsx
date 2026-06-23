@@ -10,6 +10,13 @@ import {
   GAP_STYLE,
   COVERED_STYLE,
 } from "../api/coverage";
+import { ZONE_COLOR, type ZonePoint } from "../api/zones";
+
+/** A dangerous zone rendered read-only on the coverage map. */
+export interface DangerZoneShape {
+  name: string;
+  polygon: ZonePoint[];
+}
 
 export interface VoronoiCoverageMapHandle {
   /** Animate the map to the given coordinates and zoom level. */
@@ -91,6 +98,12 @@ interface VoronoiCoverageMapProps {
   onIndustrialHeatmapLoaded?: (count: number, error?: boolean) => void;
   /** Ciudades descartadas por el filtro de densidad: se dibujan como círculos grises semitransparentes. */
   rejectedLocations?: RejectedLocation[];
+  /**
+   * Zonas peligrosas (definidas en Administración › Zonas) a superponer en el
+   * mapa como cuadrados rojos de solo lectura. `undefined`/`null` o vacío = no
+   * se dibuja la capa. El simulador nunca las edita ni las lista; solo las ve.
+   */
+  dangerZones?: DangerZoneShape[] | null;
 }
 
 const FACTORY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg>`;
@@ -142,6 +155,7 @@ function VoronoiCoverageMap({
   heatmapBbox,
   onIndustrialHeatmapLoaded,
   rejectedLocations,
+  dangerZones,
 }: VoronoiCoverageMapProps, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -166,6 +180,7 @@ function VoronoiCoverageMap({
   const editLayer = useRef<L.LayerGroup | null>(null);
   const industrialLayer = useRef<L.LayerGroup | null>(null);
   const rejectedLayer = useRef<L.LayerGroup | null>(null);
+  const dangerLayer = useRef<L.LayerGroup | null>(null);
 
   // Refs para manejar el estado de dibujo sin stale closures en los event handlers.
   const isDrawingRef = useRef(isDrawingBoundary);
@@ -215,6 +230,7 @@ function VoronoiCoverageMap({
     mapRef.current = map;
     cellsLayer.current = L.layerGroup().addTo(map);
     industrialLayer.current = L.layerGroup().addTo(map);
+    dangerLayer.current = L.layerGroup().addTo(map);
     markersLayer.current = L.layerGroup().addTo(map);
     simLayer.current = L.layerGroup().addTo(map);
     suggestionsLayer.current = L.layerGroup().addTo(map);
@@ -357,6 +373,31 @@ function VoronoiCoverageMap({
       .bindTooltip("Área personalizada activa", { sticky: true })
       .addTo(layer);
   }, [customBoundary, isEditingBoundary]);
+
+  // Zonas peligrosas (Administración › Zonas): cuadrados rojos de solo lectura.
+  // El simulador solo las muestra — no se editan ni se listan acá.
+  useEffect(() => {
+    const layer = dangerLayer.current;
+    if (!layer) return;
+    layer.clearLayers();
+    if (!dangerZones || dangerZones.length === 0) return;
+
+    for (const z of dangerZones) {
+      if (!z.polygon || z.polygon.length < 3) continue;
+      L.polygon(
+        z.polygon.map((p) => [p.lat, p.lng] as [number, number]),
+        {
+          color: ZONE_COLOR.stroke,
+          weight: 2,
+          fillColor: ZONE_COLOR.stroke,
+          fillOpacity: 0.2,
+          interactive: true,
+        },
+      )
+        .bindTooltip(`🚫 Zona peligrosa: ${z.name}`, { sticky: true })
+        .addTo(layer);
+    }
+  }, [dangerZones]);
 
   // Modo edición de vértices: handles arrastrables + puntos medios para insertar.
   useEffect(() => {

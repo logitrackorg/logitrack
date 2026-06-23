@@ -31,6 +31,8 @@ import {
   GAP_STYLE,
 } from "../../api/coverage";
 import { regionsApi, type Region as CoverageRegion } from "../../api/regions";
+import { zoneApi, type Zone } from "../../api/zones";
+import { isInDangerZone } from "../../utils/pointInPolygon";
 import { VoronoiCoverageMap, type VoronoiCoverageMapHandle } from "../../components/VoronoiCoverageMap";
 import { CoverageSimulatorPanel, type DiagnosisMode } from "../../components/CoverageSimulatorPanel";
 import { SIM_AREA_DEFAULT, SIM_AREA_MAX, computeSimAreaBounds } from "../../utils/coverageArea";
@@ -1030,6 +1032,7 @@ export function CoberturaTab() {
   const prioritizeIndustrialRef = useRef(false);
   const [applyTerrainFriction, setApplyTerrainFriction] = useState(false);
   const applyTerrainFrictionRef = useRef(false);
+  const [penalizeDangerZones, setPenalizeDangerZones] = useState(false);
   // Pesos efectivos: los modificadores opcionales que estén apagados se fuerzan
   // a 0 para que no entren en el cálculo del score. "Penalizar terreno" anula su
   // penalización; "Priorizar zonas industriales" anula su bonus Y lo saca del
@@ -1040,8 +1043,9 @@ export function CoberturaTab() {
       ...scoreWeights,
       terrain: applyTerrainFriction ? scoreWeights.terrain : 0,
       industry: prioritizeIndustrial ? scoreWeights.industry : 0,
+      danger: penalizeDangerZones ? scoreWeights.danger : 0,
     }),
-    [scoreWeights, applyTerrainFriction, prioritizeIndustrial],
+    [scoreWeights, applyTerrainFriction, prioritizeIndustrial, penalizeDangerZones],
   );
   const [minSeparation, setMinSeparation] = useState(20);
   const minSeparationRef = useRef(20);
@@ -1075,6 +1079,12 @@ export function CoberturaTab() {
   const [industrialHeatmapLoading, setIndustrialHeatmapLoading] = useState(false);
   const [industrialZoneResult, setIndustrialZoneResult] = useState<{ count: number; error: boolean } | null>(null);
   const [rejectedLocations, setRejectedLocations] = useState<RejectedLocation[]>([]);
+  // Zonas peligrosas (Administración › Zonas): solo lectura en el simulador.
+  // `showDangerZones` controla su capa en el mapa. (`penalizeDangerZones` se
+  // declara junto a los otros modificadores de score, arriba, porque
+  // `effectiveWeights` lo necesita.)
+  const [dangerZones, setDangerZones] = useState<Zone[]>([]);
+  const [showDangerZones, setShowDangerZones] = useState(false);
 
   // Zonas guardadas (predefinidas + zonas del usuario).
   const [regions, setRegions] = useState<CoverageRegion[]>([]);
@@ -1112,6 +1122,9 @@ export function CoberturaTab() {
 
   // Fetch saved regions (predefined + custom) for the zone selector.
   useEffect(() => { regionsApi.list().then(setRegions).catch(() => {}); }, []);
+
+  // Fetch active dangerous zones (read-only overlay + scoring penalty).
+  useEffect(() => { zoneApi.list(false).then(setDangerZones).catch(() => {}); }, []);
 
   // Limpia el último diagnóstico confirmado (sugerencias, ciudades aterrizadas,
   // errores, proyección). Se llama al cambiar de zona para que el resultado de
@@ -2020,6 +2033,7 @@ export function CoberturaTab() {
                 setIndustrialZoneResult({ count, error: error ?? false });
               }}
               rejectedLocations={showRejectedOnMap && rejectedLocations.length > 0 ? rejectedLocations : undefined}
+              dangerZones={showDangerZones ? dangerZones : undefined}
             />
           </div>
         </Card>
@@ -2064,6 +2078,8 @@ export function CoberturaTab() {
                 onPrioritizeIndustrialChange={setPrioritizeIndustrial}
                 applyTerrainFriction={applyTerrainFriction}
                 onApplyTerrainFrictionChange={setApplyTerrainFriction}
+                penalizeDangerZones={penalizeDangerZones}
+                onPenalizeDangerZonesChange={setPenalizeDangerZones}
                 minSeparation={minSeparation}
                 onMinSeparationChange={setMinSeparation}
                 minScore={minScore}
@@ -2080,6 +2096,9 @@ export function CoberturaTab() {
                 }}
                 industrialHeatmapLoading={industrialHeatmapLoading}
                 industrialZoneResult={industrialZoneResult}
+                showDangerZones={showDangerZones}
+                onShowDangerZonesChange={setShowDangerZones}
+                dangerZoneCount={dangerZones.length}
               />
               {simResult !== null && (
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -2165,10 +2184,14 @@ export function CoberturaTab() {
                             {snappedCities
                               .map((c, i) => ({ city: c, index: i }))
                               .filter(({ city }) => city.is_snapped)
-                              .sort((a, b) =>
-                                computeWeightedScore(simResult.suggested_locations[b.index], effectiveWeights) -
-                                computeWeightedScore(simResult.suggested_locations[a.index], effectiveWeights)
-                              )
+                              .sort((a, b) => {
+                                const la = simResult.suggested_locations[a.index];
+                                const lb = simResult.suggested_locations[b.index];
+                                return (
+                                  computeWeightedScore(lb, effectiveWeights, isInDangerZone(lb.lat, lb.lng, dangerZones)) -
+                                  computeWeightedScore(la, effectiveWeights, isInDangerZone(la.lat, la.lng, dangerZones))
+                                );
+                              })
                               .map(({ city, index }) => (
                                 <SuggestionCard
                                   key={`${city.city_name}-${index}`}
@@ -2179,6 +2202,7 @@ export function CoberturaTab() {
                                   onBlacklist={(name) => blacklistCity(index, name)}
                                   onFlyTo={handleFlyToLocation}
                                   weights={effectiveWeights}
+                                  dangerZones={dangerZones}
                                 />
                               ))}
                           </ul>
@@ -2511,6 +2535,29 @@ export function CoberturaTab() {
               </div>
             </div>
 
+            {/* ── Penalización de zona peligrosa ── */}
+            <div className="pt-3 border-t border-slate-100 dark:border-gray-700 space-y-0.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-700 dark:text-slate-200 font-medium">🚫 Penalización de zona peligrosa</span>
+                <span className="tabular-nums font-semibold text-rose-500 dark:text-rose-400">−{scoreWeights.danger} pts</span>
+              </div>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
+                Puntos que se <strong>restan</strong> al score final cuando la sugerencia cae dentro de una zona peligrosa (Administración › Zonas). Se aplica solo si el modificador <strong>🚫 Penalizar zonas peligrosas</strong> está activo.
+              </p>
+              <input
+                type="range"
+                min={0}
+                max={50}
+                step={1}
+                value={scoreWeights.danger}
+                onChange={(e) => setScoreWeights((prev) => ({ ...prev, danger: Number(e.target.value) }))}
+                className="w-full accent-rose-500 mt-1"
+              />
+              <div className="flex justify-between text-[9px] text-slate-400">
+                <span>0 (sin penalización)</span><span>50</span>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-gray-700">
               <span className="text-[11px] text-slate-500 dark:text-slate-400">
                 Base máx.: <strong className="text-slate-700 dark:text-slate-200">{scoreWeights.pop + scoreWeights.density + scoreWeights.area + scoreWeights.industry} pts</strong>
@@ -2710,8 +2757,8 @@ function SeverityPill({
   );
 }
 
-type ScoreWeightsConfig = { pop: number; density: number; area: number; industry: number; terrain: number };
-const DEFAULT_SCORE_WEIGHTS: ScoreWeightsConfig = { pop: 20, density: 20, area: 35, industry: 15, terrain: 20 };
+type ScoreWeightsConfig = { pop: number; density: number; area: number; industry: number; terrain: number; danger: number };
+const DEFAULT_SCORE_WEIGHTS: ScoreWeightsConfig = { pop: 20, density: 20, area: 35, industry: 15, terrain: 20, danger: 15 };
 
 /** Returns Tailwind color classes based on the 1–100 Logistics Viability Score. */
 function scoreColor(score: number): { ring: string; bg: string; text: string } {
@@ -2725,9 +2772,9 @@ const TERRAIN_FACTORS: Record<string, number> = {
   "Llano": 0, "Llano-Ventoso": 0.2, "Semi-montañoso": 0.5, "Serrano": 0.7, "Montañoso": 1.0,
 };
 
-type ScoreBreakdown = { popPts: number; densPts: number; areaPts: number; industryPts: number; terrainPenalty: number };
+type ScoreBreakdown = { popPts: number; densPts: number; areaPts: number; industryPts: number; terrainPenalty: number; dangerPenalty: number };
 
-function computeScoreBreakdown(loc: SuggestedLocation, w: ScoreWeightsConfig = DEFAULT_SCORE_WEIGHTS): ScoreBreakdown {
+function computeScoreBreakdown(loc: SuggestedLocation, w: ScoreWeightsConfig = DEFAULT_SCORE_WEIGHTS, inDangerZone = false): ScoreBreakdown {
   const pop = loc.population ?? 0;
   const density = loc.density ?? 0;
   const area = loc.actual_added_km2 ?? loc.gap_area_km2 ?? 0;
@@ -2737,23 +2784,25 @@ function computeScoreBreakdown(loc: SuggestedLocation, w: ScoreWeightsConfig = D
   const areaPts = area > 0 ? Math.min(w.area, Math.log10(area + 1) / Math.log10(300_001) * w.area) : 0;
   const industryPts = (loc.has_industrial_zone ?? false) ? w.industry : 0;
   const terrainPenalty = terrainFactor * w.terrain;
-  return { popPts, densPts, areaPts, industryPts, terrainPenalty };
+  const dangerPenalty = inDangerZone ? w.danger : 0;
+  return { popPts, densPts, areaPts, industryPts, terrainPenalty, dangerPenalty };
 }
 
-function computeWeightedScore(loc: SuggestedLocation, w: ScoreWeightsConfig): number {
-  const b = computeScoreBreakdown(loc, w);
+function computeWeightedScore(loc: SuggestedLocation, w: ScoreWeightsConfig, inDangerZone = false): number {
+  const b = computeScoreBreakdown(loc, w, inDangerZone);
   const totalMax = w.pop + w.density + w.area + w.industry;
   if (totalMax <= 0) return 1;
   const normalized = (b.popPts + b.densPts + b.areaPts + b.industryPts) * (100 / totalMax);
-  return Math.round(Math.min(100, Math.max(1, normalized - b.terrainPenalty)));
+  return Math.round(Math.min(100, Math.max(1, normalized - b.terrainPenalty - b.dangerPenalty)));
 }
 
 /** Compact circular badge that shows the Logistics Viability Index.
  *  When `loc` is provided, hovering shows a breakdown of how the score was computed. */
-function ScoreBadge({ score, size = "md", loc, weights = DEFAULT_SCORE_WEIGHTS }: { score: number; size?: "sm" | "md"; loc?: SuggestedLocation; weights?: ScoreWeightsConfig }) {
+function ScoreBadge({ score, size = "md", loc, weights = DEFAULT_SCORE_WEIGHTS, dangerZones = [] }: { score: number; size?: "sm" | "md"; loc?: SuggestedLocation; weights?: ScoreWeightsConfig; dangerZones?: Zone[] }) {
   const [hovered, setHovered] = useState(false);
-  const breakdown = loc ? computeScoreBreakdown(loc, weights) : null;
-  const displayScore = breakdown ? computeWeightedScore(loc!, weights) : score;
+  const inDanger = loc ? isInDangerZone(loc.lat, loc.lng, dangerZones) : false;
+  const breakdown = loc ? computeScoreBreakdown(loc, weights, inDanger) : null;
+  const displayScore = breakdown ? computeWeightedScore(loc!, weights, inDanger) : score;
   const { ring, bg, text } = scoreColor(displayScore);
   const dim = size === "sm" ? "w-8 h-8 text-[10px]" : "w-10 h-10 text-xs";
   return (
@@ -2800,6 +2849,12 @@ function ScoreBadge({ score, size = "md", loc, weights = DEFAULT_SCORE_WEIGHTS }
                 <span className="font-medium tabular-nums">−{breakdown.terrainPenalty.toFixed(1)} pts</span>
               </div>
             )}
+            {breakdown.dangerPenalty > 0 && (
+              <div className="flex justify-between items-center border-t border-slate-100 dark:border-gray-700 pt-1 mt-1 text-rose-500 dark:text-rose-400">
+                <span>🚫 Zona peligrosa</span>
+                <span className="font-medium tabular-nums">−{breakdown.dangerPenalty.toFixed(0)} pts</span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2824,6 +2879,7 @@ function SuggestionCard({
   onBlacklist,
   onFlyTo,
   weights = DEFAULT_SCORE_WEIGHTS,
+  dangerZones = [],
 }: {
   city: SnappedCity;
   loc: SuggestedLocation;
@@ -2832,6 +2888,7 @@ function SuggestionCard({
   onBlacklist: (cityName: string) => void;
   onFlyTo: (lat: number, lng: number) => void;
   weights?: ScoreWeightsConfig;
+  dangerZones?: Zone[];
 }) {
   const [blacklistChecked, setBlacklistChecked] = useState(false);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${city.lat},${city.lng}`;
@@ -2869,7 +2926,7 @@ function SuggestionCard({
         </button>
       </div>
       <div className="flex items-start gap-2">
-        {(loc.score ?? 0) > 0 && <ScoreBadge score={loc.score!} loc={loc} weights={weights} />}
+        {(loc.score ?? 0) > 0 && <ScoreBadge score={loc.score!} loc={loc} weights={weights} dangerZones={dangerZones} />}
         <div className="min-w-0">
           <button
             type="button"
