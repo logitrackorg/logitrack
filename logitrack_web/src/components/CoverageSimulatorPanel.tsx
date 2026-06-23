@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import type { Region } from "../api/regions";
-
-export const SIM_AREA_MIN = 50;
-export const SIM_AREA_MAX = 1_000_000;
-export const SIM_AREA_STEP = 1_000;
-export const SIM_AREA_DEFAULT = 500_000;
+import { SIM_AREA_MAX, computeSimAreaBounds } from "../utils/coverageArea";
 
 const MIN_POP_MAX = 500_000;
 const MIN_POP_STEP = 10_000;
@@ -68,6 +64,9 @@ interface CoverageSimulatorPanelProps {
   /** When true, mountainous terrain divides the score (discourages Andes candidates). */
   applyTerrainFriction?: boolean;
   onApplyTerrainFrictionChange?: (v: boolean) => void;
+  /** When true, candidates inside a dangerous zone get a fixed score penalty. */
+  penalizeDangerZones?: boolean;
+  onPenalizeDangerZonesChange?: (v: boolean) => void;
   /** true mientras el backend está calculando el diagnóstico — bloquea el panel y cambia el texto del botón. */
   isDiagnosing?: boolean;
   /** Toggles the industrial zones overlay on the map. */
@@ -80,6 +79,11 @@ interface CoverageSimulatorPanelProps {
   /** Toggles visibility of rejected (discarded) city markers on the map. */
   showRejectedOnMap?: boolean;
   onShowRejectedOnMapChange?: (v: boolean) => void;
+  /** Toggles the dangerous-zones overlay (read-only red squares) on the map. */
+  showDangerZones?: boolean;
+  onShowDangerZonesChange?: (v: boolean) => void;
+  /** Number of active dangerous zones available (for the layer's status label). */
+  dangerZoneCount?: number;
   /** Minimum distance (km) enforced between suggested branches and existing ones. Minimum 1 km. */
   minSeparation?: number;
   onMinSeparationChange?: (v: number) => void;
@@ -123,6 +127,8 @@ export function CoverageSimulatorPanel({
   onPrioritizeIndustrialChange,
   applyTerrainFriction = false,
   onApplyTerrainFrictionChange,
+  penalizeDangerZones = false,
+  onPenalizeDangerZonesChange,
   isDiagnosing = false,
   zoneAreaKm2,
   showIndustrialHeatmap = false,
@@ -131,6 +137,9 @@ export function CoverageSimulatorPanel({
   industrialZoneResult = null,
   showRejectedOnMap = true,
   onShowRejectedOnMapChange,
+  showDangerZones = false,
+  onShowDangerZonesChange,
+  dangerZoneCount = 0,
   minSeparation = 20,
   onMinSeparationChange,
   minScore = 0,
@@ -138,14 +147,12 @@ export function CoverageSimulatorPanel({
 }: CoverageSimulatorPanelProps) {
   const isDisabled = disabled || isDiagnosing;
 
-  // Adaptive slider bounds: floor stays at SIM_AREA_MIN (~4 km radius) even
-  // nationally so dense metros (AMBA) can use a tight radius that exposes
-  // uncovered demand; max scales to 25 % of the active zone. Use the number
-  // input for precise small values — the linear slider is coarse at the low end.
+  // Adaptive slider bounds: both floor (0.1 %) and ceiling (25 %) scale with the
+  // active zone so small zones (CABA) keep a usable range instead of being pinned
+  // at a fixed floor near their own ceiling. Use the number input for precise
+  // small values — the linear slider is coarse at the low end.
   const effectiveZoneArea = zoneAreaKm2 ?? SIM_AREA_MAX;
-  const simAreaMin = SIM_AREA_MIN;
-  const simAreaMax = Math.max(simAreaMin, Math.min(SIM_AREA_MAX, Math.round(effectiveZoneArea * 0.25)));
-  const simAreaStep = Math.max(10, Math.round((simAreaMax - simAreaMin) / 1000));
+  const { min: simAreaMin, max: simAreaMax, step: simAreaStep } = computeSimAreaBounds(effectiveZoneArea);
 
   const [minPopulation, setMinPopulation] = useState(MIN_POP_DEFAULT);
   const [densityInput, setDensityInput] = useState("0");
@@ -176,14 +183,12 @@ export function CoverageSimulatorPanel({
             disabled={isDrawingBoundary}
             className="flex-1 text-xs px-2 py-1.5 rounded-md border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
-            <option value="national">Nacional (Completo)</option>
-            {predefined.length > 0 && (
-              <optgroup label="Zonas Predefinidas">
-                {predefined.map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
-                ))}
-              </optgroup>
-            )}
+            <optgroup label="Zonas Predefinidas">
+              <option value="national">Nacional (Completo)</option>
+              {predefined.map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </optgroup>
             {custom.length > 0 && (
               <optgroup label="Mis Zonas">
                 {custom.map((r) => (
@@ -461,6 +466,21 @@ export function CoverageSimulatorPanel({
                 </button>
                 <span className="text-[11px] text-slate-600 dark:text-slate-300">⛰️ Penalizar terreno</span>
               </label>
+              <label className={`flex items-center gap-2 cursor-pointer select-none ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`}>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={penalizeDangerZones}
+                  disabled={isDisabled}
+                  onClick={() => onPenalizeDangerZonesChange?.(!penalizeDangerZones)}
+                  className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer disabled:cursor-not-allowed focus:outline-none ${
+                    penalizeDangerZones ? "bg-rose-500" : "bg-slate-300 dark:bg-gray-600"
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${penalizeDangerZones ? "translate-x-4" : "translate-x-0"}`} />
+                </button>
+                <span className="text-[11px] text-slate-600 dark:text-slate-300">🚫 Penalizar zonas peligrosas</span>
+              </label>
             </div>
 
             {/* Minimum density filter */}
@@ -688,6 +708,31 @@ export function CoverageSimulatorPanel({
           </button>
           <span className="text-[11px] text-slate-600 dark:text-slate-300">🚫 Ciudades descartadas en mapa</span>
         </label>
+        <label className="flex items-center gap-2 cursor-pointer select-none mt-1.5">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showDangerZones}
+            onClick={() => onShowDangerZonesChange?.(!showDangerZones)}
+            className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer focus:outline-none ${
+              showDangerZones ? "bg-rose-500" : "bg-slate-300 dark:bg-gray-600"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
+                showDangerZones ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <span className="text-[11px] text-slate-600 dark:text-slate-300">🚫 Zonas peligrosas</span>
+        </label>
+        {showDangerZones && (
+          <p className={`text-[10px] mt-1 leading-tight ${dangerZoneCount === 0 ? "text-slate-400 dark:text-slate-500" : "text-rose-600 dark:text-rose-400"}`}>
+            {dangerZoneCount === 0
+              ? "No hay zonas peligrosas activas. Se gestionan desde Administración › Zonas."
+              : `${dangerZoneCount} zona${dangerZoneCount !== 1 ? "s" : ""} peligrosa${dangerZoneCount !== 1 ? "s" : ""} activa${dangerZoneCount !== 1 ? "s" : ""} (solo lectura).`}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -31,8 +31,11 @@ import {
   GAP_STYLE,
 } from "../../api/coverage";
 import { regionsApi, type Region as CoverageRegion } from "../../api/regions";
+import { zoneApi, type Zone } from "../../api/zones";
+import { isInDangerZone } from "../../utils/pointInPolygon";
 import { VoronoiCoverageMap, type VoronoiCoverageMapHandle } from "../../components/VoronoiCoverageMap";
-import { CoverageSimulatorPanel, SIM_AREA_DEFAULT, SIM_AREA_MIN, SIM_AREA_MAX, type DiagnosisMode } from "../../components/CoverageSimulatorPanel";
+import { CoverageSimulatorPanel, type DiagnosisMode } from "../../components/CoverageSimulatorPanel";
+import { SIM_AREA_DEFAULT, SIM_AREA_MAX, computeSimAreaBounds } from "../../utils/coverageArea";
 import { CollapsiblePanel } from "../../components/CollapsiblePanel";
 import { SkeletonCard } from "../../components/ui/skeleton";
 // ── Palette ──────────────────────────────────────────────────────────────────
@@ -1029,10 +1032,20 @@ export function CoberturaTab() {
   const prioritizeIndustrialRef = useRef(false);
   const [applyTerrainFriction, setApplyTerrainFriction] = useState(false);
   const applyTerrainFrictionRef = useRef(false);
-  // Cuando "Penalizar terreno" está apagado, la penalización se fuerza a 0.
+  const [penalizeDangerZones, setPenalizeDangerZones] = useState(false);
+  // Pesos efectivos: los modificadores opcionales que estén apagados se fuerzan
+  // a 0 para que no entren en el cálculo del score. "Penalizar terreno" anula su
+  // penalización; "Priorizar zonas industriales" anula su bonus Y lo saca del
+  // máximo (denominador), de modo que el score se normaliza solo sobre los 3
+  // factores que siempre están: población, densidad y área útil.
   const effectiveWeights = useMemo(
-    () => ({ ...scoreWeights, terrain: applyTerrainFriction ? scoreWeights.terrain : 0 }),
-    [scoreWeights, applyTerrainFriction],
+    () => ({
+      ...scoreWeights,
+      terrain: applyTerrainFriction ? scoreWeights.terrain : 0,
+      industry: prioritizeIndustrial ? scoreWeights.industry : 0,
+      danger: penalizeDangerZones ? scoreWeights.danger : 0,
+    }),
+    [scoreWeights, applyTerrainFriction, prioritizeIndustrial, penalizeDangerZones],
   );
   const [minSeparation, setMinSeparation] = useState(20);
   const minSeparationRef = useRef(20);
@@ -1052,7 +1065,10 @@ export function CoberturaTab() {
   // Guarda el estado de zona anterior a la selección de celda para restaurarlo al deseleccionar.
   const preCellSelectionStateRef = useRef<{ boundary: [number, number][] | null; mode: "national" | "custom" } | null>(null);
 
-  const handleFlyToLocation = useCallback((lat: number, lng: number, zoom = 8) => {
+  // Zoom 12 ≈ detalle de ciudad: al apretar el nombre de una ciudad/sucursal se
+  // acerca lo suficiente para verla, en vez de quedarse en el zoom regional (la
+  // vista de zonas como AMBA ya está en ~zoom 9-10, así que un zoom menor alejaba).
+  const handleFlyToLocation = useCallback((lat: number, lng: number, zoom = 12) => {
     coverageMapRef.current?.flyTo(lat, lng, zoom);
   }, []);
 
@@ -1066,6 +1082,12 @@ export function CoberturaTab() {
   const [industrialHeatmapLoading, setIndustrialHeatmapLoading] = useState(false);
   const [industrialZoneResult, setIndustrialZoneResult] = useState<{ count: number; error: boolean } | null>(null);
   const [rejectedLocations, setRejectedLocations] = useState<RejectedLocation[]>([]);
+  // Zonas peligrosas (Administración › Zonas): solo lectura en el simulador.
+  // `showDangerZones` controla su capa en el mapa. (`penalizeDangerZones` se
+  // declara junto a los otros modificadores de score, arriba, porque
+  // `effectiveWeights` lo necesita.)
+  const [dangerZones, setDangerZones] = useState<Zone[]>([]);
+  const [showDangerZones, setShowDangerZones] = useState(false);
 
   // Zonas guardadas (predefinidas + zonas del usuario).
   const [regions, setRegions] = useState<CoverageRegion[]>([]);
@@ -1103,6 +1125,9 @@ export function CoberturaTab() {
 
   // Fetch saved regions (predefined + custom) for the zone selector.
   useEffect(() => { regionsApi.list().then(setRegions).catch(() => {}); }, []);
+
+  // Fetch active dangerous zones (read-only overlay + scoring penalty).
+  useEffect(() => { zoneApi.list(false).then(setDangerZones).catch(() => {}); }, []);
 
   // Limpia el último diagnóstico confirmado (sugerencias, ciudades aterrizadas,
   // errores, proyección). Se llama al cambiar de zona para que el resultado de
@@ -1147,13 +1172,14 @@ export function CoberturaTab() {
     setIsDrawingBoundary(true);
   }, [resetDiagnosis]);
 
-  // Editar una zona personalizada existente: entra en modo re-dibujo mostrando
-  // la forma original de fondo (tono claro) como referencia. Al cerrar el nuevo
-  // polígono (Enter) se abre el modal con el nombre precargado para confirmar
-  // nombre + nueva geometría. Solo aplica a zonas propias (type "custom").
+  // Editar una zona existente: entra en modo re-dibujo mostrando la forma
+  // original de fondo (tono claro) como referencia. Al cerrar el nuevo polígono
+  // (Enter) se abre el modal con el nombre precargado para confirmar nombre +
+  // nueva geometría. Las zonas propias se reemplazan; las predefinidas se
+  // guardan como una zona nueva en "Mis Zonas" (ver handleSaveNewRegion).
   const handleStartEditRegion = useCallback(() => {
     const region = regions.find((r) => r.id === selectedRegionId);
-    if (!region || region.type !== "custom") return;
+    if (!region) return;
     resetDiagnosis();
     setEditingRegionId(region.id);
     setRedrawReference(customBoundary ?? region.coordinates.map((c) => [c.lat, c.lng]));
@@ -1169,10 +1195,13 @@ export function CoberturaTab() {
     setRegionSaveError(null);
     setPendingRegionBoundary(pts);
     // Al editar, precargamos el nombre actual para que el usuario pueda
-    // mantenerlo o cambiarlo en el mismo paso de confirmación.
+    // mantenerlo o cambiarlo. Las predefinidas se guardan como zona nueva, así
+    // que sugerimos "{nombre} (editada)" para no duplicar el nombre original.
     if (editingRegionId) {
       const region = regions.find((r) => r.id === editingRegionId);
-      setSavingRegionName(region?.name ?? "");
+      if (region) {
+        setSavingRegionName(region.type === "custom" ? region.name : `${region.name} (editada)`);
+      }
     }
     setShowSaveRegionModal(true);
   }, [editingRegionId, regions]);
@@ -1217,19 +1246,27 @@ export function CoberturaTab() {
     setCustomBoundary(pts);
     setIsEditingBoundary(false);
     resetDiagnosis();
-    // If the active boundary belongs to a saved custom region, persist the new
-    // shape immediately so it survives a page refresh.
+    // Persistir la nueva forma para que sobreviva a un F5.
     if (selectedRegionId !== "national") {
-      const region = regions.find((r) => r.id === selectedRegionId && r.type === "custom");
+      const region = regions.find((r) => r.id === selectedRegionId);
       if (region) {
+        const coordinates = pts.map(([lat, lng]) => ({ lat, lng }));
         try {
           setRegionSaveError(null);
-          await regionsApi.update(region.id, {
-            name: region.name,
-            coordinates: pts.map(([lat, lng]) => ({ lat, lng })),
-          });
-          const updated = await regionsApi.list();
-          setRegions(updated);
+          if (region.type === "custom") {
+            // Zona propia: se reemplaza en el lugar.
+            await regionsApi.update(region.id, { name: region.name, coordinates });
+            const updated = await regionsApi.list();
+            setRegions(updated);
+          } else {
+            // Zona predefinida: está hardcodeada en el servidor (un PUT daría 404
+            // y al F5 volvería a su forma original). En vez de reemplazarla,
+            // guardamos la edición como una zona nueva en "Mis Zonas".
+            const saved = await regionsApi.create({ name: `${region.name} (editada)`, coordinates });
+            const updated = await regionsApi.list();
+            setRegions(updated);
+            setSelectedRegionId(saved.id);
+          }
         } catch {
           setRegionSaveError("No se pudieron guardar los cambios de la zona. Verificá tu conexión e intentá de nuevo.");
         }
@@ -1248,8 +1285,12 @@ export function CoberturaTab() {
     try {
       const coordinates = pendingRegionBoundary.map(([lat, lng]) => ({ lat, lng }));
       const name = savingRegionName.trim();
-      const saved = editingRegionId
-        ? await regionsApi.update(editingRegionId, { name, coordinates })
+      // Solo se reemplaza en el lugar cuando se edita una zona propia. Editar una
+      // zona predefinida (hardcodeada en el servidor) crea una zona nueva en
+      // "Mis Zonas" en vez de intentar un update que devolvería 404.
+      const editingRegion = editingRegionId ? regions.find((r) => r.id === editingRegionId) : undefined;
+      const saved = editingRegion?.type === "custom"
+        ? await regionsApi.update(editingRegion.id, { name, coordinates })
         : await regionsApi.create({ name, coordinates });
       const updated = await regionsApi.list();
       setRegions(updated);
@@ -1267,7 +1308,7 @@ export function CoberturaTab() {
     } finally {
       setSavingRegion(false);
     }
-  }, [pendingRegionBoundary, savingRegionName, editingRegionId]);
+  }, [pendingRegionBoundary, savingRegionName, editingRegionId, regions]);
 
   const handleCancelSaveRegion = useCallback(() => {
     setShowSaveRegionModal(false);
@@ -1820,14 +1861,11 @@ export function CoberturaTab() {
     return `${minLng},${minLat},${maxLng},${maxLat}`;
   }, [customBoundary]);
 
-  // Clamp the coverage-radius slider whenever the zone area changes.
-  // The floor stays at SIM_AREA_MIN (~4 km radius) even nationally so dense
-  // metros (AMBA) can use a tight radius that exposes uncovered demand — a
-  // larger floor would let a single central branch blanket the whole metro and
-  // suppress all suggestions there.
+  // Clamp the coverage-radius slider whenever the zone area changes. Both bounds
+  // scale with the zone (min = 0.1 %, max = 25 %) so small zones like CABA keep a
+  // usable range — computeSimAreaBounds keeps this in sync with the panel.
   useEffect(() => {
-    const minA = SIM_AREA_MIN;
-    const maxA = Math.max(minA, Math.min(SIM_AREA_MAX, Math.round(zoneAreaKm2 * 0.25)));
+    const { min: minA, max: maxA } = computeSimAreaBounds(zoneAreaKm2);
     setVisualArea((prev) => Math.max(minA, Math.min(maxA, prev)));
   }, [zoneAreaKm2]);
 
@@ -1998,6 +2036,7 @@ export function CoberturaTab() {
                 setIndustrialZoneResult({ count, error: error ?? false });
               }}
               rejectedLocations={showRejectedOnMap && rejectedLocations.length > 0 ? rejectedLocations : undefined}
+              dangerZones={showDangerZones ? dangerZones : undefined}
             />
           </div>
         </Card>
@@ -2032,7 +2071,7 @@ export function CoberturaTab() {
                 selectedRegionId={selectedRegionId}
                 onRegionChange={handleRegionChange}
                 onStartDrawNewRegion={handleStartDrawNewRegion}
-                canEditSelectedRegion={regions.find((r) => r.id === selectedRegionId)?.type === "custom"}
+                canEditSelectedRegion={selectedRegionId !== "national" && regions.some((r) => r.id === selectedRegionId)}
                 onEditRegion={handleStartEditRegion}
                 diagnosisMode={diagnosisMode}
                 onDiagnosisModeChange={setDiagnosisMode}
@@ -2042,6 +2081,8 @@ export function CoberturaTab() {
                 onPrioritizeIndustrialChange={setPrioritizeIndustrial}
                 applyTerrainFriction={applyTerrainFriction}
                 onApplyTerrainFrictionChange={setApplyTerrainFriction}
+                penalizeDangerZones={penalizeDangerZones}
+                onPenalizeDangerZonesChange={setPenalizeDangerZones}
                 minSeparation={minSeparation}
                 onMinSeparationChange={setMinSeparation}
                 minScore={minScore}
@@ -2058,6 +2099,9 @@ export function CoberturaTab() {
                 }}
                 industrialHeatmapLoading={industrialHeatmapLoading}
                 industrialZoneResult={industrialZoneResult}
+                showDangerZones={showDangerZones}
+                onShowDangerZonesChange={setShowDangerZones}
+                dangerZoneCount={dangerZones.length}
               />
               {simResult !== null && (
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -2143,10 +2187,14 @@ export function CoberturaTab() {
                             {snappedCities
                               .map((c, i) => ({ city: c, index: i }))
                               .filter(({ city }) => city.is_snapped)
-                              .sort((a, b) =>
-                                computeWeightedScore(simResult.suggested_locations[b.index], effectiveWeights) -
-                                computeWeightedScore(simResult.suggested_locations[a.index], effectiveWeights)
-                              )
+                              .sort((a, b) => {
+                                const la = simResult.suggested_locations[a.index];
+                                const lb = simResult.suggested_locations[b.index];
+                                return (
+                                  computeWeightedScore(lb, effectiveWeights, isInDangerZone(lb.lat, lb.lng, dangerZones)) -
+                                  computeWeightedScore(la, effectiveWeights, isInDangerZone(la.lat, la.lng, dangerZones))
+                                );
+                              })
                               .map(({ city, index }) => (
                                 <SuggestionCard
                                   key={`${city.city_name}-${index}`}
@@ -2157,6 +2205,7 @@ export function CoberturaTab() {
                                   onBlacklist={(name) => blacklistCity(index, name)}
                                   onFlyTo={handleFlyToLocation}
                                   weights={effectiveWeights}
+                                  dangerZones={dangerZones}
                                 />
                               ))}
                           </ul>
@@ -2489,6 +2538,29 @@ export function CoberturaTab() {
               </div>
             </div>
 
+            {/* ── Penalización de zona peligrosa ── */}
+            <div className="pt-3 border-t border-slate-100 dark:border-gray-700 space-y-0.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-700 dark:text-slate-200 font-medium">🚫 Penalización de zona peligrosa</span>
+                <span className="tabular-nums font-semibold text-rose-500 dark:text-rose-400">−{scoreWeights.danger} pts</span>
+              </div>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
+                Puntos que se <strong>restan</strong> al score final cuando la sugerencia cae dentro de una zona peligrosa (Administración › Zonas). Se aplica solo si el modificador <strong>🚫 Penalizar zonas peligrosas</strong> está activo.
+              </p>
+              <input
+                type="range"
+                min={0}
+                max={50}
+                step={1}
+                value={scoreWeights.danger}
+                onChange={(e) => setScoreWeights((prev) => ({ ...prev, danger: Number(e.target.value) }))}
+                className="w-full accent-rose-500 mt-1"
+              />
+              <div className="flex justify-between text-[9px] text-slate-400">
+                <span>0 (sin penalización)</span><span>50</span>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-gray-700">
               <span className="text-[11px] text-slate-500 dark:text-slate-400">
                 Base máx.: <strong className="text-slate-700 dark:text-slate-200">{scoreWeights.pop + scoreWeights.density + scoreWeights.area + scoreWeights.industry} pts</strong>
@@ -2688,8 +2760,8 @@ function SeverityPill({
   );
 }
 
-type ScoreWeightsConfig = { pop: number; density: number; area: number; industry: number; terrain: number };
-const DEFAULT_SCORE_WEIGHTS: ScoreWeightsConfig = { pop: 20, density: 20, area: 35, industry: 15, terrain: 20 };
+type ScoreWeightsConfig = { pop: number; density: number; area: number; industry: number; terrain: number; danger: number };
+const DEFAULT_SCORE_WEIGHTS: ScoreWeightsConfig = { pop: 20, density: 20, area: 35, industry: 15, terrain: 20, danger: 15 };
 
 /** Returns Tailwind color classes based on the 1–100 Logistics Viability Score. */
 function scoreColor(score: number): { ring: string; bg: string; text: string } {
@@ -2703,9 +2775,9 @@ const TERRAIN_FACTORS: Record<string, number> = {
   "Llano": 0, "Llano-Ventoso": 0.2, "Semi-montañoso": 0.5, "Serrano": 0.7, "Montañoso": 1.0,
 };
 
-type ScoreBreakdown = { popPts: number; densPts: number; areaPts: number; industryPts: number; terrainPenalty: number };
+type ScoreBreakdown = { popPts: number; densPts: number; areaPts: number; industryPts: number; terrainPenalty: number; dangerPenalty: number };
 
-function computeScoreBreakdown(loc: SuggestedLocation, w: ScoreWeightsConfig = DEFAULT_SCORE_WEIGHTS): ScoreBreakdown {
+function computeScoreBreakdown(loc: SuggestedLocation, w: ScoreWeightsConfig = DEFAULT_SCORE_WEIGHTS, inDangerZone = false): ScoreBreakdown {
   const pop = loc.population ?? 0;
   const density = loc.density ?? 0;
   const area = loc.actual_added_km2 ?? loc.gap_area_km2 ?? 0;
@@ -2715,23 +2787,25 @@ function computeScoreBreakdown(loc: SuggestedLocation, w: ScoreWeightsConfig = D
   const areaPts = area > 0 ? Math.min(w.area, Math.log10(area + 1) / Math.log10(300_001) * w.area) : 0;
   const industryPts = (loc.has_industrial_zone ?? false) ? w.industry : 0;
   const terrainPenalty = terrainFactor * w.terrain;
-  return { popPts, densPts, areaPts, industryPts, terrainPenalty };
+  const dangerPenalty = inDangerZone ? w.danger : 0;
+  return { popPts, densPts, areaPts, industryPts, terrainPenalty, dangerPenalty };
 }
 
-function computeWeightedScore(loc: SuggestedLocation, w: ScoreWeightsConfig): number {
-  const b = computeScoreBreakdown(loc, w);
+function computeWeightedScore(loc: SuggestedLocation, w: ScoreWeightsConfig, inDangerZone = false): number {
+  const b = computeScoreBreakdown(loc, w, inDangerZone);
   const totalMax = w.pop + w.density + w.area + w.industry;
   if (totalMax <= 0) return 1;
   const normalized = (b.popPts + b.densPts + b.areaPts + b.industryPts) * (100 / totalMax);
-  return Math.round(Math.min(100, Math.max(1, normalized - b.terrainPenalty)));
+  return Math.round(Math.min(100, Math.max(1, normalized - b.terrainPenalty - b.dangerPenalty)));
 }
 
 /** Compact circular badge that shows the Logistics Viability Index.
  *  When `loc` is provided, hovering shows a breakdown of how the score was computed. */
-function ScoreBadge({ score, size = "md", loc, weights = DEFAULT_SCORE_WEIGHTS }: { score: number; size?: "sm" | "md"; loc?: SuggestedLocation; weights?: ScoreWeightsConfig }) {
+function ScoreBadge({ score, size = "md", loc, weights = DEFAULT_SCORE_WEIGHTS, dangerZones = [] }: { score: number; size?: "sm" | "md"; loc?: SuggestedLocation; weights?: ScoreWeightsConfig; dangerZones?: Zone[] }) {
   const [hovered, setHovered] = useState(false);
-  const breakdown = loc ? computeScoreBreakdown(loc, weights) : null;
-  const displayScore = breakdown ? computeWeightedScore(loc!, weights) : score;
+  const inDanger = loc ? isInDangerZone(loc.lat, loc.lng, dangerZones) : false;
+  const breakdown = loc ? computeScoreBreakdown(loc, weights, inDanger) : null;
+  const displayScore = breakdown ? computeWeightedScore(loc!, weights, inDanger) : score;
   const { ring, bg, text } = scoreColor(displayScore);
   const dim = size === "sm" ? "w-8 h-8 text-[10px]" : "w-10 h-10 text-xs";
   return (
@@ -2764,16 +2838,24 @@ function ScoreBadge({ score, size = "md", loc, weights = DEFAULT_SCORE_WEIGHTS }
               <span className="text-slate-500 dark:text-slate-400">📦 Área útil</span>
               <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.areaPts.toFixed(1)}<span className="text-slate-400">/{weights.area}</span></span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-500 dark:text-slate-400">🏭 Industrial</span>
-              <span className={`font-medium tabular-nums ${breakdown.industryPts > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-400"}`}>
-                {breakdown.industryPts.toFixed(0)}<span className="text-slate-400">/{weights.industry}</span>
-              </span>
-            </div>
+            {weights.industry > 0 && (
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 dark:text-slate-400">🏭 Industrial</span>
+                <span className={`font-medium tabular-nums ${breakdown.industryPts > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-400"}`}>
+                  {breakdown.industryPts.toFixed(0)}<span className="text-slate-400">/{weights.industry}</span>
+                </span>
+              </div>
+            )}
             {breakdown.terrainPenalty > 0 && (
               <div className="flex justify-between items-center border-t border-slate-100 dark:border-gray-700 pt-1 mt-1 text-rose-500 dark:text-rose-400">
                 <span>⛰️ {loc!.terrain_type ?? "Terreno difícil"}</span>
                 <span className="font-medium tabular-nums">−{breakdown.terrainPenalty.toFixed(1)} pts</span>
+              </div>
+            )}
+            {breakdown.dangerPenalty > 0 && (
+              <div className="flex justify-between items-center border-t border-slate-100 dark:border-gray-700 pt-1 mt-1 text-rose-500 dark:text-rose-400">
+                <span>🚫 Zona peligrosa</span>
+                <span className="font-medium tabular-nums">−{breakdown.dangerPenalty.toFixed(0)} pts</span>
               </div>
             )}
           </div>
@@ -2800,6 +2882,7 @@ function SuggestionCard({
   onBlacklist,
   onFlyTo,
   weights = DEFAULT_SCORE_WEIGHTS,
+  dangerZones = [],
 }: {
   city: SnappedCity;
   loc: SuggestedLocation;
@@ -2808,6 +2891,7 @@ function SuggestionCard({
   onBlacklist: (cityName: string) => void;
   onFlyTo: (lat: number, lng: number) => void;
   weights?: ScoreWeightsConfig;
+  dangerZones?: Zone[];
 }) {
   const [blacklistChecked, setBlacklistChecked] = useState(false);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${city.lat},${city.lng}`;
@@ -2845,7 +2929,7 @@ function SuggestionCard({
         </button>
       </div>
       <div className="flex items-start gap-2">
-        {(loc.score ?? 0) > 0 && <ScoreBadge score={loc.score!} loc={loc} weights={weights} />}
+        {(loc.score ?? 0) > 0 && <ScoreBadge score={loc.score!} loc={loc} weights={weights} dangerZones={dangerZones} />}
         <div className="min-w-0">
           <button
             type="button"
