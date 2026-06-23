@@ -38,7 +38,7 @@ const CLAIM_TYPE_LABELS: Record<string, string> = {
     damage: "📦 Daño / Faltante",
     delay: "🕐 Demora en entrega",
     not_delivered: "🚫 No lo recibí",
-    missing: "🔍 Extravío",
+    //missing: "🔍 Extravío",
     bad_treatment: "😡 Maltrato del personal",
     wrong_data: "📝 Datos incorrectos",
     other: "❓ Otro",
@@ -175,10 +175,10 @@ export function AnalyticsTab() {
     const [claimTypes, setClaimTypes] = useState<EventCount[]>([]);
     const [totalOpened, setTotalOpened] = useState(0);
     const [totalAuth, setTotalAuth] = useState(0);
-    const [totalClaims, setTotalClaims] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+    const EXCLUDED_CLAIM_TYPES = ["missing"]; // agregá acá cualquier otro que quieras ocultar
 
     // ── Umami: visitas a la página pública ──
     const [umamiVisits, setUmamiVisits] = useState<number | null>(null);
@@ -219,7 +219,6 @@ export function AnalyticsTab() {
 
             setTotalOpened(data.total_opened ?? 0);
             setTotalAuth(data.total_auth ?? 0);
-            setTotalClaims(data.total_claims ?? 0);
 
             // Convertir actions map a array ordenado
             const actionsArr = Object.entries(data.actions as Record<string, number>)
@@ -228,8 +227,10 @@ export function AnalyticsTab() {
             setEvents(actionsArr);
 
             // Convertir claim_types map a array ordenado
+            
             const claimArr = Object.entries(data.claim_types as Record<string, number>)
                 .map(([event, count]) => ({ event, count }))
+                .filter(({ event, count }) => count > 0 && !EXCLUDED_CLAIM_TYPES.includes(event))
                 .sort((a, b) => b.count - a.count);
             setClaimTypes(claimArr);
 
@@ -395,7 +396,7 @@ export function AnalyticsTab() {
                             />
                             <StatBox
                                 label="Reclamos enviados"
-                                value={totalClaims}
+                                value={claimTypes.reduce((sum, { count }) => sum + count, 0)}
                                 icon={<TrendingUp className="w-5 h-5" />}
                                 color="amber"
                             />
