@@ -504,7 +504,7 @@ func TestUpdateStatus_AllowedFromSalida(t *testing.T) {
 	_, err := shipmentSvc.UpdateStatus("LT-DDDD", model.UpdateStatusRequest{
 		Status: model.StatusOutForDelivery, ChangedBy: "op1", DriverID: "drv1",
 	})
-	if err != nil && err.Error() == "El envío debe ser movido a Salida antes de despacharlo" {
+	if err != nil && err.Error() == "El envío debe estar en depósito para despachar antes de despacharlo" {
 		t.Fatalf("dispatch from Salida should not be blocked by zone guard, got: %v", err)
 	}
 }

@@ -878,7 +878,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	if current.CurrentZone != nil && dispatchTargetStatuses[req.Status] {
 		switch model.BranchZoneType(*current.CurrentZone) {
 		case model.ZoneEntrada, model.ZoneRevision:
-			return model.Shipment{}, fmt.Errorf("El envío debe ser movido a Salida antes de despacharlo")
+			return model.Shipment{}, fmt.Errorf("El envío debe estar en depósito para despachar antes de despacharlo")
 		}
 	}
 

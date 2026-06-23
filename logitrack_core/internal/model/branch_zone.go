@@ -23,7 +23,7 @@ type BranchZone struct {
 
 var BranchZoneNames = map[BranchZoneType]string{
 	ZoneEntrada:    "Entrada",
-	ZoneSalida:     "Salida",
+	ZoneSalida:     "En depósito para despachar",
 	ZoneRevision:   "Revisión",
 	ZoneDevolucion: "Listo para devolución",
 }
