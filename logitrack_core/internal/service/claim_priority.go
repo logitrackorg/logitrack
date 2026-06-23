@@ -31,7 +31,7 @@ type ShipmentPriorityInfo struct {
 // Las reglas se evalúan en orden de precedencia: la primera que aplica gana.
 //
 //  1. urgente — riesgo material o legal: envío extraviado/destruido, daño con
-//     evidencia mientras el envío sigue activo, o SLA ya vencido.
+//     evidencia adjunta (en cualquier estado del envío), o SLA ya vencido.
 //  2. alta    — incumplimiento alto-impacto: score ML >= umbral high, envío
 //     extraviado o ya con 3+ intentos fallidos.
 //  3. media   — incumplimiento moderado: score ML >= umbral medium o tipos
@@ -57,7 +57,12 @@ func isUrgent(c ClaimPriorityInput, s ShipmentPriorityInfo) bool {
 	if s.Status == model.StatusLost || s.Status == model.StatusDestroyed {
 		return true
 	}
-	if c.Type == model.ClaimTypeDamage && c.HasEvidence && isShipmentActive(s.Status) {
+	// Daño con evidencia adjunta es urgente sin importar el estado del envío.
+	// El caso real más común es un reclamo abierto post-entrega (status =
+	// delivered), que justamente requiere `delivered` para ser elegible vía
+	// CanFileClaim. Filtrar por "envío activo" dejaba esta regla sin casos
+	// útiles.
+	if c.Type == model.ClaimTypeDamage && c.HasEvidence {
 		return true
 	}
 	if s.SLAExpired {
@@ -87,19 +92,4 @@ func isMedium(c ClaimPriorityInput, s ShipmentPriorityInfo, cfg model.SystemConf
 		return true
 	}
 	return false
-}
-
-// isShipmentActive devuelve true cuando el envío todavía está en ciclo de vida
-// operativo (no es terminal). Se usa para limitar la urgencia de un reclamo de
-// daño con evidencia a casos en los que el envío sigue en juego.
-func isShipmentActive(status model.Status) bool {
-	switch status {
-	case model.StatusDelivered,
-		model.StatusReturned,
-		model.StatusCancelled,
-		model.StatusLost,
-		model.StatusDestroyed:
-		return false
-	}
-	return true
 }
