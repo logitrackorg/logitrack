@@ -2,7 +2,7 @@ import type { BranchZoneType } from "../api/shipments";
 
 const config: Record<BranchZoneType, { label: string; bg: string }> = {
   entrada:    { label: "Entrada", bg: "#3b82f6" },
-  salida:     { label: "Salida",  bg: "#10b981" },
+  salida:     { label: "En depósito para despachar",  bg: "#10b981" },
   revision:   { label: "Revisión", bg: "#f59e0b" },
   devolucion: { label: "Listo para devolución", bg: "#8b5cf6" },
 };

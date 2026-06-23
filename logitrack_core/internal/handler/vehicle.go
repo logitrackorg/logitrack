@@ -313,11 +313,11 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		return
 	}
 
-	// US-02 CA-03: un envío en Entrada o Revisión debe moverse a Salida antes de despacharlo.
+	// US-02 CA-03: un envío en Entrada o Revisión debe moverse a depósito para despachar antes de despacharlo.
 	if shipment.CurrentZone != nil {
 		switch model.BranchZoneType(*shipment.CurrentZone) {
 		case model.ZoneEntrada, model.ZoneRevision:
-			c.JSON(http.StatusConflict, gin.H{"error": "El envío debe ser movido a Salida antes de despacharlo"})
+			c.JSON(http.StatusConflict, gin.H{"error": "El envío debe estar en depósito para despachar antes de despacharlo"})
 			return
 		}
 	}

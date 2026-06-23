@@ -60,6 +60,12 @@ func (r *postgresBranchZoneRepository) Create(zone model.BranchZone) error {
 	return err
 }
 
+func (r *postgresBranchZoneRepository) renameZone(id, name string, updatedAt time.Time) error {
+	_, err := r.db.Exec(`UPDATE branch_zones SET name = $1, updated_at = $2 WHERE id = $3`,
+		name, updatedAt, id)
+	return err
+}
+
 func (r *postgresBranchZoneRepository) SetActiveForBranch(branchID string, active bool) error {
 	_, err := r.db.Exec(`UPDATE branch_zones SET active = $1, updated_at = $2 WHERE branch_id = $3`,
 		active, time.Now(), branchID)
@@ -71,9 +77,9 @@ func (r *postgresBranchZoneRepository) EnsureZonesForBranch(branchID string) err
 	if err != nil {
 		return err
 	}
-	existingTypes := map[model.BranchZoneType]bool{}
+	existingByType := map[model.BranchZoneType]model.BranchZone{}
 	for _, z := range existing {
-		existingTypes[z.ZoneType] = true
+		existingByType[z.ZoneType] = z
 	}
 
 	allTypes := []model.BranchZoneType{
@@ -84,7 +90,13 @@ func (r *postgresBranchZoneRepository) EnsureZonesForBranch(branchID string) err
 	}
 	now := time.Now()
 	for _, zt := range allTypes {
-		if existingTypes[zt] {
+		if z, ok := existingByType[zt]; ok {
+			// Zona ya existe: realinear el nombre mostrado al canónico si cambió.
+			if canonical := model.BranchZoneNames[zt]; z.Name != canonical {
+				if err := r.renameZone(z.ID, canonical, now); err != nil {
+					return fmt.Errorf("renombrando zona %q de sucursal %s: %w", zt, branchID, err)
+				}
+			}
 			continue
 		}
 		zone := model.BranchZone{

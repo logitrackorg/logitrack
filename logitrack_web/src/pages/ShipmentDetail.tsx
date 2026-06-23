@@ -883,7 +883,7 @@ export function ShipmentDetail() {
                           </Button>
                         ) : (
                           <Button size="sm" variant="outline" onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "salida"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-[var(--ok)] text-[var(--ok-text)] hover:bg-[var(--ok-bg)]">
-                            Mover a Salida
+                            Mover a depósito para despachar
                           </Button>
                         )}
                         <Button size="sm" variant="outline" onClick={() => setRevisionModalOpen(true)} disabled={moving} className="border-[var(--warn)] text-[var(--warn-text)] hover:bg-[var(--warn-bg)]">
@@ -904,7 +904,7 @@ export function ShipmentDetail() {
                     {shipment.current_zone === "revision" && hasRole("supervisor") && (
                       <>
                         <Button size="sm" variant="outline" onClick={() => { setResolutionText(""); setApproveModalOpen(true); }} disabled={moving} className="border-[var(--ok)] text-[var(--ok-text)] hover:bg-[var(--ok-bg)]">
-                          {shipment.is_returning ? "Aprobar (→ Devolución)" : "Aprobar (→ Salida)"}
+                          {shipment.is_returning ? "Aprobar (→ Devolución)" : "Aprobar (→ En depósito para despachar)"}
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => { setShowIncidentModal(true); setIncidentError(""); setIncidentDescription(""); setIncidentType("extraviado"); }} disabled={moving} className="gap-1.5 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/15">
                           <AlertTriangle className="w-3.5 h-3.5" />
@@ -940,7 +940,7 @@ export function ShipmentDetail() {
                 <DialogContent>
                   <DialogHeader onClose={() => setApproveModalOpen(false)}>
                     <DialogTitle>
-                      {shipment.is_returning ? "Aprobar revisión (→ Devolución)" : "Aprobar revisión (→ Salida)"}
+                      {shipment.is_returning ? "Aprobar revisión (→ Devolución)" : "Aprobar revisión (→ En depósito para despachar)"}
                     </DialogTitle>
                   </DialogHeader>
                   <div className="px-6 pb-2 space-y-3">

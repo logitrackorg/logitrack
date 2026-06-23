@@ -153,7 +153,7 @@ func (s *BranchZoneService) MoveShipment(trackingID, username, branchID, notes s
 
 	// Salida es terminal: el envío ya está listo para despacho y no puede moverse a otra zona.
 	if fromZone == model.ZoneSalida {
-		return fmt.Errorf("Un envío en Salida está listo para despacho y no puede moverse a otra zona")
+		return fmt.Errorf("Un envío en depósito para despachar está listo para despacho y no puede moverse a otra zona")
 	}
 
 	// Devolución solo está disponible para envíos en modo devolución.
