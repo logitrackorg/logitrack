@@ -1065,7 +1065,10 @@ export function CoberturaTab() {
   // Guarda el estado de zona anterior a la selección de celda para restaurarlo al deseleccionar.
   const preCellSelectionStateRef = useRef<{ boundary: [number, number][] | null; mode: "national" | "custom" } | null>(null);
 
-  const handleFlyToLocation = useCallback((lat: number, lng: number, zoom = 8) => {
+  // Zoom 12 ≈ detalle de ciudad: al apretar el nombre de una ciudad/sucursal se
+  // acerca lo suficiente para verla, en vez de quedarse en el zoom regional (la
+  // vista de zonas como AMBA ya está en ~zoom 9-10, así que un zoom menor alejaba).
+  const handleFlyToLocation = useCallback((lat: number, lng: number, zoom = 12) => {
     coverageMapRef.current?.flyTo(lat, lng, zoom);
   }, []);
 
