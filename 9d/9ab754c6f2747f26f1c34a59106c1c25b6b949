@@ -1,0 +1,21 @@
+logitrack_core/internal/handler/analytics_handler.go
+  s_80a5f7b0221c07::t_b397e4d6e2975b 152-153
+logitrack_web/src/pages/reports/AnalyticsTab.tsx
+  s_80a5f7b0221c07::t_4988f0a67d4bdd 41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.10",
+  "base_commit_sha": "9d9ab754c6f2747f26f1c34a59106c1c25b6b949",
+  "prompts": {},
+  "sessions": {
+    "s_80a5f7b0221c07": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "68356a17-ce21-4060-811b-7349f4b098b3",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
