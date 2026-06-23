@@ -1,0 +1,23 @@
+logitrack_web/src/pages/AdminUsers.tsx
+  s_77432f0a0cb2e4::t_4ecee905b0d77e 214
+  s_77432f0a0cb2e4::t_23d4f8ad15c805 414
+  s_77432f0a0cb2e4::t_a4afbf2bbaadaa 154-155
+  s_77432f0a0cb2e4::t_1bfbdedbfcca7e 402
+  s_77432f0a0cb2e4::t_933956c3e64155 188-189
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "2574ecbaf2e27da586c156c95dd65c80b1c1af9d",
+  "prompts": {},
+  "sessions": {
+    "s_77432f0a0cb2e4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4705089e-1096-434b-ba8d-9e409d8de475",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
