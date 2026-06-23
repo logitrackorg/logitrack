@@ -151,7 +151,8 @@ export function AdminUsers() {
 
   const handleSave = async () => {
     if (!editingUser) return;
-    if (ROLES_WITH_BRANCH.includes(editState.role) && !editState.branch_id) {
+    const needsBranch = ROLES_WITH_BRANCH.includes(editState.role) && !(editState.role === "driver" && editDriverType === "intersucursal");
+    if (needsBranch && !editState.branch_id) {
       setSaveError("La sucursal es obligatoria para este rol.");
       return;
     }
@@ -184,7 +185,8 @@ export function AdminUsers() {
   };
 
   const handleCreate = async () => {
-    if (ROLES_WITH_BRANCH.includes(createForm.role) && !createForm.branch_id) {
+    const needsBranch = ROLES_WITH_BRANCH.includes(createForm.role) && !(createForm.role === "driver" && createForm.driver_type === "intersucursal");
+    if (needsBranch && !createForm.branch_id) {
       setCreateError("La sucursal es obligatoria para este rol.");
       return;
     }
@@ -209,7 +211,7 @@ export function AdminUsers() {
         email: createForm.email,
         address: createForm.address,
       };
-      if (ROLES_WITH_BRANCH.includes(createForm.role)) payload.branch_id = createForm.branch_id;
+      if (needsBranch) payload.branch_id = createForm.branch_id;
       if (createForm.role === "driver" && createForm.driver_type) payload.driver_type = createForm.driver_type;
       const newUser = await adminApi.createUser(payload);
       setUsers(prev => [...prev, newUser]);
@@ -397,7 +399,7 @@ export function AdminUsers() {
                   </select>
                 </label>
               </div>
-              {ROLES_WITH_BRANCH.includes(editState.role) && (
+              {ROLES_WITH_BRANCH.includes(editState.role) && !(editState.role === "driver" && editDriverType === "intersucursal") && (
                 <label className={labelClass}>
                   Sucursal asignada *
                   <select value={editState.branch_id} onChange={e => setEditState(s => ({ ...s, branch_id: e.target.value }))} className={inputClass}>
@@ -409,7 +411,7 @@ export function AdminUsers() {
               {editState.role === "driver" && (
                 <label className={labelClass}>
                   Tipo de chofer *
-                  <select value={editDriverType} onChange={e => setEditDriverType(e.target.value as DriverType | "")} className={inputClass}>
+                  <select value={editDriverType} onChange={e => { const t = e.target.value as DriverType | ""; setEditDriverType(t); if (t === "intersucursal") setEditState(s => ({ ...s, branch_id: "" })); }} className={inputClass}>
                     <option value="">— Seleccionar tipo —</option>
                     <option value="ultima_milla">Última milla</option>
                     <option value="intersucursal">Intersucursal</option>

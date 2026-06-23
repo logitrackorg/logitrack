@@ -8,7 +8,8 @@ import (
 )
 
 type SystemConfigService struct {
-	repo repository.SystemConfigRepository
+	repo                repository.SystemConfigRepository
+	onEscalationEnabled func()
 }
 
 func NewSystemConfigService(repo repository.SystemConfigRepository) *SystemConfigService {
@@ -17,6 +18,16 @@ func NewSystemConfigService(repo repository.SystemConfigRepository) *SystemConfi
 
 func (s *SystemConfigService) Get() model.SystemConfig {
 	return s.repo.Get()
+}
+
+// SetOnEscalationEnabled registra un callback que se invoca sincrónicamente
+// cuando Update detecta la transición ClaimEscalationEnabled: false → true.
+// Sirve para "ponerse al día" inmediatamente con los reclamos que acumularon
+// inactividad mientras el toggle estuvo apagado, sin esperar al próximo tick
+// del scheduler. Es opcional; si no se setea, el comportamiento previo se
+// mantiene.
+func (s *SystemConfigService) SetOnEscalationEnabled(cb func()) {
+	s.onEscalationEnabled = cb
 }
 
 func (s *SystemConfigService) Update(cfg model.SystemConfig) (model.SystemConfig, error) {
@@ -83,11 +94,20 @@ func (s *SystemConfigService) Update(cfg model.SystemConfig) (model.SystemConfig
 		return model.SystemConfig{}, fmt.Errorf("photo_purge_days debe estar entre 1 y 1825 (5 años)")
 	}
 
+	// Snapshot del valor previo del toggle de escalado, ANTES de persistir,
+	// para detectar la transición false → true y disparar el callback de
+	// "ponerse al día" después de guardar.
+	prevEscalationEnabled := s.repo.Get().ClaimEscalationEnabled
+
 	// CA01: Guardar configuración
 	if err := s.repo.Update(cfg); err != nil {
 		return model.SystemConfig{}, err
 	}
-	
+
+	if !prevEscalationEnabled && cfg.ClaimEscalationEnabled && s.onEscalationEnabled != nil {
+		s.onEscalationEnabled()
+	}
+
 	return s.repo.Get(), nil
 }
 

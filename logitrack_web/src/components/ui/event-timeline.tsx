@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { MapPin, Clock, AlertTriangle, Camera, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtDateTime, fmtDate } from "@/utils/date";
 import { shipmentApi, type ShipmentEvent, type ShipmentStatus } from "@/api/shipments";
-import { CLAIM_EVENT_LABELS, CLAIM_TYPE_LABELS, type ClaimEventType, type ClaimType } from "@/api/claims";
+import { claimsApi, CLAIM_EVENT_LABELS, CLAIM_TYPE_LABELS, type ClaimEventType, type ClaimType } from "@/api/claims";
 import type { Branch } from "@/api/branches";
 
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
@@ -79,6 +79,46 @@ interface EventTimelineProps {
   branches: Branch[];
   showHeading?: boolean;
   className?: string;
+}
+
+// Acción del evento "reclamo registrado". El backend solo devuelve el reclamo
+// (GetByIDForBranch) si la sucursal del usuario es la de origen o tiene el
+// reclamo derivado. Aprovechamos eso: intentamos cargarlo y mostramos el botón
+// "Ver reclamo" solo si hay acceso; si no, mostramos que el reclamo existe pero
+// lo gestiona otra sucursal (sin enlace, para no caer en un callejón sin salida).
+function ClaimEventAction({ claimId }: { claimId: string }) {
+  const [access, setAccess] = useState<"loading" | "granted" | "denied">("loading");
+
+  useEffect(() => {
+    let alive = true;
+    claimsApi
+      .get(claimId)
+      .then(() => { if (alive) setAccess("granted"); })
+      .catch(() => { if (alive) setAccess("denied"); });
+    return () => { alive = false; };
+  }, [claimId]);
+
+  if (access === "loading") return null;
+
+  if (access === "denied") {
+    return (
+      <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-gray-400">
+        <ClipboardList size={13} className="inline shrink-0" />
+        Reclamo {claimId} — gestionado por la sucursal de origen
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2">
+      <Link
+        to={`/claims/${claimId}`}
+        className="inline-flex items-center gap-1.5 bg-red-600 text-white text-[13px] font-semibold px-3 py-1.5 rounded-md no-underline hover:bg-red-700 transition-colors"
+      >
+        <ClipboardList size={14} className="mr-1 inline" /> Ver reclamo {claimId}
+      </Link>
+    </div>
+  );
 }
 
 function DeliveryPhotoThumbnail({ trackingId }: { trackingId: string }) {
@@ -238,20 +278,7 @@ export function EventTimeline({ events, branches, showHeading, className }: Even
                     {ev.event_type === "claim_created" && ev.notes && (
                       (() => {
                         const m = ev.notes!.match(/REC-\d+/);
-                        if (m) {
-                          const claimId = m[0];
-                          return (
-                            <div className="mt-2">
-                              <Link
-                                to={`/claims/${claimId}`}
-                                className="inline-flex items-center gap-1.5 bg-red-600 text-white text-[13px] font-semibold px-3 py-1.5 rounded-md no-underline hover:bg-red-700 transition-colors"
-                              >
-                                <ClipboardList size={14} className="mr-1 inline" /> Ver reclamo {claimId}
-                              </Link>
-                            </div>
-                          );
-                        }
-                        return null;
+                        return m ? <ClaimEventAction claimId={m[0]} /> : null;
                       })()
                     )}
                   </>

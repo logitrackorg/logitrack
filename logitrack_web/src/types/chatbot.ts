@@ -147,7 +147,11 @@ export type ChatAction =
   | 'confirm_claim_response'
   | 'file_claim'
   | 'select_claim_type'
+  | 'claim_type_blocked'
   | 'toggle_damage_subtype'
   | 'confirm_damage_subtypes'
+  | 'select_delivery_subtype'
   | 'skip_claim_evidence'
-  | 'confirm_claim_submit';
+  | 'confirm_claim_submit'
+  // Pre-filtro guiado de reclamos
+  | 'prefilter_answer';

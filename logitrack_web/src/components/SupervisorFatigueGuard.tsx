@@ -156,7 +156,7 @@ export function SupervisorFatigueGuard({ children }: Props) {
                     unblocking ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
                   }`}
                 >
-                  Continuar
+                  Dejar bloqueado
                 </button>
               </div>
             )}

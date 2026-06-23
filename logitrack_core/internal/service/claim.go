@@ -6,6 +6,7 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -130,12 +131,7 @@ func (s *ClaimService) addTripRouteBranches(trackingID string, route map[string]
 }
 
 func containsStr(list []string, v string) bool {
-	for _, x := range list {
-		if x == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, v)
 }
 
 // TransferTargetBranches returns the active branches a claim may be transferred to:
@@ -195,9 +191,44 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 	if err != nil {
 		return model.Claim{}, fmt.Errorf("envio no encontrado")
 	}
+
+	// Normalización de claim_type — single source of truth.
+	// Si el caller proveyó Category, recalculamos ClaimType desde el árbol de
+	// decisión (ClassifyClaimType) y descartamos el ClaimType crudo. Sin
+	// Category caemos al ClaimType del request (compat con clientes legacy).
+	parsedDamageSubtypes := ParseDamageSubtypes(req.DamageSubtypes)
+	if req.Category != "" {
+		classification := ClaimClassificationInput{
+			Category:        ClaimCategoryInput(req.Category),
+			DamageSubtypes:  parsedDamageSubtypes,
+			DeliverySubtype: DeliverySubtype(req.DeliverySubtype),
+		}
+		if normalized, ok := ClassifyClaimType(classification); ok {
+			req.ClaimType = normalized
+		} else {
+			return model.Claim{}, fmt.Errorf("categoria de reclamo no valida")
+		}
+	}
+
 	if !model.ValidClaimTypes[req.ClaimType] {
 		return model.Claim{}, fmt.Errorf("tipo de reclamo no valido")
 	}
+	if !CanFileClaimOfType(shipment, req.ClaimType) {
+		return model.Claim{}, fmt.Errorf("%s", ClaimIneligibleMessage)
+	}
+
+	// Evidencia obligatoria: producto dañado exige adjunto. Aplica a AMBOS
+	// canales — antes esto vivía duplicado en parseMultipartPublicClaimRequest
+	// y FileClaim del chatbot.
+	if req.ClaimType == model.ClaimTypeDamage && DamageRequiresEvidence(parsedDamageSubtypes) && evidence == nil {
+		return model.Claim{}, fmt.Errorf("la evidencia es obligatoria para producto dañado")
+	}
+
+	// Tipo y tamaño de archivo — set único: imágenes + pdf + txt.
+	if err := validateEvidenceUpload(evidence); err != nil {
+		return model.Claim{}, err
+	}
+
 	description := strings.TrimSpace(req.Description)
 	if description == "" {
 		return model.Claim{}, fmt.Errorf("la descripcion es requerida")
@@ -218,6 +249,17 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 	}
 	if !s.ValidateClaimant(&shipment, createdBy, claimantDNI) {
 		return model.Claim{}, fmt.Errorf("el dni y el nombre no coinciden con el remitente o destinatario del envio")
+	}
+
+	// Dedup centralizada: bloquea un segundo reclamo activo del mismo DNI sobre
+	// el mismo envío. Un reclamo de otra parte (ej. remitente vs destinatario)
+	// no bloquea. Antes esto vivía solo en el handler del chatbot — el form
+	// público permitía duplicados.
+	if existing, dupErr := s.GetLatestActiveClaimByTrackingIDAndDNI(trackingID, claimantDNI); dupErr == nil {
+		return model.Claim{}, &ActiveClaimExistsError{
+			ExistingClaimID: existing.ID,
+			ExistingStatus:  string(existing.Status),
+		}
 	}
 
 
@@ -725,26 +767,42 @@ func (s *ClaimService) computeClaimPriority(claimType model.ClaimType, hasEviden
 		return priority, note
 	}
 	// Anti-inflación: si la sucursal ya tiene una proporción de urgentes mayor o
-	// igual al cap, degradamos a "alta" y dejamos nota. Si no podemos contar
-	// (sin sucursal de origen o error al consultar), permitimos urgente —
-	// preferimos un falso urgente a perder señal de un caso real.
-	branchID := strings.TrimSpace(shipment.OriginBranchID)
-	if branchID == "" {
-		return priority, note
-	}
-	totalOpen, urgentOpen, err := s.claimRepo.CountOpenAndUrgentByBranch(branchID)
-	if err != nil || totalOpen == 0 {
-		return priority, note
-	}
-	cap := cfg.UrgentClaimsCapPct
-	if cap <= 0 {
-		return priority, note
-	}
-	ratio := float64(urgentOpen) / float64(totalOpen)
-	if ratio >= cap {
-		return model.ClaimPriorityAlta, "El ticket fue clasificado como alta por tope de urgentes en sucursal."
+	// igual al cap, degradamos a "alta" y dejamos nota. Si no podemos evaluar
+	// (sin sucursal de origen, sin reclamos abiertos, cap <= 0 o error al
+	// consultar), permitimos urgente — preferimos un falso urgente a perder
+	// señal de un caso real.
+	if branchUrgentCapReached(s.claimRepo, cfg, shipment.OriginBranchID) {
+		return model.ClaimPriorityAlta, urgentCapNote
 	}
 	return priority, note
+}
+
+// urgentCapNote es la justificación que se anexa al reclamo cuando la regla
+// anti-inflación de urgentes degrada un ticket que habría sido urgente. La
+// misma constante se usa al crear el reclamo y desde el job de escalado
+// automático para que la nota sea idempotente.
+const urgentCapNote = "El ticket fue clasificado como alta por tope de urgentes en sucursal."
+
+// branchUrgentCapReached indica si la sucursal ya alcanzó (o superó) el tope
+// de urgentes abiertos definido en cfg.UrgentClaimsCapPct. Devuelve false si
+// no se puede evaluar (sin sucursal, sin reclamos abiertos, cap <= 0 o error
+// al consultar): en esos casos preferimos permitir el urgente para no perder
+// señal de casos reales.
+func branchUrgentCapReached(claimRepo repository.ClaimRepository, cfg model.SystemConfig, branchID string) bool {
+	branchID = strings.TrimSpace(branchID)
+	if branchID == "" {
+		return false
+	}
+	capPct := cfg.UrgentClaimsCapPct
+	if capPct <= 0 {
+		return false
+	}
+	totalOpen, urgentOpen, err := claimRepo.CountOpenAndUrgentByBranch(branchID)
+	if err != nil || totalOpen == 0 {
+		return false
+	}
+	ratio := float64(urgentOpen) / float64(totalOpen)
+	return ratio >= capPct
 }
 
 func isTerminalOrTransferred(status model.ClaimStatus) bool {

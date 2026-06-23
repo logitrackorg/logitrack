@@ -11,7 +11,6 @@ import (
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/service"
-	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/analytics"
 )
 
@@ -186,9 +185,10 @@ func (h *ChatbotHandler) Authenticate(c *gin.Context) {
 				actions = append(actions, "respond_claim")
 			}
 		}  else {
-			s := string(shipment.Status)
-			terminalNoReclamo := s == "draft" || s == "cancelled" || s == "returned"
-			if !terminalNoReclamo && canFileClaim(shipment) {
+			// Mostramos file_claim siempre que el envío exista (no sea draft):
+			// como mínimo bad_treatment es reclamable. El resto de los tipos
+			// se filtra en FileClaim mediante canFileClaimOfType.
+			if string(shipment.Status) != "draft" {
 				actions = append(actions, "file_claim")
 			}
 		}
@@ -617,9 +617,9 @@ func (h *ChatbotHandler) AuthenticateSender(c *gin.Context) {
 				actions = append(actions, "respond_claim")
 			}
 		} else {
-			s := string(shipment.Status)
-			terminalNoReclamo := s == "draft" || s == "cancelled" || s == "returned"
-			if !terminalNoReclamo && canFileClaim(shipment) {
+			// Idéntico criterio que en Authenticate: mostrar file_claim siempre
+			// que el envío no sea draft; canFileClaimOfType filtra por tipo.
+			if string(shipment.Status) != "draft" {
 				actions = append(actions, "file_claim")
 			}
 		}
@@ -760,29 +760,19 @@ func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
 	return actions
 }
 
-// canFileClaim determina si el cliente puede hacer un reclamo.
-// Condiciones: el envío fue entregado (status=delivered) O
-// pasó al menos 1 hora desde la fecha estimada de entrega.
-func canFileClaim(shipment model.Shipment) bool {
-    if shipment.Status == model.StatusDelivered {
-        return true
-    }
-    if shipment.EstimatedDeliveryAt != nil {
-        deadline := shipment.EstimatedDeliveryAt.Add(1 * time.Hour)
-        if clock.Now().After(deadline) {
-            return true
-        }
-    }
-    return false
-}
-// FileClaimRequest es el payload para crear un reclamo desde el chatbot
+// FileClaimRequest es el payload para crear un reclamo desde el chatbot.
+// Category y DeliverySubtype son opcionales y representan la elección del
+// árbol de decisión compartido (CLAIM_CATEGORIES en el frontend); cuando
+// vienen, el servicio normaliza el claim_type con ClassifyClaimType.
 type FileClaimRequest struct {
-	TrackingID    string   `json:"tracking_id" binding:"required"`
-	ClaimantDNI   string   `json:"claimant_dni" binding:"required"`
-	ClaimantName  string   `json:"claimant_name" binding:"required"`
-	ClaimType     string   `json:"claim_type" binding:"required"`
-	DamageSubtypes []string `json:"damage_subtypes"`
-	Description   string   `json:"description" binding:"required"`
+	TrackingID      string   `json:"tracking_id" binding:"required"`
+	ClaimantDNI     string   `json:"claimant_dni" binding:"required"`
+	ClaimantName    string   `json:"claimant_name" binding:"required"`
+	ClaimType       string   `json:"claim_type" binding:"required"`
+	Category        string   `json:"category"`
+	DamageSubtypes  []string `json:"damage_subtypes"`
+	DeliverySubtype string   `json:"delivery_subtype"`
+	Description     string   `json:"description" binding:"required"`
 }
 
 // FileClaimResponse es la respuesta tras crear un reclamo
@@ -795,7 +785,7 @@ type FileClaimResponse struct {
 // FileClaim permite al cliente crear un reclamo desde el chatbot (US5).
 func (h *ChatbotHandler) FileClaim(c *gin.Context) {
 	// Soporta multipart (con evidencia) y JSON (sin evidencia)
-	var trackingID, claimantDNI, claimantName, claimType, description string
+	var trackingID, claimantDNI, claimantName, claimType, description, category, deliverySubtype string
 	var damageSubtypes []string
 	var evidenceUpload *service.ClaimEvidenceUpload
 
@@ -806,6 +796,8 @@ func (h *ChatbotHandler) FileClaim(c *gin.Context) {
 		claimantName = strings.TrimSpace(c.PostForm("claimant_name"))
 		claimType = strings.TrimSpace(c.PostForm("claim_type"))
 		description = strings.TrimSpace(c.PostForm("description"))
+		category = strings.TrimSpace(c.PostForm("category"))
+		deliverySubtype = strings.TrimSpace(c.PostForm("delivery_subtype"))
 		damageSubtypes = strings.Split(c.PostForm("damage_subtypes"), ",")
 
 		if fh, err := c.FormFile("evidence"); err == nil {
@@ -834,37 +826,13 @@ func (h *ChatbotHandler) FileClaim(c *gin.Context) {
 		claimType = req.ClaimType
 		description = req.Description
 		damageSubtypes = req.DamageSubtypes
+		category = req.Category
+		deliverySubtype = req.DeliverySubtype
 	}
 
 	if h.claimSvc == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Servicio no disponible"})
 		return
-	}
-
-	// Verificar si este mismo reclamante ya tiene un reclamo activo para este envío.
-	// Un reclamo de otra parte (ej: remitente vs destinatario) no bloquea.
-	if existing, err := h.claimSvc.GetLatestActiveClaimByTrackingIDAndDNI(trackingID, claimantDNI); err == nil {
-		c.JSON(http.StatusConflict, gin.H{
-			"error":    fmt.Sprintf("Ya tenés un reclamo abierto (%s) en estado '%s'. No podés abrir otro hasta que se resuelva.", existing.ID, existing.Status),
-			"claim_id": existing.ID,
-			"status":   string(existing.Status),
-		})
-		return
-	}
-
-	// Validar que si el tipo es daño con producto dañado, se adjuntó evidencia
-	if model.ClaimType(claimType) == model.ClaimTypeDamage {
-		hasProdDamaged := false
-		for _, st := range damageSubtypes {
-			if strings.TrimSpace(st) == "product_damaged" {
-				hasProdDamaged = true
-				break
-			}
-		}
-		if hasProdDamaged && evidenceUpload == nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Para producto dañado es obligatorio adjuntar evidencia fotográfica"})
-			return
-		}
 	}
 
 	// Determinar si el reclamante es remitente o destinatario para formatear created_by
@@ -876,16 +844,31 @@ func (h *ChatbotHandler) FileClaim(c *gin.Context) {
 	}
 	_ = claimantName // nombre usado solo en contexto de autenticación previa
 
+	// Todas las validaciones (elegibilidad por tipo, dedup, evidencia
+	// obligatoria para producto dañado, tipo/tamaño de archivo) viven en
+	// ClaimService.CreatePublicClaim — única fuente de verdad. Acá solo
+	// armamos el request y mapeamos errores a códigos HTTP.
 	req := model.CreatePublicClaimRequest{
-		TrackingID:  trackingID,
-		DNI:         claimantDNI,
-		CreatedBy:   createdBy,
-		ClaimType:   model.ClaimType(claimType),
-		Description: description,
+		TrackingID:      trackingID,
+		DNI:             claimantDNI,
+		CreatedBy:       createdBy,
+		ClaimType:       model.ClaimType(claimType),
+		Description:     description,
+		Category:        category,
+		DamageSubtypes:  damageSubtypes,
+		DeliverySubtype: deliverySubtype,
 	}
 
 	claim, err := h.claimSvc.CreatePublicClaim(req, evidenceUpload)
 	if err != nil {
+		if existing, ok := service.IsActiveClaimExistsError(err); ok {
+			c.JSON(http.StatusConflict, gin.H{
+				"error":    existing.Error(),
+				"claim_id": existing.ExistingClaimID,
+				"status":   existing.ExistingStatus,
+			})
+			return
+		}
 		log.Printf("[chatbot] FileClaim error: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

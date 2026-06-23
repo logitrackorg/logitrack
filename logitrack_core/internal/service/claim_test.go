@@ -7,9 +7,37 @@ import (
 	"testing"
 	"time"
 
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
+
+// withEligibleClock avanza el reloj global lo suficiente como para que
+// CanFileClaim devuelva true para envíos recién creados (ETA > now por días).
+// Necesario en tests que crean reclamos no-bad_treatment sobre envíos en
+// at_origin_hub, porque CreatePublicClaim ahora valida elegibilidad por tipo.
+func withEligibleClock(t *testing.T) {
+	t.Helper()
+	clock.SetOverride(time.Now().Add(30 * 24 * time.Hour))
+	t.Cleanup(clock.ClearOverride)
+}
+
+// deliverShipment lleva un envío hasta "entregado". A diferencia de
+// withEligibleClock (que adelanta el reloj y por ende vence el SLA, disparando
+// el auto-pase a in_review), un envío en estado terminal no tiene SLA activo:
+// el reclamo recién creado queda en estado "open". Usar en tests que verifican
+// el estado/eventos iniciales del reclamo, no solo la elegibilidad.
+func deliverShipment(t *testing.T, ts testSetup, id string) {
+	t.Helper()
+	toInTransit(t, ts, id)
+	toAtHub(t, ts, id)
+	toOutForDelivery(t, ts, id)
+	mustStatus(t, ts, id, model.UpdateStatusRequest{
+		Status:       model.StatusDelivered,
+		ChangedBy:    "driver-01",
+		RecipientDNI: defaultRecipient().DNI,
+	})
+}
 
 func newClaimSetup() (*ClaimService, testSetup) {
 	shipmentRepo, eventStore, proj := repository.NewInMemoryShipmentRepositoryWithDeps()
@@ -75,7 +103,12 @@ func (f *fakeClaimEmailSender) SendClaimResolvedNotification(claim model.Claim, 
 func TestCreatePublicClaim_UniqueSequentialIDs(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	withEligibleClock(t)
 
+	// Dos reclamantes distintos (remitente + destinatario) sobre el mismo
+	// envío — la dedup centralizada bloquea duplicados del MISMO DNI, no de
+	// partes distintas. Esto cubre el invariante de IDs únicos + el flujo de
+	// "remitente reclama" y "destinatario reclama" en paralelo.
 	c1, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
 		TrackingID:  ship.TrackingID,
 		ClaimType:   model.ClaimTypeDelay,
@@ -90,8 +123,8 @@ func TestCreatePublicClaim_UniqueSequentialIDs(t *testing.T) {
 		TrackingID:  ship.TrackingID,
 		ClaimType:   model.ClaimTypeDamage,
 		Description: "Paquete llegó con daños visibles",
-		CreatedBy:   "Alice Sender",
-		DNI:         "12345678",
+		CreatedBy:   "Bob Recipient",
+		DNI:         "87654321",
 	}, nil)
 	if err != nil {
 		t.Fatalf("create claim 2: %v", err)
@@ -107,6 +140,7 @@ func TestCreatePublicClaim_UniqueSequentialIDs(t *testing.T) {
 func TestCreatePublicClaim_AppendsShipmentEvent(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	withEligibleClock(t)
 
 	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
 		TrackingID:  ship.TrackingID,
@@ -138,6 +172,7 @@ func TestCreatePublicClaim_AppendsShipmentEvent(t *testing.T) {
 func TestCreatePublicClaim_PersistsClaimEvents(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	deliverShipment(t, ts, ship.TrackingID)
 
 	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
 		TrackingID:  ship.TrackingID,
@@ -162,6 +197,7 @@ func TestCreatePublicClaim_PersistsClaimEvents(t *testing.T) {
 func TestCreatePublicClaim_SendsCustomerEmail(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	deliverShipment(t, ts, ship.TrackingID)
 	fakeEmail := &fakeClaimEmailSender{createdCalls: make(chan claimEmailCall, 1)}
 	claimSvc.SetClaimEmailService(fakeEmail)
 
@@ -195,6 +231,7 @@ func TestCreatePublicClaim_SendsCustomerEmail(t *testing.T) {
 func TestCreatePublicClaim_WithEvidenceStoresMetadata(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	withEligibleClock(t)
 
 	oldWD, err := os.Getwd()
 	if err != nil {
@@ -238,6 +275,7 @@ func TestCreatePublicClaim_WithEvidenceStoresMetadata(t *testing.T) {
 func TestCreatePublicClaim_WithImageEvidenceInfersExtension(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	withEligibleClock(t)
 
 	oldWD, err := os.Getwd()
 	if err != nil {
@@ -277,6 +315,7 @@ func TestCreatePublicClaim_WithImageEvidenceInfersExtension(t *testing.T) {
 func TestResolveClaim_AppendsResolvedEvent(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	deliverShipment(t, ts, ship.TrackingID)
 	fakeEmail := &fakeClaimEmailSender{resolvedCalls: make(chan claimResolvedEmailCall, 1)}
 	claimSvc.SetClaimEmailService(fakeEmail)
 
@@ -330,6 +369,7 @@ func TestResolveClaim_AppendsResolvedEvent(t *testing.T) {
 func TestRequestCustomerInfo_SendsInfoRequestedEmail(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	withEligibleClock(t)
 	fakeEmail := &fakeClaimEmailSender{infoRequestedCalls: make(chan claimInfoRequestedCall, 1)}
 	claimSvc.SetClaimEmailService(fakeEmail)
 
@@ -372,6 +412,7 @@ func TestRequestCustomerInfo_SendsInfoRequestedEmail(t *testing.T) {
 func TestMarkInReview_TransitionsFromPendingCustomer(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	deliverShipment(t, ts, ship.TrackingID)
 
 	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
 		TrackingID:  ship.TrackingID,

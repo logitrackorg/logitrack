@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Paperclip, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { CLAIM_EVIDENCE_ACCEPT } from '@/utils/claimDecisionTree';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -41,7 +42,7 @@ export function ChatInput({
     <form className="border-t border-gray-200 dark:border-gray-700 p-3 flex items-center gap-2" onSubmit={handleSubmit}>
       {showFileUpload && (
         <>
-          <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx" className="hidden" onChange={handleFileChange} disabled={attachDisabled} />
+          <input ref={fileInputRef} type="file" accept={CLAIM_EVIDENCE_ACCEPT} className="hidden" onChange={handleFileChange} disabled={attachDisabled} />
           <Button type="button" variant="ghost" size="icon" disabled={attachDisabled} title="Adjuntar archivo" onClick={() => fileInputRef.current?.click()} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
             <Paperclip size={16} />
           </Button>

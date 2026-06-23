@@ -120,6 +120,12 @@ export interface CreatePublicClaimPayload {
   created_by: string;
   dni: string;
   damage_subtypes: string;
+  /** Categoría del árbol de decisión (opcional). Cuando viene, el backend la
+   *  usa para normalizar claim_type vía service.ClassifyClaimType. */
+  category?: string;
+  /** Subtipo de entrega (opcional). Discrimina dentro de delivery_problem
+   *  entre not_delivered y wrong_data. */
+  delivery_subtype?: string;
   evidence?: File | null;
 }
 
@@ -140,6 +146,8 @@ export const publicTrackingApi = {
     formData.append("created_by", payload.created_by);
     formData.append("dni", payload.dni);
     formData.append("damage_subtypes", payload.damage_subtypes);
+    if (payload.category) formData.append("category", payload.category);
+    if (payload.delivery_subtype) formData.append("delivery_subtype", payload.delivery_subtype);
     if (payload.evidence) {
       formData.append("evidence", payload.evidence);
     }

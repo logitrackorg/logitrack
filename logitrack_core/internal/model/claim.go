@@ -139,6 +139,17 @@ type CreatePublicClaimRequest struct {
 	Description string    `json:"description" binding:"required"`
 	CreatedBy   string    `json:"created_by" binding:"required"`
 	DNI         string    `json:"dni" binding:"required"`
+
+	// Category, DamageSubtypes y DeliverySubtype son opcionales y representan la
+	// elección del cliente en el árbol de decisión, ANTES de que el backend la
+	// normalice al ClaimType canónico. Cuando vienen seteados, el servicio los
+	// usa para (a) re-clasificar el claim_type vía service.ClassifyClaimType y
+	// (b) validar reglas de subtipo (ej. evidencia obligatoria para
+	// product_damaged). Si están vacíos, el servicio confía en ClaimType crudo
+	// — backwards-compat con clientes que no envían el árbol completo.
+	Category        string   `json:"category,omitempty"`
+	DamageSubtypes  []string `json:"damage_subtypes,omitempty"`
+	DeliverySubtype string   `json:"delivery_subtype,omitempty"`
 }
 
 type ResolveClaimRequest struct {
