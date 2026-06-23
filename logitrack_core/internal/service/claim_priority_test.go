@@ -50,6 +50,21 @@ func TestCalculatePriority_UrgentByDamageWithEvidenceOnActiveShipment(t *testing
 	}
 }
 
+// El caso real más común: el cliente abre el reclamo con foto después de
+// recibir el paquete dañado. El envío está en `delivered` y, aún así, debe
+// clasificarse como urgente. Antes el gate isShipmentActive degradaba este
+// caso silenciosamente a "baja".
+func TestCalculatePriority_UrgentByDamageWithEvidenceOnDeliveredShipment(t *testing.T) {
+	got, _ := CalculatePriority(
+		ClaimPriorityInput{Type: model.ClaimTypeDamage, HasEvidence: true},
+		ShipmentPriorityInfo{Status: model.StatusDelivered},
+		defaultCfg(),
+	)
+	if got != model.ClaimPriorityUrgente {
+		t.Fatalf("daño con evidencia en envío entregado debe ser urgente, fue %q", got)
+	}
+}
+
 func TestCalculatePriority_DamageWithoutEvidenceIsNotUrgent(t *testing.T) {
 	got, _ := CalculatePriority(
 		ClaimPriorityInput{Type: model.ClaimTypeDamage, HasEvidence: false},
