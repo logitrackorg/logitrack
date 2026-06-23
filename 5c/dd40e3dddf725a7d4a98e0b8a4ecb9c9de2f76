@@ -1,0 +1,21 @@
+logitrack_web/src/api/auth.ts
+  s_7b8be16c8573b7::t_81102591c2fe00 29-30
+logitrack_core/internal/handler/admin.go
+  s_7b8be16c8573b7::t_5a6c4af5da2e3b 209-212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.10",
+  "base_commit_sha": "5cdd40e3dddf725a7d4a98e0b8a4ecb9c9de2f76",
+  "prompts": {},
+  "sessions": {
+    "s_7b8be16c8573b7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cd330725-df98-4171-a6a2-0053dd3a8336",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
