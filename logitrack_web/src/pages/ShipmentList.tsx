@@ -90,19 +90,22 @@ const inputClass =
 
 type ViewMode = "flat" | "trip";
 
+const SLA_MONITORED_LIST: ReadonlySet<string> = new Set([
+  "at_origin_hub", "at_hub", "loaded", "in_transit",
+  "out_for_delivery", "redelivery_scheduled", "ready_for_return",
+]);
+const DELAYED_MS = 36 * 60 * 60 * 1000;
+const AT_RISK_MS = 24 * 60 * 60 * 1000;
+
 function isLikelyDelayed(s: Shipment): boolean {
-  if (!s.estimated_delivery_at) return false;
-  const now = new Date();
-  const est = new Date(s.estimated_delivery_at);
-  return est < now && !["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status);
+  if (!SLA_MONITORED_LIST.has(s.status) || !s.updated_at) return false;
+  return Date.now() - new Date(s.updated_at).getTime() > DELAYED_MS;
 }
 
 function isLikelyAtRisk(s: Shipment): boolean {
-  if (!s.estimated_delivery_at) return false;
-  const now = new Date();
-  const est = new Date(s.estimated_delivery_at);
-  const hoursLeft = (est.getTime() - now.getTime()) / 36e5;
-  return hoursLeft >= 0 && hoursLeft <= 24 && !["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status);
+  if (!SLA_MONITORED_LIST.has(s.status) || !s.updated_at) return false;
+  const dwell = Date.now() - new Date(s.updated_at).getTime();
+  return dwell > AT_RISK_MS && dwell <= DELAYED_MS;
 }
 
 export function ShipmentList() {
@@ -204,6 +207,18 @@ export function ShipmentList() {
     const d = new Date(iso);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
+
+  // Branch+date filtered base — used by the KPI strip so its counts match what the list shows.
+  const branchDateFiltered = shipments.filter((s) => {
+    if (s.status === "expired") return false;
+    if (branchFilter && s.receiving_branch_id !== branchFilter && !(s.status === "in_transit" && s.current_location === branchFilter)) return false;
+    if (!dateRangeInvalid) {
+      const created = localDate(s.created_at);
+      if (dateFrom && created < dateFrom) return false;
+      if (dateTo && created > dateTo) return false;
+    }
+    return true;
+  });
 
   const filtered = shipments.filter((s) => {
     // Expired drafts are never shown outside the explicit "expired" filter,
@@ -360,9 +375,9 @@ export function ShipmentList() {
         </TopbarActions>
       )}
 
-      {/* KPI strip — computed from raw shipment list, siempre refleja el total sin filtros de estado */}
+      {/* KPI strip — computed from branch+date filtered list so counts match what the filter shows */}
       <ShipmentKPIStrip
-        shipments={shipments}
+        shipments={branchDateFiltered}
         activeFilter={statusFilter}
         onFilter={(v) => setStatusFilter(v)}
       />
