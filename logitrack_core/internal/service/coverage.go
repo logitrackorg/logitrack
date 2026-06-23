@@ -704,7 +704,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 
 	rejectedScore := func(c model.SuggestedLocation, usefulArea float64) int {
 		f, _ := terrainFriction(c.Lat, c.Lng)
-		return CalculateViabilityScore(c.Population, c.Density, usefulArea, false, f)
+		return CalculateViabilityScore(c.Population, c.Density, usefulArea, false, density.PrioritizeIndustrial, f)
 	}
 
 	radiusKm := math.Sqrt(simulatedAreaKm2 / math.Pi)
@@ -931,6 +931,7 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 			candidates[i].Density,
 			candidates[i].ActualAddedKm2,
 			candidates[i].HasIndustrialZone,
+			density.PrioritizeIndustrial,
 			f,
 		)
 	}

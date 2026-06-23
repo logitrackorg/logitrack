@@ -166,19 +166,25 @@ func (s *CoverageService) detectIndustrialZones(candidates []model.SuggestedLoca
 }
 
 // CalculateViabilityScore returns a Logistics Viability Index in the range
-// [1, 100] that combines four independent signals into a single score:
+// [1, 100] that combines several independent signals into a single score:
 //
 //	Population / Density   40 pts  (20 each, log10 / linear normalised)
 //	Net useful area        35 pts  (log10 normalised, 300 000 km² ceiling)
-//	Industrial zone bonus  15 pts  (flat bonus when hasIndustry)
+//	Industrial zone bonus  15 pts  (flat bonus when hasIndustry) — only when
+//	                               prioritizeIndustrial is set
 //	Terrain friction        ÷ f    (1.0 – 1.5; divides the sub-total)
 //
-// The raw sub-total (max 90) is then rescaled to 1–100.
+// The industrial slot participates in the score only when prioritizeIndustrial
+// is true: otherwise it's dropped from both the bonus and the denominator, so
+// the score is normalised over the three always-present signals (population,
+// density, area) instead of silently penalising every candidate by 15/90 for
+// lacking a feature the user didn't ask to weigh. The raw sub-total (max 90 with
+// industrial, 75 without) is then rescaled to 1–100.
 //
 // This is a pure function with no side-effects and no network calls; terrain
 // friction is passed in by the caller (computed via terrainFriction, which is
 // also a pure coordinate-based heuristic).
-func CalculateViabilityScore(population int, density, usefulAreaKm2 float64, hasIndustry bool, friction float64) int {
+func CalculateViabilityScore(population int, density, usefulAreaKm2 float64, hasIndustry, prioritizeIndustrial bool, friction float64) int {
 	if friction < 1.0 {
 		friction = 1.0
 	}
@@ -216,16 +222,22 @@ func CalculateViabilityScore(population int, density, usefulAreaKm2 float64, has
 
 	// Industrial zone bonus (0 or 15): logistics hubs near industrial areas
 	// are strategically preferable; the bonus lifts them above residential
-	// cities with identical population/density figures.
+	// cities with identical population/density figures. Only counts when the
+	// user enabled industrial prioritisation — otherwise it's excluded from
+	// both the bonus and the denominator below.
+	maxRaw := 75.0 // population (20) + density (20) + area (35)
 	var industryBonus float64
-	if hasIndustry {
-		industryBonus = 15
+	if prioritizeIndustrial {
+		maxRaw += 15
+		if hasIndustry {
+			industryBonus = 15
+		}
 	}
 
-	// Combine and apply terrain penalty.
-	// Max raw = (20+20+35+15) / 1.0 = 90; normalise to 1–100.
+	// Combine and apply terrain penalty, then normalise to 1–100 over the
+	// active maximum (90 with industrial, 75 without).
 	raw := (popScore + densityScore + areaScore + industryBonus) / friction
-	normalized := raw * (100.0 / 90.0)
+	normalized := raw * (100.0 / maxRaw)
 	return int(math.Min(100, math.Max(1, math.Round(normalized))))
 }
 

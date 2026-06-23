@@ -1030,10 +1030,18 @@ export function CoberturaTab() {
   const prioritizeIndustrialRef = useRef(false);
   const [applyTerrainFriction, setApplyTerrainFriction] = useState(false);
   const applyTerrainFrictionRef = useRef(false);
-  // Cuando "Penalizar terreno" está apagado, la penalización se fuerza a 0.
+  // Pesos efectivos: los modificadores opcionales que estén apagados se fuerzan
+  // a 0 para que no entren en el cálculo del score. "Penalizar terreno" anula su
+  // penalización; "Priorizar zonas industriales" anula su bonus Y lo saca del
+  // máximo (denominador), de modo que el score se normaliza solo sobre los 3
+  // factores que siempre están: población, densidad y área útil.
   const effectiveWeights = useMemo(
-    () => ({ ...scoreWeights, terrain: applyTerrainFriction ? scoreWeights.terrain : 0 }),
-    [scoreWeights, applyTerrainFriction],
+    () => ({
+      ...scoreWeights,
+      terrain: applyTerrainFriction ? scoreWeights.terrain : 0,
+      industry: prioritizeIndustrial ? scoreWeights.industry : 0,
+    }),
+    [scoreWeights, applyTerrainFriction, prioritizeIndustrial],
   );
   const [minSeparation, setMinSeparation] = useState(20);
   const minSeparationRef = useRef(20);
@@ -2778,12 +2786,14 @@ function ScoreBadge({ score, size = "md", loc, weights = DEFAULT_SCORE_WEIGHTS }
               <span className="text-slate-500 dark:text-slate-400">📦 Área útil</span>
               <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{breakdown.areaPts.toFixed(1)}<span className="text-slate-400">/{weights.area}</span></span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-500 dark:text-slate-400">🏭 Industrial</span>
-              <span className={`font-medium tabular-nums ${breakdown.industryPts > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-400"}`}>
-                {breakdown.industryPts.toFixed(0)}<span className="text-slate-400">/{weights.industry}</span>
-              </span>
-            </div>
+            {weights.industry > 0 && (
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 dark:text-slate-400">🏭 Industrial</span>
+                <span className={`font-medium tabular-nums ${breakdown.industryPts > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-400"}`}>
+                  {breakdown.industryPts.toFixed(0)}<span className="text-slate-400">/{weights.industry}</span>
+                </span>
+              </div>
+            )}
             {breakdown.terrainPenalty > 0 && (
               <div className="flex justify-between items-center border-t border-slate-100 dark:border-gray-700 pt-1 mt-1 text-rose-500 dark:text-rose-400">
                 <span>⛰️ {loc!.terrain_type ?? "Terreno difícil"}</span>
