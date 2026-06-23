@@ -828,9 +828,17 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 				return cur.Construct(polyclip.INTERSECTION, tierra)
 			})
 		}
+		// Two circles of radius radiusKm only overlap when their centres are
+		// within 2×radiusKm. Circles farther than that contribute nothing to the
+		// DIFFERENCE, so skipping them is exact (no result change) and avoids a
+		// no-op polyclip op. This keeps per-candidate work bounded even when
+		// density.AdditionalSites accumulates across "Buscar más" rounds.
 		for _, cell := range coverageCells {
 			if len(remainder) == 0 {
 				break
+			}
+			if ml.HaversineKm(candidates[i].Lat, candidates[i].Lng, cell.Site.Lat, cell.Site.Lng) >= radiusKm*2 {
+				continue
 			}
 			pt := cProj.project(cell.Site.Lat, cell.Site.Lng)
 			sub := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), pt))
@@ -842,6 +850,9 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		for _, site := range density.AdditionalSites {
 			if len(remainder) == 0 {
 				break
+			}
+			if ml.HaversineKm(candidates[i].Lat, candidates[i].Lng, site.Lat, site.Lng) >= radiusKm*2 {
+				continue
 			}
 			pt := cProj.project(site.Lat, site.Lng)
 			sub := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), pt))
