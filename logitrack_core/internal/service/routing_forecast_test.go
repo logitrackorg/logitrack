@@ -55,8 +55,8 @@ type fakeBranchRepoListActive struct {
 	branches []model.Branch
 }
 
-func (f *fakeBranchRepoListActive) List() []model.Branch                            { return f.branches }
-func (f *fakeBranchRepoListActive) ListActive() []model.Branch                      { return f.branches }
+func (f *fakeBranchRepoListActive) List() []model.Branch       { return f.branches }
+func (f *fakeBranchRepoListActive) ListActive() []model.Branch { return f.branches }
 func (f *fakeBranchRepoListActive) GetByID(id string) (model.Branch, bool) {
 	for _, b := range f.branches {
 		if b.ID == id {
@@ -65,14 +65,17 @@ func (f *fakeBranchRepoListActive) GetByID(id string) (model.Branch, bool) {
 	}
 	return model.Branch{}, false
 }
-func (f *fakeBranchRepoListActive) GetByCity(city string) (model.Branch, bool)        { return model.Branch{}, false }
-func (f *fakeBranchRepoListActive) GetByNameOrID(q string) []model.Branch              { return nil }
-func (f *fakeBranchRepoListActive) Create(b model.Branch) error                          { return nil }
-func (f *fakeBranchRepoListActive) Add(b model.Branch)                                   {}
-func (f *fakeBranchRepoListActive) Update(id string, b model.Branch) error               { return nil }
+func (f *fakeBranchRepoListActive) GetByCity(city string) (model.Branch, bool) {
+	return model.Branch{}, false
+}
+func (f *fakeBranchRepoListActive) GetByNameOrID(q string) []model.Branch  { return nil }
+func (f *fakeBranchRepoListActive) Create(b model.Branch) error            { return nil }
+func (f *fakeBranchRepoListActive) Add(b model.Branch)                     {}
+func (f *fakeBranchRepoListActive) Update(id string, b model.Branch) error { return nil }
 func (f *fakeBranchRepoListActive) UpdateStatus(id string, s model.BranchStatus, u string) error {
 	return nil
 }
+
 func (f *fakeBranchRepoListActive) UpdateEmployeeOfMonth(id string, enabled bool, u string) error {
 	return nil
 }
@@ -185,7 +188,7 @@ func TestPredict_NoneConfidenceWithoutData(t *testing.T) {
 func TestPredict_DefaultHorizonIs7(t *testing.T) {
 	svc := newForecastTestService(nil)
 	forecasts, _ := svc.Predict(0) // 0 → debería usar default 7
-	expectedRows := 7 * 2 // 7 días × 2 pares O-D (caba→cordoba y cordoba→caba)
+	expectedRows := 7 * 2          // 7 días × 2 pares O-D (caba→cordoba y cordoba→caba)
 	if len(forecasts) != expectedRows {
 		t.Errorf("con horizonDays=0, esperado %d rows (7 días × 2 pares), got %d", expectedRows, len(forecasts))
 	}

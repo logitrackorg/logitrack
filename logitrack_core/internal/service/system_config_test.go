@@ -15,7 +15,7 @@ type stubSystemConfigRepoBare struct {
 	cfg model.SystemConfig
 }
 
-func (s *stubSystemConfigRepoBare) Get() model.SystemConfig          { return s.cfg }
+func (s *stubSystemConfigRepoBare) Get() model.SystemConfig           { return s.cfg }
 func (s *stubSystemConfigRepoBare) Update(c model.SystemConfig) error { s.cfg = c; return nil }
 
 // validBaseCfg devuelve una SystemConfig que pasa todas las validaciones

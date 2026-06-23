@@ -290,9 +290,10 @@ func (h *SupervisorFatigueHandler) GetHistory(c *gin.Context) {
 
 // normalizeKSS maps the 8-point KSS level to a fixed 0–100 risk scale.
 // The scale excludes the original neutral midpoint (old level 5).
-//   1–4 (alert)                                  →   0 risk
-//   5–6 (signs of drowsiness / moderate effort)  →  50 risk
-//   7–8 (high drowsiness / fighting sleep)        → 100 risk
+//
+//	1–4 (alert)                                  →   0 risk
+//	5–6 (signs of drowsiness / moderate effort)  →  50 risk
+//	7–8 (high drowsiness / fighting sleep)        → 100 risk
 func normalizeKSS(level int) float64 {
 	switch {
 	case level >= 7:

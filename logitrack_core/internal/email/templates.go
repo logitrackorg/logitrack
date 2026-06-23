@@ -611,20 +611,20 @@ const passwordResetOTPBodySrc = `
 </p>`
 
 var (
-	baseTmpl              = template.Must(template.New("base").Parse(baseTmplSrc))
-	recipientTmpl         = template.Must(template.New("recipient").Parse(recipientBodySrc))
-	senderTmpl            = template.Must(template.New("sender").Parse(senderBodySrc))
-	lastMileTmpl          = template.Must(template.New("lastmile").Parse(lastMileBodySrc))
-	readyForPickupTmpl    = template.Must(template.New("readyforpickup").Parse(readyForPickupBodySrc))
-	deliveryConfirmedTmpl = template.Must(template.New("deliveryconfirmed").Parse(deliveryConfirmedBodySrc))
-	rejectedTmpl          = template.Must(template.New("rejected").Parse(rejectedBodySrc))
-	deliveryFailedTmpl    = template.Must(template.New("deliveryfailed").Parse(deliveryFailedBodySrc))
-	slaExpiredTmpl        = template.Must(template.New("slaexpired").Parse(slaExpiredBodySrc))
-	claimCreatedTmpl      = template.Must(template.New("claimcreated").Parse(claimCreatedBodySrc))
+	baseTmpl               = template.Must(template.New("base").Parse(baseTmplSrc))
+	recipientTmpl          = template.Must(template.New("recipient").Parse(recipientBodySrc))
+	senderTmpl             = template.Must(template.New("sender").Parse(senderBodySrc))
+	lastMileTmpl           = template.Must(template.New("lastmile").Parse(lastMileBodySrc))
+	readyForPickupTmpl     = template.Must(template.New("readyforpickup").Parse(readyForPickupBodySrc))
+	deliveryConfirmedTmpl  = template.Must(template.New("deliveryconfirmed").Parse(deliveryConfirmedBodySrc))
+	rejectedTmpl           = template.Must(template.New("rejected").Parse(rejectedBodySrc))
+	deliveryFailedTmpl     = template.Must(template.New("deliveryfailed").Parse(deliveryFailedBodySrc))
+	slaExpiredTmpl         = template.Must(template.New("slaexpired").Parse(slaExpiredBodySrc))
+	claimCreatedTmpl       = template.Must(template.New("claimcreated").Parse(claimCreatedBodySrc))
 	claimInfoRequestedTmpl = template.Must(template.New("claiminforequested").Parse(claimInfoRequestedBodySrc))
 	claimResolvedTmpl      = template.Must(template.New("claimresolved").Parse(claimResolvedBodySrc))
-	passwordResetOTPTmpl  = template.Must(template.New("passwordresetotp").Parse(passwordResetOTPBodySrc))
-	passwordChangedTmpl   = template.Must(template.New("passwordchanged").Parse(passwordChangedBodySrc))
+	passwordResetOTPTmpl   = template.Must(template.New("passwordresetotp").Parse(passwordResetOTPBodySrc))
+	passwordChangedTmpl    = template.Must(template.New("passwordchanged").Parse(passwordChangedBodySrc))
 )
 
 func renderRecipientConfirmation(s model.Shipment, org model.OrganizationConfig, trackBaseURL string) string {

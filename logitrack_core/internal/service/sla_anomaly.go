@@ -132,9 +132,9 @@ type SLAAnomalyService struct {
 
 	// Daily buffer of average snapshots. Each Collector run appends the current
 	// per-state averages. Guarded by bufferMu.
-	bufferMu        sync.Mutex
-	dailyAvgBuffer  []map[string]float64 // each element = one snapshot
-	bufferDay       string               // "YYYY-MM-DD" of the current buffer day
+	bufferMu       sync.Mutex
+	dailyAvgBuffer []map[string]float64 // each element = one snapshot
+	bufferDay      string               // "YYYY-MM-DD" of the current buffer day
 
 	// lastCalculatedAt records when the Collector last successfully refreshed
 	// the per-status averages. Exposed via GetLastCalculatedAt() for the UI.

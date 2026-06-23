@@ -139,8 +139,7 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		shipment.UpdatedAt = event.Timestamp
 		p.shipments[event.TrackingID] = shipment
 
-	
-		case model.EventPickupRequested:
+	case model.EventPickupRequested:
 		_ = event.Payload.(model.PickupRequestedPayload)
 		shipment, ok := p.shipments[event.TrackingID]
 		if !ok {
@@ -173,7 +172,7 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		newDate := payload.NewDeliveryDate
 		shipment.EstimatedDeliveryAt = &newDate
 		shipment.UpdatedAt = event.Timestamp
-		
+
 		// Actualizar metadata del chatbot
 		if shipment.ChatbotMetadata == nil {
 			shipment.ChatbotMetadata = &model.ChatbotMetadata{
@@ -187,7 +186,7 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		}
 		now := event.Timestamp
 		shipment.ChatbotMetadata.LastChatbotInteraction = &now
-		
+
 		// Si el estado es "redelivery_scheduled", mantenerlo; sino cambiarlo
 		if shipment.Status != model.StatusRedeliveryScheduled {
 			shipment.Status = model.StatusRedeliveryScheduled

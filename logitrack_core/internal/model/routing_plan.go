@@ -21,23 +21,23 @@ const (
 // HorizonOffset=0 → plan aplicable (hoy). HorizonOffset>0 → pronóstico
 // read-only (no se puede aplicar). Los pronósticos se regeneran cada día.
 type GlobalRoutingPlan struct {
-	ID              string       `json:"id"`
-	PlanDate        string       `json:"plan_date"`             // YYYY-MM-DD
-	Status          PlanStatus   `json:"status"`
-	BranchPlans     []BranchPlan `json:"branch_plans"`
-	GeneratedAt     time.Time    `json:"generated_at"`
-	AppliedAt       *time.Time   `json:"applied_at,omitempty"`
-	AppliedBy       string       `json:"applied_by,omitempty"`
-	Log             GlobalPlanLog `json:"log"`
-	Insights        NetworkInsights `json:"insights"`
+	ID          string          `json:"id"`
+	PlanDate    string          `json:"plan_date"` // YYYY-MM-DD
+	Status      PlanStatus      `json:"status"`
+	BranchPlans []BranchPlan    `json:"branch_plans"`
+	GeneratedAt time.Time       `json:"generated_at"`
+	AppliedAt   *time.Time      `json:"applied_at,omitempty"`
+	AppliedBy   string          `json:"applied_by,omitempty"`
+	Log         GlobalPlanLog   `json:"log"`
+	Insights    NetworkInsights `json:"insights"`
 	// AppliedBranches lista las sucursales que ya completaron su apply.
 	// Cuando todas las sucursales del plan están en esta lista, el plan pasa a "applied".
 	AppliedBranches []string `json:"applied_branches"`
 
 	// HorizonOffset es la cantidad de días desde hoy. 0=hoy (aplicable), 1/2=pronóstico.
-	HorizonOffset int  `json:"horizon_offset"`
+	HorizonOffset int `json:"horizon_offset"`
 	// IsForecast=true cuando HorizonOffset>0. Los pronósticos no se pueden aplicar.
-	IsForecast    bool `json:"is_forecast"`
+	IsForecast bool `json:"is_forecast"`
 }
 
 // NetworkInsights agrupa el análisis cross-branch del plan global.
@@ -62,10 +62,10 @@ type EmptyMoveSuggestion struct {
 
 // ConsolidationOpportunity indica que múltiples sucursales despachan hoy al mismo destino.
 type ConsolidationOpportunity struct {
-	DestinationBranchID string                 `json:"destination_branch_id"`
+	DestinationBranchID string                  `json:"destination_branch_id"`
 	Dispatches          []ConsolidationDispatch `json:"dispatches"`
-	TotalWeightKg       float64                `json:"total_weight_kg"`
-	AvgFillRatePct      float64                `json:"avg_fill_rate_pct"`
+	TotalWeightKg       float64                 `json:"total_weight_kg"`
+	AvgFillRatePct      float64                 `json:"avg_fill_rate_pct"`
 }
 
 // ConsolidationDispatch describe un despacho dentro de una ConsolidationOpportunity.
@@ -79,11 +79,11 @@ type ConsolidationDispatch struct {
 
 // NetworkMetrics agrega métricas globales de la red al momento de generación.
 type NetworkMetrics struct {
-	TotalShipmentsAssigned     int     `json:"total_shipments_assigned"`
-	TotalShipmentsUnassigned   int     `json:"total_shipments_unassigned"`
-	TotalVehiclesDispatched    int     `json:"total_vehicles_dispatched"`
-	IdleVehiclesCount          int     `json:"idle_vehicles_count"`
-	BranchesWithUnservedDemand int     `json:"branches_with_unserved_demand"`
+	TotalShipmentsAssigned     int `json:"total_shipments_assigned"`
+	TotalShipmentsUnassigned   int `json:"total_shipments_unassigned"`
+	TotalVehiclesDispatched    int `json:"total_vehicles_dispatched"`
+	IdleVehiclesCount          int `json:"idle_vehicles_count"`
+	BranchesWithUnservedDemand int `json:"branches_with_unserved_demand"`
 
 	// Utilización separada por tipo de despacho.
 	AvgInterBranchUtilizationPct float64 `json:"avg_inter_branch_utilization_pct"`

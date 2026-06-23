@@ -21,21 +21,21 @@ type DriverFatigueStatus struct {
 	Username     string          `json:"username"`
 	DriverType   DriverType      `json:"driver_type"`
 	CheckinToday bool            `json:"checkin_today"`
-	RiskScore    *int            `json:"risk_score"`    // nil when no check-in today
-	RiskLevel    DriverRiskLevel `json:"risk_level"`    // "pendiente" when no check-in today
-	KSSLevel     *int            `json:"kss_level"`     // nil when no check-in today
-	HorasSueno   *int            `json:"horas_sueno"`   // nil when no check-in today
-	DriftScore   *int            `json:"drift_score"`   // nil when no baseline yet
-	HasVoice     bool            `json:"has_voice"`     // whether voice analysis was completed today
-	PVTMetrics   *PVTResult      `json:"pvt_metrics"`   // nil when PVT was not completed today
-	CheckinTime  *time.Time      `json:"checkin_time"`  // nil when no check-in today
-	History      []DriverCheckin `json:"history"`       // last 30 days, newest first
+	RiskScore    *int            `json:"risk_score"`   // nil when no check-in today
+	RiskLevel    DriverRiskLevel `json:"risk_level"`   // "pendiente" when no check-in today
+	KSSLevel     *int            `json:"kss_level"`    // nil when no check-in today
+	HorasSueno   *int            `json:"horas_sueno"`  // nil when no check-in today
+	DriftScore   *int            `json:"drift_score"`  // nil when no baseline yet
+	HasVoice     bool            `json:"has_voice"`    // whether voice analysis was completed today
+	PVTMetrics   *PVTResult      `json:"pvt_metrics"`  // nil when PVT was not completed today
+	CheckinTime  *time.Time      `json:"checkin_time"` // nil when no check-in today
+	History      []DriverCheckin `json:"history"`      // last 30 days, newest first
 }
 
 // FatigueDashboardResponse is returned by GET /supervisor/fatigue-dashboard.
 type FatigueDashboardResponse struct {
 	BranchID string                `json:"branch_id"`
-	Date     string                `json:"date"`      // YYYY-MM-DD in ART
+	Date     string                `json:"date"` // YYYY-MM-DD in ART
 	Drivers  []DriverFatigueStatus `json:"drivers"`
 	GreenMax int                   `json:"green_max"` // threshold copied from config
 	RedMin   int                   `json:"red_min"`   // threshold copied from config
@@ -43,7 +43,7 @@ type FatigueDashboardResponse struct {
 
 // FatigueDailyMetric aggregates all drivers' risk levels for a single calendar day.
 type FatigueDailyMetric struct {
-	Date          string  `json:"date"`           // YYYY-MM-DD
+	Date          string  `json:"date"` // YYYY-MM-DD
 	Verde         int     `json:"verde"`
 	Amarillo      int     `json:"amarillo"`
 	Rojo          int     `json:"rojo"`

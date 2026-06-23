@@ -8,10 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/logitrack/core/internal/clock"
+	"github.com/logitrack/core/internal/geo"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
-	"github.com/logitrack/core/internal/geo" 
 )
 
 type AuthHandler struct {
@@ -20,8 +20,8 @@ type AuthHandler struct {
 	twoFARepo repository.TwoFARepository
 }
 
-func NewAuthHandler(repo repository.AuthRepository, accessLog repository.AccessLogRepository, twoFARepo repository.TwoFARepository, ) *AuthHandler {
-	return &AuthHandler{repo: repo, accessLog: accessLog, twoFARepo: twoFARepo,}
+func NewAuthHandler(repo repository.AuthRepository, accessLog repository.AccessLogRepository, twoFARepo repository.TwoFARepository) *AuthHandler {
+	return &AuthHandler{repo: repo, accessLog: accessLog, twoFARepo: twoFARepo}
 }
 
 func (h *AuthHandler) RegisterRoutes(r *gin.RouterGroup) {
@@ -71,7 +71,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	user, err := h.repo.FindUser(req.Username, req.Password)
 	if err != nil {
 		if err == repository.ErrAccountInactive {
@@ -85,11 +85,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	if user.TwoFAEnabled {
-		
+
 		sessionToken, err := h.twoFARepo.CreatePendingSession(
 			c.Request.Context(),
 			user.ID,
-			5*time.Minute, 
+			5*time.Minute,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "error creando sesión temporal"})
@@ -97,11 +97,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 
 		h.logWithContext(c, user.Username, user.ID, string(user.Role), "2fa_required", "")
-		
+
 		c.JSON(http.StatusOK, model.LoginResponse{
 			Requires2FA:  true,
 			SessionToken: sessionToken,
-		
 		})
 		return
 	}
@@ -109,11 +108,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	token := uuid.NewString()
 	h.repo.SaveToken(token, user)
 	h.logWithContext(c, user.Username, user.ID, string(user.Role), model.AccessEventLoginSuccess, "")
-	
+
 	c.JSON(http.StatusOK, model.LoginResponse{
 		Token:       token,
 		User:        user,
-		Requires2FA: false, 
+		Requires2FA: false,
 	})
 }
 

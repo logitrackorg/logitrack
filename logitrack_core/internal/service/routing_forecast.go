@@ -17,8 +17,10 @@ import (
 // Suficiente para 6 sucursales con datos limitados (POC).
 // =============================================================================
 
-const historyWindowDays = 90
-const minObsForHighConfidence = 12
+const (
+	historyWindowDays       = 90
+	minObsForHighConfidence = 12
+)
 
 // observation interna del forecasting.
 type forecastObs struct {

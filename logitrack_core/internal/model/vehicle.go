@@ -64,4 +64,3 @@ type UpdateVehicleStatusRequest struct {
 	Notes  string        `json:"notes,omitempty"`
 	Force  bool          `json:"force,omitempty"` // forzar cambio aunque haya transición incompatible
 }
-

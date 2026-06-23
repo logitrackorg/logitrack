@@ -12,13 +12,13 @@ func TestLessUserID_NumericOrdering(t *testing.T) {
 		a, b string
 		want bool // true => a should rank before b (a is "lower")
 	}{
-		{"5", "12", true},   // 5 < 12 numerically (string compare would give false)
-		{"12", "5", false},  // inverse of above
-		{"2", "10", true},   // 2 < 10 numerically (string compare would give false)
-		{"1", "2", true},    // trivial numeric
-		{"15", "16", true},  // adjacent
-		{"x", "y", true},    // non-numeric fallback to lexicographic
-		{"10", "9", false},  // 10 > 9 numerically
+		{"5", "12", true},  // 5 < 12 numerically (string compare would give false)
+		{"12", "5", false}, // inverse of above
+		{"2", "10", true},  // 2 < 10 numerically (string compare would give false)
+		{"1", "2", true},   // trivial numeric
+		{"15", "16", true}, // adjacent
+		{"x", "y", true},   // non-numeric fallback to lexicographic
+		{"10", "9", false}, // 10 > 9 numerically
 	}
 	for _, c := range cases {
 		if got := lessUserID(c.a, c.b); got != c.want {

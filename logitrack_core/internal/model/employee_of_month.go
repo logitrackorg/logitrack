@@ -28,18 +28,18 @@ type EmployeeOfMonthWinner struct {
 
 // Award is the lightweight view embedded in user profiles.
 type Award struct {
-	Category  EmployeeOfMonthCategory `json:"category"`
-	Period    time.Time               `json:"period"`
-	Score     float64                 `json:"score"`
-	BranchID  string                  `json:"branch_id,omitempty"`
+	Category EmployeeOfMonthCategory `json:"category"`
+	Period   time.Time               `json:"period"`
+	Score    float64                 `json:"score"`
+	BranchID string                  `json:"branch_id,omitempty"`
 }
 
 // Scoring constants — thresholds and weights are not admin-configurable in this delivery.
 const (
 	// Minimum activity thresholds for eligibility.
-	EOMMinLastMileDeliveries   = 10
-	EOMMinInterBranchTrips     = 2
-	EOMMinOperatorShipments    = 10
+	EOMMinLastMileDeliveries = 10
+	EOMMinInterBranchTrips   = 2
+	EOMMinOperatorShipments  = 10
 
 	// Score weights (must sum to 1.0 per category).
 	EOMLastMileWeightFirstAttempt = 0.40

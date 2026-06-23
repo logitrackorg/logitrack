@@ -11,9 +11,9 @@ import (
 )
 
 type UserHandler struct {
-	authRepo   repository.AuthRepository
-	userSvc    *service.UserService
-	eomSvc     *service.EmployeeOfMonthService
+	authRepo repository.AuthRepository
+	userSvc  *service.UserService
+	eomSvc   *service.EmployeeOfMonthService
 }
 
 func NewUserHandler(authRepo repository.AuthRepository, userSvc *service.UserService) *UserHandler {

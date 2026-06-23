@@ -1,7 +1,7 @@
 package model
 
 import (
-	"fmt"  
+	"fmt"
 	"time"
 )
 
@@ -28,7 +28,6 @@ const (
 	StatusRecipientNotFound   Status = "recipient_not_found"
 	StatusExpired             Status = "expired"
 	StatusPendingPayment      Status = "pending_payment"
-	
 )
 
 type PackageType string
@@ -124,8 +123,8 @@ type Shipment struct {
 	// Security keyword — última milla only. Generated at create/confirm; sent to recipient via email.
 	// Never returned in API responses (json:"-"); validated by the driver at delivery time.
 	SecurityKeyword     string `json:"security_keyword,omitempty"`
-	SecurityKeywordHash string `json:"-"` // bcrypt hash, exposed only in GET /driver/route for offline validation
-	KeywordAttempts     int    `json:"keyword_attempts,omitempty"`    // failed keyword attempts by driver (max 3)
+	SecurityKeywordHash string `json:"-"`                              // bcrypt hash, exposed only in GET /driver/route for offline validation
+	KeywordAttempts     int    `json:"keyword_attempts,omitempty"`     // failed keyword attempts by driver (max 3)
 	ContingencyDelivery bool   `json:"contingency_delivery,omitempty"` // true when delivered via DNI fallback after max keyword attempts
 
 	// Corrections: typed non-destructive field overrides; original data is never modified.
@@ -136,16 +135,16 @@ type Shipment struct {
 	IncidentType IncidentType `json:"incident_type,omitempty"`
 
 	// Pricing — calculated at creation/confirmation, never recalculated.
-	Price          *float64        `json:"price,omitempty"`
-	PriceBreakdown *PriceBreakdown `json:"price_breakdown,omitempty"`
-	PriceCurrency  string          `json:"price_currency,omitempty"`
+	Price           *float64         `json:"price,omitempty"`
+	PriceBreakdown  *PriceBreakdown  `json:"price_breakdown,omitempty"`
+	PriceCurrency   string           `json:"price_currency,omitempty"`
 	ChatbotMetadata *ChatbotMetadata `json:"chatbot_metadata,omitempty"`
 	// Multi-hop routing
 	ReservedForTripID *string  `json:"reserved_for_trip_id,omitempty"`
-	NextHopBranchID   string   `json:"next_hop_branch_id,omitempty"`   
-	PlannedPath       []string `json:"planned_path,omitempty"`         
-	HopIndex          int      `json:"hop_index,omitempty"`            
-	PathRevision      int      `json:"path_revision,omitempty"`        
+	NextHopBranchID   string   `json:"next_hop_branch_id,omitempty"`
+	PlannedPath       []string `json:"planned_path,omitempty"`
+	HopIndex          int      `json:"hop_index,omitempty"`
+	PathRevision      int      `json:"path_revision,omitempty"`
 
 	// PhotoExpiredAt is set by the photo lifecycle job when the delivery photo's
 	// retention window (PhotoRetentionDays) has elapsed. Once set, the photo endpoint
@@ -184,13 +183,13 @@ type Shipment struct {
 // slaMonitoredForDelay is the canonical set of states where LogiTrack is
 // responsible for moving the shipment forward and delay is meaningful.
 var slaMonitoredForDelay = map[Status]bool{
-	StatusAtOriginHub:        true,
-	StatusAtHub:              true,
-	StatusLoaded:             true,
-	StatusInTransit:          true,
-	StatusOutForDelivery:     true,
+	StatusAtOriginHub:         true,
+	StatusAtHub:               true,
+	StatusLoaded:              true,
+	StatusInTransit:           true,
+	StatusOutForDelivery:      true,
 	StatusRedeliveryScheduled: true,
-	StatusReadyForReturn:     true,
+	StatusReadyForReturn:      true,
 }
 
 // SLAAtRiskThresholdHours is the warning threshold (100 % of the fallback
@@ -226,24 +225,24 @@ func (s *Shipment) ComputeIsAtRisk(now time.Time) bool {
 // ShipmentCorrections holds non-destructive field overrides for a confirmed shipment.
 // Only non-nil fields have been corrected; original values are always preserved in Shipment.
 type ShipmentCorrections struct {
-	SenderName            *string       `json:"sender_name,omitempty"`
-	SenderPhone           *string       `json:"sender_phone,omitempty"`
-	SenderEmail           *string       `json:"sender_email,omitempty"`
-	SenderDNI             *string       `json:"sender_dni,omitempty"`
-	OriginStreet          *string       `json:"origin_street,omitempty"`
-	OriginCity            *string       `json:"origin_city,omitempty"`
-	OriginProvince        *string       `json:"origin_province,omitempty"`
-	OriginPostalCode      *string       `json:"origin_postal_code,omitempty"`
-	RecipientName         *string       `json:"recipient_name,omitempty"`
-	RecipientPhone        *string       `json:"recipient_phone,omitempty"`
-	RecipientEmail        *string       `json:"recipient_email,omitempty"`
-	RecipientDNI          *string       `json:"recipient_dni,omitempty"`
-	DestinationStreet     *string       `json:"destination_street,omitempty"`
-	DestinationCity       *string       `json:"destination_city,omitempty"`
-	DestinationProvince   *string       `json:"destination_province,omitempty"`
-	DestinationPostalCode *string       `json:"destination_postal_code,omitempty"`
-	SpecialInstructions   *string       `json:"special_instructions,omitempty"`
-	TimeWindow            *TimeWindow   `json:"time_window,omitempty"`
+	SenderName            *string     `json:"sender_name,omitempty"`
+	SenderPhone           *string     `json:"sender_phone,omitempty"`
+	SenderEmail           *string     `json:"sender_email,omitempty"`
+	SenderDNI             *string     `json:"sender_dni,omitempty"`
+	OriginStreet          *string     `json:"origin_street,omitempty"`
+	OriginCity            *string     `json:"origin_city,omitempty"`
+	OriginProvince        *string     `json:"origin_province,omitempty"`
+	OriginPostalCode      *string     `json:"origin_postal_code,omitempty"`
+	RecipientName         *string     `json:"recipient_name,omitempty"`
+	RecipientPhone        *string     `json:"recipient_phone,omitempty"`
+	RecipientEmail        *string     `json:"recipient_email,omitempty"`
+	RecipientDNI          *string     `json:"recipient_dni,omitempty"`
+	DestinationStreet     *string     `json:"destination_street,omitempty"`
+	DestinationCity       *string     `json:"destination_city,omitempty"`
+	DestinationProvince   *string     `json:"destination_province,omitempty"`
+	DestinationPostalCode *string     `json:"destination_postal_code,omitempty"`
+	SpecialInstructions   *string     `json:"special_instructions,omitempty"`
+	TimeWindow            *TimeWindow `json:"time_window,omitempty"`
 }
 
 // CorrectedField pairs a human-readable label with its corrected value, used for auto-comments.
@@ -579,22 +578,22 @@ func (s *Shipment) GetAvailableRescheduleDates(maxDays int) []time.Time {
 // InitializeChatbotMetadata sets up chatbot metadata if not present.
 // maxReschedules should come from SystemConfig.MaxReschedules.
 /*func (s *Shipment) InitializeChatbotMetadata(maxReschedules int) {
-	if s.ChatbotMetadata == nil {
-		s.ChatbotMetadata = &ChatbotMetadata{
-			RescheduleCount: 0,
-			MaxReschedules:  maxReschedules, 
-		}
-
-		if s.EstimatedDeliveryAt != nil {
-			originalDate := *s.EstimatedDeliveryAt
-			s.ChatbotMetadata.OriginalDeliveryDate = &originalDate
-		}
-		}else {		
-			s.ChatbotMetadata.MaxReschedules = maxReschedules
+if s.ChatbotMetadata == nil {
+	s.ChatbotMetadata = &ChatbotMetadata{
+		RescheduleCount: 0,
+		MaxReschedules:  maxReschedules,
 	}
-	}*/
 
-	// ✅ CÓDIGO NUEVO - COPIAR Y PEGAR:
+	if s.EstimatedDeliveryAt != nil {
+		originalDate := *s.EstimatedDeliveryAt
+		s.ChatbotMetadata.OriginalDeliveryDate = &originalDate
+	}
+	}else {
+		s.ChatbotMetadata.MaxReschedules = maxReschedules
+}
+}*/
+
+// ✅ CÓDIGO NUEVO - COPIAR Y PEGAR:
 func (s *Shipment) InitializeChatbotMetadata() {
 	if s.ChatbotMetadata == nil {
 		s.ChatbotMetadata = &ChatbotMetadata{

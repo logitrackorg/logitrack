@@ -107,10 +107,10 @@ type Problem struct {
 
 	// Límites de ventanas horarias en minutos desde medianoche.
 	// Si todos son cero se aplican los defaults históricos (noon=12:00 para ambos).
-	MorningWindowStartMin  float64 // default 8*60
-	MorningWindowEndMin    float64 // default 14*60
+	MorningWindowStartMin   float64 // default 8*60
+	MorningWindowEndMin     float64 // default 14*60
 	AfternoonWindowStartMin float64 // default 12*60
-	AfternoonWindowEndMin  float64 // default 18*60
+	AfternoonWindowEndMin   float64 // default 18*60
 
 	// EnforceTimeWindows=true: ventanas duras — envíos fuera de ventana quedan unassigned.
 	// EnforceTimeWindows=false: ventanas blandas — se incluyen con OutOfWindow=true.

@@ -1,22 +1,22 @@
 package mercadopago
 
 type preferenceItem struct {
-	Title       string  `json:"title"`
-	Quantity    int     `json:"quantity"`
-	UnitPrice   float64 `json:"unit_price"`
-	CurrencyID  string  `json:"currency_id"`
+	Title      string  `json:"title"`
+	Quantity   int     `json:"quantity"`
+	UnitPrice  float64 `json:"unit_price"`
+	CurrencyID string  `json:"currency_id"`
 }
 
 type createPreferenceRequest struct {
-	Items              []preferenceItem `json:"items"`
-	ExternalReference  string           `json:"external_reference"`
-	NotificationURL    string           `json:"notification_url"`
+	Items             []preferenceItem `json:"items"`
+	ExternalReference string           `json:"external_reference"`
+	NotificationURL   string           `json:"notification_url"`
 }
 
 // CreatePreferenceResponse holds what we need from the MP response.
 type CreatePreferenceResponse struct {
-	ID              string `json:"id"`
-	InitPoint       string `json:"init_point"`
+	ID               string `json:"id"`
+	InitPoint        string `json:"init_point"`
 	SandboxInitPoint string `json:"sandbox_init_point"`
 }
 

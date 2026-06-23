@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
-	"time"
 	"log"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/logitrack/core/internal/analytics"
 	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/email"
@@ -28,7 +29,6 @@ import (
 	"github.com/logitrack/core/internal/seed"
 	"github.com/logitrack/core/internal/service"
 	"github.com/logitrack/core/internal/sse"
-	"github.com/logitrack/core/internal/analytics"
 )
 
 func getenv(key, fallback string) string {
@@ -114,7 +114,7 @@ func main() {
 		}
 	}
 	analyticsClient := analytics.NewPostHogClient()
-    defer analyticsClient.Close()
+	defer analyticsClient.Close()
 
 	// Services & handlers
 	modelPath := os.Getenv("ML_MODEL_PATH")
@@ -282,11 +282,11 @@ func main() {
 	messagingSvc.SetPickupEmailFallback(emailSvc)            // email fallback para ready_for_pickup
 	messagingSvc.SetDeliveryConfirmedEmailFallback(emailSvc) // email fallback para entrega confirmada
 	messagingSvc.SetRejectedEmailFallback(emailSvc)          // email fallback para rechazo (LOGITRACK-429)
-	messagingSvc.SetDeliveryFailedEmailService(emailSvc)      // email siempre (+ WhatsApp si tiene tel) para entrega fallida (LOGITRACK-437)
-	messagingSvc.SetSLAExpiredEmailFallback(emailSvc)          // email fallback cuando WhatsApp no disponible para SLA vencido (LOGITRACK-124)
-	messagingSvc.SetClaimEmailFallback(emailSvc)               // email fallback cuando WhatsApp no disponible para reclamos (LOGITRACK-123/125/486)
-	messagingSvc.SetSystemConfigGetter(sysConfigSvc)           // permite forzar email desde config de admin
-	claimSvc.SetClaimWAService(messagingSvc)                   // WhatsApp al reclamante, email como fallback (LOGITRACK-123/125/486)
+	messagingSvc.SetDeliveryFailedEmailService(emailSvc)     // email siempre (+ WhatsApp si tiene tel) para entrega fallida (LOGITRACK-437)
+	messagingSvc.SetSLAExpiredEmailFallback(emailSvc)        // email fallback cuando WhatsApp no disponible para SLA vencido (LOGITRACK-124)
+	messagingSvc.SetClaimEmailFallback(emailSvc)             // email fallback cuando WhatsApp no disponible para reclamos (LOGITRACK-123/125/486)
+	messagingSvc.SetSystemConfigGetter(sysConfigSvc)         // permite forzar email desde config de admin
+	claimSvc.SetClaimWAService(messagingSvc)                 // WhatsApp al reclamante, email como fallback (LOGITRACK-123/125/486)
 	shipmentSvc.SetWhatsAppConfirmationService(messagingSvc) // confirmación al registrar envío (LOGITRACK-406)
 	shipmentSvc.SetMessagingService(messagingSvc)
 	shipmentSvc.SetReadyForPickupEmailService(messagingSvc) // WhatsApp primero, email fallback
@@ -306,7 +306,7 @@ func main() {
 	branchSvc.SetBranchZoneService(branchZoneSvc)
 	branchHandler := handler.NewBranchHandler(branchSvc)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc, claimSvc)
-	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc, shipmentSvc, sysConfigSvc, claimSvc,  analyticsClient,)
+	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc, shipmentSvc, sysConfigSvc, claimSvc, analyticsClient)
 	analyticsHandler := handler.NewAnalyticsHandler()
 	umamiHandler := handler.NewUmamiHandler()
 	qrHandler := handler.NewQRHandler(shipmentSvc)
@@ -539,7 +539,7 @@ func main() {
 
 	// Public routes
 	authHandler.RegisterRoutes(api)
-	twoFAHandler.RegisterRoutes(api, middleware.Auth(authRepo)) 
+	twoFAHandler.RegisterRoutes(api, middleware.Auth(authRepo))
 	passwordResetHandler.RegisterRoutes(api)
 	api.POST("/webhooks/mercadopago", paymentHandler.Webhook)
 
@@ -901,7 +901,6 @@ func main() {
 	protected.GET("/analytics/chatbot", analyticsRead, analyticsHandler.GetChatbotStats)
 	protected.GET("/analytics/umami/stats", analyticsRead, umamiHandler.GetStats)
 	protected.GET("/analytics/umami/pageviews", analyticsRead, umamiHandler.GetPageviews)
-	
 
 	// Public tracking — no auth required. Dedicated handlers return a redacted
 	// view (no personal data) and 404 on drafts.

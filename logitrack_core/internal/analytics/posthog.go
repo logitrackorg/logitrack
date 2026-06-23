@@ -9,7 +9,7 @@ import (
 
 // Client es el wrapper del cliente PostHog
 type Client struct {
-	ph     posthog.Client
+	ph      posthog.Client
 	enabled bool
 }
 

@@ -289,19 +289,23 @@ func (r *eventSourcedShipmentRepository) RevertToDraft(cmd RevertToDraftCmd) (mo
 }
 
 func (r *eventSourcedShipmentRepository) RecordPathPlanned(_ PathPlannedCmd) error { return nil }
-func (r *eventSourcedShipmentRepository) SetPalletID(_, _ string) error           { return nil }
+func (r *eventSourcedShipmentRepository) SetPalletID(_, _ string) error            { return nil }
 func (r *eventSourcedShipmentRepository) ReserveForTrip(trackingID, tripID string) error {
 	return r.projection.ReserveForTrip(trackingID, tripID)
 }
+
 func (r *eventSourcedShipmentRepository) ReleaseFromTrip(trackingID string) error {
 	return r.projection.ReleaseFromTrip(trackingID)
 }
+
 func (r *eventSourcedShipmentRepository) SetSLANotified(trackingID string, notifiedAt *time.Time) error {
 	return r.projection.SetSLANotified(trackingID, notifiedAt)
 }
+
 func (r *eventSourcedShipmentRepository) SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error {
 	return r.projection.SetSLAExpiredNotified(trackingID, notifiedAt)
 }
+
 func (r *eventSourcedShipmentRepository) SetConfirmationEmailSent(trackingID string) (bool, error) {
 	return r.projection.SetConfirmationEmailSent(trackingID)
 }
@@ -477,24 +481,24 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 		}, true
 
 	case model.EventDeliveryRescheduled:
-	payload := de.Payload.(model.DeliveryRescheduledPayload)
-	
-	// ✅ NUEVO: Preparar fecha de reprogramación
-	rescheduledDate := payload.NewDeliveryDate
-	
-	return model.ShipmentEvent{
-		ID:         de.ID,
-		TrackingID: de.TrackingID,
-		EventType:  "rescheduled", // ✅ NUEVO: Especificar tipo
-		ChangedBy:  de.ChangedBy,
-		Notes:      fmt.Sprintf("Entrega reprogramada para el %s", payload.NewDeliveryDate.Format("02/01/2006")),
-		Timestamp:  de.Timestamp,
-		
-		// ✅ NUEVOS CAMPOS
-		CurrentLocation: payload.CurrentLocation,
-		RescheduledDate: &rescheduledDate,
-		Via:             payload.RequestedVia,
-	}, true
+		payload := de.Payload.(model.DeliveryRescheduledPayload)
+
+		// ✅ NUEVO: Preparar fecha de reprogramación
+		rescheduledDate := payload.NewDeliveryDate
+
+		return model.ShipmentEvent{
+			ID:         de.ID,
+			TrackingID: de.TrackingID,
+			EventType:  "rescheduled", // ✅ NUEVO: Especificar tipo
+			ChangedBy:  de.ChangedBy,
+			Notes:      fmt.Sprintf("Entrega reprogramada para el %s", payload.NewDeliveryDate.Format("02/01/2006")),
+			Timestamp:  de.Timestamp,
+
+			// ✅ NUEVOS CAMPOS
+			CurrentLocation: payload.CurrentLocation,
+			RescheduledDate: &rescheduledDate,
+			Via:             payload.RequestedVia,
+		}, true
 
 	case model.EventCancelledByRecipient:
 		payload := de.Payload.(model.CancelledByRecipientPayload)
@@ -605,40 +609,40 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 	if err != nil {
 		return model.Shipment{}, err
 	}
-	
+
 	// Inicializar metadata si no existe
-if shipment.ChatbotMetadata == nil {
-	shipment.InitializeChatbotMetadata()
-}
-
-// ✅ Usar configuración pasada desde el handler
-maxReschedules := cmd.MaxReschedules
-maxRescheduleDays := cmd.MaxRescheduleDays
-
-// Validar que se puede reprogramar
-canReschedule, reason := shipment.CanReschedule(maxReschedules)
-if !canReschedule {
-	return model.Shipment{}, errors.New(reason)
-}
-
-// Validar que la fecha está dentro del rango permitido
-availableDates := shipment.GetAvailableRescheduleDates(maxRescheduleDays)
-validDate := false
-for _, date := range availableDates {
-	if date.Truncate(24*time.Hour).Equal(cmd.NewDeliveryDate.Truncate(24*time.Hour)) {
-		validDate = true
-		break
+	if shipment.ChatbotMetadata == nil {
+		shipment.InitializeChatbotMetadata()
 	}
-}
-if !validDate {
-	return model.Shipment{}, fmt.Errorf("la fecha seleccionada no está disponible")
-}
 
-// Calcular días desde la fecha original
-daysFromOriginal := 0
-if shipment.ChatbotMetadata.OriginalDeliveryDate != nil {
-	daysFromOriginal = int(cmd.NewDeliveryDate.Sub(*shipment.ChatbotMetadata.OriginalDeliveryDate).Hours() / 24)
-}
+	// ✅ Usar configuración pasada desde el handler
+	maxReschedules := cmd.MaxReschedules
+	maxRescheduleDays := cmd.MaxRescheduleDays
+
+	// Validar que se puede reprogramar
+	canReschedule, reason := shipment.CanReschedule(maxReschedules)
+	if !canReschedule {
+		return model.Shipment{}, errors.New(reason)
+	}
+
+	// Validar que la fecha está dentro del rango permitido
+	availableDates := shipment.GetAvailableRescheduleDates(maxRescheduleDays)
+	validDate := false
+	for _, date := range availableDates {
+		if date.Truncate(24 * time.Hour).Equal(cmd.NewDeliveryDate.Truncate(24 * time.Hour)) {
+			validDate = true
+			break
+		}
+	}
+	if !validDate {
+		return model.Shipment{}, fmt.Errorf("la fecha seleccionada no está disponible")
+	}
+
+	// Calcular días desde la fecha original
+	daysFromOriginal := 0
+	if shipment.ChatbotMetadata.OriginalDeliveryDate != nil {
+		daysFromOriginal = int(cmd.NewDeliveryDate.Sub(*shipment.ChatbotMetadata.OriginalDeliveryDate).Hours() / 24)
+	}
 	/*// Validar que se puede reprogramar
 	canReschedule, reason := shipment.CanReschedule()
 	if !canReschedule {
@@ -681,7 +685,7 @@ if shipment.ChatbotMetadata.OriginalDeliveryDate != nil {
 			DaysFromOriginal: daysFromOriginal,
 			RequestedVia:     "chatbot",
 			// ✅ NUEVO: Agregar ubicación actual
-			CurrentLocation:  currentLocation,
+			CurrentLocation: currentLocation,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
@@ -827,7 +831,6 @@ func claimTypeLabel(ct model.ClaimType) string {
 		return string(ct)
 	}
 }
-
 
 func paymentMethodLabel(m model.PaymentMethod) string {
 	switch m {

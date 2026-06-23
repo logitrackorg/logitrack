@@ -29,20 +29,20 @@ import (
 // En D=0 los source providers leen los repositorios vivos. En D>0 leen del
 // projectionState, permitiendo simular sin mutar nada real.
 type planContext struct {
-	branchID   string
-	forGlobal  bool
-	existing   *model.GlobalRoutingPlan // contexto cross-branch (como hoy)
+	branchID  string
+	forGlobal bool
+	existing  *model.GlobalRoutingPlan // contexto cross-branch (como hoy)
 
 	// Posición en el horizonte.
-	day      int             // 0=hoy, 1=mañana, 2=pasado
-	planDate model.DateOnly  // fecha del día simulado
-	now      time.Time       // base temporal del día
+	day      int            // 0=hoy, 1=mañana, 2=pasado
+	planDate model.DateOnly // fecha del día simulado
+	now      time.Time      // base temporal del día
 
 	// Fuentes inyectables de vehículos y envíos.
-	vehicleSource  func(branchID string, mode model.VehicleMode) ([]model.Vehicle, map[string]float64)
+	vehicleSource    func(branchID string, mode model.VehicleMode) ([]model.Vehicle, map[string]float64)
 	allVehicleSource func(branchID string) ([]model.Vehicle, map[string]float64)
-	shipmentSource func(branchID string) []model.Shipment
-	hubInventory   func() map[string][]model.Shipment // para cross-branch pickups
+	shipmentSource   func(branchID string) []model.Shipment
+	hubInventory     func() map[string][]model.Shipment // para cross-branch pickups
 
 	// runSLARisk=true solo en D=0 (evita notificaciones falsas en días proyectados).
 	runSLARisk bool
@@ -53,12 +53,12 @@ func (s *RoutingService) liveContext(branchID string, forGlobal bool, existing *
 	now := clock.Now().UTC()
 	planDate := model.NewDateOnly(now.In(clock.LocalTZ))
 	return &planContext{
-		branchID:   branchID,
-		forGlobal:  forGlobal,
-		existing:   existing,
-		day:        0,
-		planDate:   planDate,
-		now:        now,
+		branchID:         branchID,
+		forGlobal:        forGlobal,
+		existing:         existing,
+		day:              0,
+		planDate:         planDate,
+		now:              now,
 		vehicleSource:    s.filterAvailableVehiclesForMode,
 		allVehicleSource: s.filterAvailableVehicles,
 		shipmentSource: func(b string) []model.Shipment {
@@ -90,8 +90,8 @@ type projectedShipment struct {
 }
 
 type projectionState struct {
-	fleet     map[string]*projectedVehicle   // vehicleID → disponibilidad proyectada
-	shipments map[string]*projectedShipment  // trackingID → ubicación/readiness proyectada
+	fleet     map[string]*projectedVehicle  // vehicleID → disponibilidad proyectada
+	shipments map[string]*projectedShipment // trackingID → ubicación/readiness proyectada
 }
 
 // availableVehicles devuelve los vehículos del estado proyectado disponibles en

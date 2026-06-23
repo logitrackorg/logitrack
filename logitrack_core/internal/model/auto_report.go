@@ -15,15 +15,15 @@ const (
 type ReportMetric string
 
 const (
-	MetricResumen           ReportMetric = "resumen"
-	MetricTipoEnvio         ReportMetric = "tipo_envio"
-	MetricMetodoEntrega     ReportMetric = "metodo_entrega"
-	MetricVolumenVentana    ReportMetric = "volumen_ventana"
-	MetricTasaExito         ReportMetric = "tasa_exito"
-	MetricChoferes          ReportMetric = "choferes"
-	MetricFacturacion       ReportMetric = "facturacion"
-	MetricRanking           ReportMetric = "ranking"
-	MetricRetorno           ReportMetric = "retorno"
+	MetricResumen        ReportMetric = "resumen"
+	MetricTipoEnvio      ReportMetric = "tipo_envio"
+	MetricMetodoEntrega  ReportMetric = "metodo_entrega"
+	MetricVolumenVentana ReportMetric = "volumen_ventana"
+	MetricTasaExito      ReportMetric = "tasa_exito"
+	MetricChoferes       ReportMetric = "choferes"
+	MetricFacturacion    ReportMetric = "facturacion"
+	MetricRanking        ReportMetric = "ranking"
+	MetricRetorno        ReportMetric = "retorno"
 )
 
 // AutoReportSchedule es la configuración persistida de un reporte automático.
@@ -40,26 +40,26 @@ type AutoReportSchedule struct {
 	DayOfMonth *int           `json:"day_of_month,omitempty"`
 	Metrics    []ReportMetric `json:"metrics"`
 	// BranchID vacío = todas las sucursales (manager scope).
-	BranchID  string `json:"branch_id"`
-	Email     string `json:"email"`
-	Active    bool   `json:"active"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	BranchID  string     `json:"branch_id"`
+	Email     string     `json:"email"`
+	Active    bool       `json:"active"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 	LastRunAt *time.Time `json:"last_run_at,omitempty"`
 }
 
 // GeneratedReport es el snapshot ejecutado para un schedule en un momento dado.
 type GeneratedReport struct {
-	ID          string          `json:"id"`
-	ScheduleID  string          `json:"schedule_id"`
-	ScheduleName string         `json:"schedule_name"`
-	Frequency   ReportFrequency `json:"frequency"`
-	PeriodFrom  time.Time       `json:"period_from"`
-	PeriodTo    time.Time       `json:"period_to"`
-	BranchID    string          `json:"branch_id"`
-	Email       string          `json:"email"`
-	GeneratedAt time.Time       `json:"generated_at"`
-	HasData     bool            `json:"has_data"`
+	ID           string          `json:"id"`
+	ScheduleID   string          `json:"schedule_id"`
+	ScheduleName string          `json:"schedule_name"`
+	Frequency    ReportFrequency `json:"frequency"`
+	PeriodFrom   time.Time       `json:"period_from"`
+	PeriodTo     time.Time       `json:"period_to"`
+	BranchID     string          `json:"branch_id"`
+	Email        string          `json:"email"`
+	GeneratedAt  time.Time       `json:"generated_at"`
+	HasData      bool            `json:"has_data"`
 	// Snapshot guarda los KPIs serializados en JSON. Las llaves dependen de las métricas configuradas.
 	Snapshot map[string]any `json:"snapshot"`
 }

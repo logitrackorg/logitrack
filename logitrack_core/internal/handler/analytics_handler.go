@@ -126,10 +126,6 @@ func (h *AnalyticsHandler) GetChatbotStats(c *gin.Context) {
 	authEvents, _ := fetchAllEvents("chatbot_authenticated", since)
 	stats.TotalAuth = len(authEvents)
 
-	// ── Reclamos enviados ────────────────────────────────────
-	claimEvents, _ := fetchAllEvents("chatbot_claim_submitted", since)
-	stats.TotalClaims = len(claimEvents)
-
 	// ── Opciones más usadas ──────────────────────────────────
 	actionEvents, _ := fetchAllEvents("chatbot_option_selected", since)
 	for _, ev := range actionEvents {
@@ -152,6 +148,9 @@ func (h *AnalyticsHandler) GetChatbotStats(c *gin.Context) {
 		if ct, ok := props["claim_type"].(string); ok {
 			stats.ClaimTypes[ct]++
 		}
+	}
+	for _, count := range stats.ClaimTypes {
+		stats.TotalClaims += count
 	}
 
 	c.JSON(http.StatusOK, stats)

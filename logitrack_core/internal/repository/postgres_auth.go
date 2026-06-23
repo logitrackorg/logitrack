@@ -35,9 +35,9 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 
 	type seedUser struct {
 		id, username, password, role, branchID string
-		firstName, lastName, email, phone       string
-		street, city, province, postalCode      string
-		driverType                              string
+		firstName, lastName, email, phone      string
+		street, city, province, postalCode     string
+		driverType                             string
 	}
 	seed := []seedUser{
 		{"1", "op_caba", "op_caba123", "operator", "caba", "Lionel", "Messi", "lionel.messi@logitrack.com", "", "Av. Corrientes 1234", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1043", ""},

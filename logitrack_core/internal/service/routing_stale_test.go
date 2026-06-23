@@ -17,36 +17,47 @@ type fakeShipmentRepo struct {
 func (f *fakeShipmentRepo) Create(cmd repository.CreateShipmentCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) SaveDraft(cmd repository.SaveDraftCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) UpdateDraft(cmd repository.UpdateDraftCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) ConfirmDraft(cmd repository.ConfirmDraftCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) UpdateStatus(cmd repository.StatusUpdateCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) ApplyCorrections(cmd repository.CorrectCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) CancelShipment(cmd repository.CancelCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) ExtendETA(cmd repository.ExtendETACmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) RequestPayment(cmd repository.RequestPaymentCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) ConfirmPayment(cmd repository.ConfirmPaymentCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) RevertToDraft(cmd repository.RevertToDraftCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) RecordPathPlanned(cmd repository.PathPlannedCmd) error {
 	f.recordedPaths = append(f.recordedPaths, cmd)
 	return nil
@@ -62,6 +73,7 @@ func (f *fakeShipmentRepo) GetByTrackingID(id string) (model.Shipment, error) {
 	}
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) List(filter model.ShipmentFilter) ([]model.Shipment, error) {
 	return f.shipments, nil
 }
@@ -69,9 +81,11 @@ func (f *fakeShipmentRepo) Search(q string) ([]model.Shipment, error) { return n
 func (f *fakeShipmentRepo) GetEvents(id string) ([]model.ShipmentEvent, error) {
 	return nil, nil
 }
+
 func (f *fakeShipmentRepo) Stats(f2 model.ShipmentFilter) (model.Stats, error) {
 	return model.Stats{}, nil
 }
+
 func (f *fakeShipmentRepo) SetSLANotified(trackingID string, notifiedAt *time.Time) error {
 	for i := range f.shipments {
 		if f.shipments[i].TrackingID == trackingID {
@@ -81,6 +95,7 @@ func (f *fakeShipmentRepo) SetSLANotified(trackingID string, notifiedAt *time.Ti
 	}
 	return nil
 }
+
 func (f *fakeShipmentRepo) SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error {
 	for i := range f.shipments {
 		if f.shipments[i].TrackingID == trackingID {
@@ -90,33 +105,43 @@ func (f *fakeShipmentRepo) SetSLAExpiredNotified(trackingID string, notifiedAt *
 	}
 	return nil
 }
+
 func (f *fakeShipmentRepo) AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error) {
 	return model.AvgTimePerStatus{}, nil
 }
+
 func (f *fakeShipmentRepo) CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error) {
 	return model.CancellationStats{}, nil
 }
+
 func (f *fakeShipmentRepo) StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error) {
 	return nil, nil
 }
+
 func (f *fakeShipmentRepo) SetConfirmationEmailSent(trackingID string) (bool, error) {
 	return true, nil
 }
+
 func (f *fakeShipmentRepo) AuthenticateRecipient(cmd repository.AuthenticateRecipientCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) RequestPickup(cmd repository.RequestPickupCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) RescheduleDelivery(cmd repository.RescheduleDeliveryCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) CancelByRecipient(cmd repository.CancelByRecipientCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) AuthenticateSender(cmd repository.AuthenticateSenderCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (f *fakeShipmentRepo) CancelBySender(cmd repository.CancelBySenderCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }

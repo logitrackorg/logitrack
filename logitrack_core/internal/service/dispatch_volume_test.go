@@ -114,7 +114,7 @@ func indexByte(s string, b byte) int {
 
 // fakeNotifRepo implementa repository.NotificationRepository mínima para tests.
 type fakeNotifRepo struct {
-	mu    sync.Mutex
+	mu     sync.Mutex
 	notifs []model.Notification
 	users  []model.User
 }
@@ -125,18 +125,21 @@ func (r *fakeNotifRepo) Create(n model.Notification) error {
 	r.notifs = append(r.notifs, n)
 	return nil
 }
+
 func (r *fakeNotifRepo) ListByUser(_ string, _ repository.NotificationFilters) ([]model.Notification, int, error) {
 	return nil, 0, nil
 }
-func (r *fakeNotifRepo) UnreadCount(_ string) (int, error)    { return 0, nil }
-func (r *fakeNotifRepo) MarkRead(_, _ string) error           { return nil }
-func (r *fakeNotifRepo) MarkAllRead(_ string) error           { return nil }
+func (r *fakeNotifRepo) UnreadCount(_ string) (int, error) { return 0, nil }
+func (r *fakeNotifRepo) MarkRead(_, _ string) error        { return nil }
+func (r *fakeNotifRepo) MarkAllRead(_ string) error        { return nil }
 func (r *fakeNotifRepo) ExistsRecent(_ model.NotificationType, _ string, _ time.Time) (bool, error) {
 	return false, nil
 }
+
 func (r *fakeNotifRepo) ExistsForUser(_ model.NotificationType, _, _ string, _ time.Time) (bool, error) {
 	return false, nil
 }
+
 func (r *fakeNotifRepo) GetUsersByBranchAndRoles(branchID string, _ []model.Role) ([]model.User, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -220,70 +223,88 @@ func (r *fakeDispatchShipmentRepo) List(filter model.ShipmentFilter) ([]model.Sh
 func (r *fakeDispatchShipmentRepo) Create(_ repository.CreateShipmentCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) SaveDraft(_ repository.SaveDraftCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) UpdateDraft(_ repository.UpdateDraftCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) ConfirmDraft(_ repository.ConfirmDraftCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) UpdateStatus(_ repository.StatusUpdateCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) ApplyCorrections(_ repository.CorrectCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) CancelShipment(_ repository.CancelCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) ExtendETA(_ repository.ExtendETACmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) RequestPayment(_ repository.RequestPaymentCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) ConfirmPayment(_ repository.ConfirmPaymentCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) RevertToDraft(_ repository.RevertToDraftCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
-func (r *fakeDispatchShipmentRepo) RecordPathPlanned(_ repository.PathPlannedCmd) error      { return nil }
-func (r *fakeDispatchShipmentRepo) SetPalletID(_, _ string) error                            { return nil }
-func (r *fakeDispatchShipmentRepo) ReserveForTrip(_, _ string) error                         { return nil }
-func (r *fakeDispatchShipmentRepo) ReleaseFromTrip(_ string) error                           { return nil }
-func (r *fakeDispatchShipmentRepo) SetSLANotified(_ string, _ *time.Time) error              { return nil }
-func (r *fakeDispatchShipmentRepo) SetSLAExpiredNotified(_ string, _ *time.Time) error       { return nil }
+func (r *fakeDispatchShipmentRepo) RecordPathPlanned(_ repository.PathPlannedCmd) error { return nil }
+func (r *fakeDispatchShipmentRepo) SetPalletID(_, _ string) error                       { return nil }
+func (r *fakeDispatchShipmentRepo) ReserveForTrip(_, _ string) error                    { return nil }
+func (r *fakeDispatchShipmentRepo) ReleaseFromTrip(_ string) error                      { return nil }
+func (r *fakeDispatchShipmentRepo) SetSLANotified(_ string, _ *time.Time) error         { return nil }
+func (r *fakeDispatchShipmentRepo) SetSLAExpiredNotified(_ string, _ *time.Time) error  { return nil }
 func (r *fakeDispatchShipmentRepo) AvgTimePerStatus(_, _ *time.Time) (model.AvgTimePerStatus, error) {
 	return model.AvgTimePerStatus{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) CancellationStats(_, _ *time.Time, _ string) (model.CancellationStats, error) {
 	return model.CancellationStats{}, nil
 }
-func (r *fakeDispatchShipmentRepo) SetConfirmationEmailSent(_ string) (bool, error)          { return true, nil }
+func (r *fakeDispatchShipmentRepo) SetConfirmationEmailSent(_ string) (bool, error) { return true, nil }
 func (r *fakeDispatchShipmentRepo) AuthenticateRecipient(_ repository.AuthenticateRecipientCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) RequestPickup(_ repository.RequestPickupCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) RescheduleDelivery(_ repository.RescheduleDeliveryCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) CancelByRecipient(_ repository.CancelByRecipientCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) AuthenticateSender(_ repository.AuthenticateSenderCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) CancelBySender(_ repository.CancelBySenderCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+
 func (r *fakeDispatchShipmentRepo) RecordKeywordFailed(trackingID, changedBy string) error {
 	return nil
 }
+
 func (r *fakeDispatchShipmentRepo) GetByTrackingID(_ string) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
@@ -291,7 +312,9 @@ func (r *fakeDispatchShipmentRepo) Search(_ string) ([]model.Shipment, error) { 
 func (r *fakeDispatchShipmentRepo) GetEvents(_ string) ([]model.ShipmentEvent, error) {
 	return nil, nil
 }
-func (r *fakeDispatchShipmentRepo) Stats(_ model.ShipmentFilter) (model.Stats, error) { return model.Stats{}, nil }
+func (r *fakeDispatchShipmentRepo) Stats(_ model.ShipmentFilter) (model.Stats, error) {
+	return model.Stats{}, nil
+}
 func (r *fakeDispatchShipmentRepo) StatsDetail(_ string, _ *time.Time, _ *time.Time) (map[string]int, error) {
 	return nil, nil
 }
@@ -651,6 +674,7 @@ func (f *fakeDispatchVolumeNotifier) Check(branchID string) {
 		f.checkFn(branchID)
 	}
 }
+
 func (f *fakeDispatchVolumeNotifier) CheckAfterDispatch(branchID string) {
 	if f.checkFn != nil {
 		f.checkFn(branchID)

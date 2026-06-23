@@ -262,7 +262,6 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 		}
 	}
 
-
 	claimID, err := s.claimRepo.NextID()
 	if err != nil {
 		return model.Claim{}, err

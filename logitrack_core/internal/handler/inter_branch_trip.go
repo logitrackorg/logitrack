@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	qrcode "github.com/skip2/go-qrcode"
 	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/service"
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 type InterBranchTripHandler struct {
@@ -119,7 +119,7 @@ func (h *InterBranchTripHandler) GetTripQR(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"trip_id":       trip.ID,
+		"trip_id":        trip.ID,
 		"qr_code_base64": base64.StdEncoding.EncodeToString(qrPNG),
 	})
 }

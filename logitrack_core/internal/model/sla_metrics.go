@@ -4,11 +4,11 @@ package model
 type FleetStatus string
 
 const (
-	FleetStatusCritical    FleetStatus = "CRÍTICO"
-	FleetStatusWarning     FleetStatus = "ADVERTENCIA"
-	FleetStatusPreventive  FleetStatus = "PREVENTIVO"
-	FleetStatusIdle        FleetStatus = "OCIOSO"
-	FleetStatusStable      FleetStatus = "ESTABLE"
+	FleetStatusCritical   FleetStatus = "CRÍTICO"
+	FleetStatusWarning    FleetStatus = "ADVERTENCIA"
+	FleetStatusPreventive FleetStatus = "PREVENTIVO"
+	FleetStatusIdle       FleetStatus = "OCIOSO"
+	FleetStatusStable     FleetStatus = "ESTABLE"
 )
 
 // FleetRawMetrics holds the raw operational numbers used by both engines.
@@ -119,6 +119,6 @@ type SLABottleneck struct {
 
 // SLADayCount holds the number of SLA escalation events for one calendar day.
 type SLADayCount struct {
-	Date  string `json:"date"`  // YYYY-MM-DD
+	Date  string `json:"date"` // YYYY-MM-DD
 	Count int    `json:"count"`
 }

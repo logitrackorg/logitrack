@@ -1,15 +1,15 @@
 package model
 
 type Stats struct {
-	Total              int                   `json:"total"`
-	ByStatus           map[Status]int        `json:"by_status"`
-	ByBranch           map[string]int        `json:"by_branch"`            // branch ID → shipment count (excludes delivered/returned)
-	ByDay              map[string]int        `json:"by_day"`               // YYYY-MM-DD → shipments created that day (within requested range)
-	ByDayDelivered     map[string]int        `json:"by_day_delivered"`     // YYYY-MM-DD → shipments delivered that day (within requested range)
-	AvgCycleTimeHours  *float64              `json:"avg_cycle_time_hours"` // tiempo promedio desde creación hasta entrega (en horas), null si no hay entregados
-	SuccessRate        *float64              `json:"success_rate"`         // porcentaje de entregas exitosas sobre el total (0–100), null si total=0
-	OpenIncidents      int                   `json:"open_incidents"`       // cantidad de envíos con has_incident=true
-	RecentShipments    []Shipment            `json:"recent_shipments"`     // últimos 5 envíos creados (no borradores)
+	Total             int            `json:"total"`
+	ByStatus          map[Status]int `json:"by_status"`
+	ByBranch          map[string]int `json:"by_branch"`            // branch ID → shipment count (excludes delivered/returned)
+	ByDay             map[string]int `json:"by_day"`               // YYYY-MM-DD → shipments created that day (within requested range)
+	ByDayDelivered    map[string]int `json:"by_day_delivered"`     // YYYY-MM-DD → shipments delivered that day (within requested range)
+	AvgCycleTimeHours *float64       `json:"avg_cycle_time_hours"` // tiempo promedio desde creación hasta entrega (en horas), null si no hay entregados
+	SuccessRate       *float64       `json:"success_rate"`         // porcentaje de entregas exitosas sobre el total (0–100), null si total=0
+	OpenIncidents     int            `json:"open_incidents"`       // cantidad de envíos con has_incident=true
+	RecentShipments   []Shipment     `json:"recent_shipments"`     // últimos 5 envíos creados (no borradores)
 }
 
 // StatsDetailItem is a row in the KPI drill-down detail by branch.
@@ -31,10 +31,10 @@ type AvgTimePerStatus []AvgTimePerStatusItem
 
 // CancellationStats represents cancellations grouped by day and reason.
 type CancellationStats struct {
-	ByDay            map[string]int `json:"by_day"`             // YYYY-MM-DD → cancellation count
-	Total            int            `json:"total"`              // total cancellations in range
-	TopReason        string         `json:"top_reason"`         // most frequent reason overall
-	ReasonsBreakdown map[string]int `json:"reasons_breakdown"`  // reason → count
+	ByDay            map[string]int `json:"by_day"`            // YYYY-MM-DD → cancellation count
+	Total            int            `json:"total"`             // total cancellations in range
+	TopReason        string         `json:"top_reason"`        // most frequent reason overall
+	ReasonsBreakdown map[string]int `json:"reasons_breakdown"` // reason → count
 }
 
 // PublicStats is a redacted, auth-free snapshot used by the login screen.
@@ -62,10 +62,10 @@ type DriverPerformanceResponse struct {
 }
 
 type IncidentsByBranchItem struct {
-	BranchID  string         `json:"branch_id"`
-	BranchName string        `json:"branch_name"`
-	Total     int            `json:"total"`
-	ByType    map[string]int `json:"by_type"`
+	BranchID   string         `json:"branch_id"`
+	BranchName string         `json:"branch_name"`
+	Total      int            `json:"total"`
+	ByType     map[string]int `json:"by_type"`
 }
 
 type IncidentsByBranchResponse struct {
@@ -75,9 +75,9 @@ type IncidentsByBranchResponse struct {
 }
 
 type BranchBilling struct {
-	Revenue    float64 `json:"revenue"`
-	Count      int     `json:"count"`
-	AvgTicket  float64 `json:"avg_ticket"`
+	Revenue   float64 `json:"revenue"`
+	Count     int     `json:"count"`
+	AvgTicket float64 `json:"avg_ticket"`
 }
 
 type BillingMetricsResponse struct {
@@ -90,13 +90,13 @@ type BillingMetricsResponse struct {
 }
 
 type BranchRankingItem struct {
-	Rank           int     `json:"rank"`
-	BranchID       string  `json:"branch_id"`
-	BranchName     string  `json:"branch_name"`
-	VolumeConfirmed int    `json:"volume_confirmed"`
-	Delivered      int     `json:"delivered"`
-	SuccessRate    *float64 `json:"success_rate"`
-	CompositeScore float64 `json:"composite_score"`
+	Rank            int      `json:"rank"`
+	BranchID        string   `json:"branch_id"`
+	BranchName      string   `json:"branch_name"`
+	VolumeConfirmed int      `json:"volume_confirmed"`
+	Delivered       int      `json:"delivered"`
+	SuccessRate     *float64 `json:"success_rate"`
+	CompositeScore  float64  `json:"composite_score"`
 }
 
 type BranchRankingResponse struct {
@@ -144,12 +144,12 @@ type ReturnBranchMetrics struct {
 }
 
 type ReturnMetricsResponse struct {
-	TotalReturned       int                       `json:"total_returned"`
-	TotalReadyForReturn int                       `json:"total_ready_for_return"`
-	TotalReturnEligible int                       `json:"total_return_eligible"`
-	ReturnRate          *float64                  `json:"return_rate"`
+	TotalReturned       int                            `json:"total_returned"`
+	TotalReadyForReturn int                            `json:"total_ready_for_return"`
+	TotalReturnEligible int                            `json:"total_return_eligible"`
+	ReturnRate          *float64                       `json:"return_rate"`
 	ByBranch            map[string]ReturnBranchMetrics `json:"by_branch"`
-	ByDay               map[string]int            `json:"by_day"`
+	ByDay               map[string]int                 `json:"by_day"`
 }
 
 type SuccessRateByBranchItem struct {
@@ -180,16 +180,16 @@ type ClaimTrendPoint struct {
 }
 
 type ClaimStatsResponse struct {
-	Total              int            `json:"total"`
-	Open               int            `json:"open"`
-	Resolved           int            `json:"resolved"`
-	Escalated          int            `json:"escalated"`
-	ByStatus           map[string]int `json:"by_status"`
-	ByPriority         map[string]int `json:"by_priority"`
-	ByType             map[string]int `json:"by_type"`
-	ByCategory         map[string]int `json:"by_category"`
-	ByResolution       map[string]int `json:"by_resolution"`
-	AvgResolutionHours *float64       `json:"avg_resolution_hours"`
+	Total              int               `json:"total"`
+	Open               int               `json:"open"`
+	Resolved           int               `json:"resolved"`
+	Escalated          int               `json:"escalated"`
+	ByStatus           map[string]int    `json:"by_status"`
+	ByPriority         map[string]int    `json:"by_priority"`
+	ByType             map[string]int    `json:"by_type"`
+	ByCategory         map[string]int    `json:"by_category"`
+	ByResolution       map[string]int    `json:"by_resolution"`
+	AvgResolutionHours *float64          `json:"avg_resolution_hours"`
 	ByBranch           []ClaimBranchStat `json:"by_branch"`
 	Trend              []ClaimTrendPoint `json:"trend"`
 }

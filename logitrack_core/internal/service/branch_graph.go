@@ -17,7 +17,7 @@ import (
 // ShortestPath usa Dijkstra sobre DistanceKm. En el futuro puede configurarse
 // para usar AvgTransitHours como peso (para optimizar tiempo en lugar de distancia).
 type BranchGraphService struct {
-	repo      repository.BranchGraphRepository
+	repo       repository.BranchGraphRepository
 	branchRepo repository.BranchRepository
 }
 
@@ -222,6 +222,7 @@ func (s *BranchGraphService) CreateEdge(edge model.BranchEdge) error {
 //   - alguna de las branches no existe
 //   - la distancia computada es 0 (coords iguales o provincia desconocida que
 //     cae al fallback de CABA en ambas branches)
+//
 // El caller debe descartar las aristas con ok=false: distancia 0 sería preferida
 // por Dijkstra sobre cualquier otra ruta y rompería el grafo silenciosamente.
 func (s *BranchGraphService) computeDistance(fromID, toID string) (float64, bool) {

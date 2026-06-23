@@ -41,16 +41,22 @@ func (r *resetFakeAuthRepo) UpdatePassword(userID, hashedPassword string) error 
 }
 
 // unused interface methods
-func (r *resetFakeAuthRepo) FindUser(_, _ string) (model.User, error)                         { return model.User{}, errors.New("not implemented") }
-func (r *resetFakeAuthRepo) SaveToken(_ string, _ model.User)                                 {}
-func (r *resetFakeAuthRepo) GetUserByToken(_ string) (model.User, error)                      { return model.User{}, nil }
-func (r *resetFakeAuthRepo) DeleteToken(_ string)                                             {}
-func (r *resetFakeAuthRepo) ListByRole(_ model.Role, _ string) []model.User                   { return nil }
-func (r *resetFakeAuthRepo) ListAll() []model.User                                            { return nil }
-func (r *resetFakeAuthRepo) GetUserByID(_ string) (model.User, error)                         { return model.User{}, nil }
-func (r *resetFakeAuthRepo) UpdateUser(_ string, _ repository.UserUpdate) (model.User, error) { return model.User{}, nil }
-func (r *resetFakeAuthRepo) CreateUser(_ repository.UserCreate) (model.User, error)           { return model.User{}, nil }
-func (r *resetFakeAuthRepo) ChangePassword(_ context.Context, _, _, _ string) error           { return nil }
+func (r *resetFakeAuthRepo) FindUser(_, _ string) (model.User, error) {
+	return model.User{}, errors.New("not implemented")
+}
+func (r *resetFakeAuthRepo) SaveToken(_ string, _ model.User)               {}
+func (r *resetFakeAuthRepo) GetUserByToken(_ string) (model.User, error)    { return model.User{}, nil }
+func (r *resetFakeAuthRepo) DeleteToken(_ string)                           {}
+func (r *resetFakeAuthRepo) ListByRole(_ model.Role, _ string) []model.User { return nil }
+func (r *resetFakeAuthRepo) ListAll() []model.User                          { return nil }
+func (r *resetFakeAuthRepo) GetUserByID(_ string) (model.User, error)       { return model.User{}, nil }
+func (r *resetFakeAuthRepo) UpdateUser(_ string, _ repository.UserUpdate) (model.User, error) {
+	return model.User{}, nil
+}
+func (r *resetFakeAuthRepo) CreateUser(_ repository.UserCreate) (model.User, error) {
+	return model.User{}, nil
+}
+func (r *resetFakeAuthRepo) ChangePassword(_ context.Context, _, _, _ string) error { return nil }
 
 type fakeResetRepo struct {
 	mu     sync.Mutex

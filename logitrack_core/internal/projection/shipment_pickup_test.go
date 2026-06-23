@@ -9,13 +9,13 @@ import (
 
 func newTestShipment(trackingID string) model.Shipment {
 	return model.Shipment{
-		TrackingID:     trackingID,
-		Status:         model.StatusAtOriginHub,
-		DeliveryMethod: model.DeliveryMethodLastMile,
+		TrackingID:      trackingID,
+		Status:          model.StatusAtOriginHub,
+		DeliveryMethod:  model.DeliveryMethodLastMile,
 		CurrentLocation: "caba",
-		OriginBranchID: "caba",
-		FinalBranchID:  "cordoba",
-		UpdatedAt:      time.Now(),
+		OriginBranchID:  "caba",
+		FinalBranchID:   "cordoba",
+		UpdatedAt:       time.Now(),
 	}
 }
 

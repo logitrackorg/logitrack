@@ -6,8 +6,10 @@ import (
 	"github.com/logitrack/core/internal/model"
 )
 
-var ErrDuplicateBranchName = errors.New("duplicate branch name")
-var ErrDuplicateBranchID = errors.New("duplicate branch id")
+var (
+	ErrDuplicateBranchName = errors.New("duplicate branch name")
+	ErrDuplicateBranchID   = errors.New("duplicate branch id")
+)
 
 type BranchRepository interface {
 	List() []model.Branch

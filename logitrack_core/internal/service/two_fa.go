@@ -11,12 +11,12 @@ import (
 	"io"
 	"os"
 	"time"
-	
+
 	"github.com/google/uuid"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"github.com/skip2/go-qrcode"
-	
+
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
@@ -54,17 +54,17 @@ func NewTwoFAService(
 	if issuer == "" {
 		issuer = "LogiTrack"
 	}
-	
+
 	aesKeyStr := os.Getenv("TWO_FA_ENCRYPTION_KEY")
 	if aesKeyStr == "" {
 		panic("TWO_FA_ENCRYPTION_KEY no configurada en .env")
 	}
-	
+
 	aesKey, err := base64.StdEncoding.DecodeString(aesKeyStr)
 	if err != nil || len(aesKey) != 32 {
 		panic("TWO_FA_ENCRYPTION_KEY debe ser base64 de 32 bytes (AES-256)")
 	}
-	
+
 	return &twoFAService{
 		twoFARepo:  twoFARepo,
 		authRepo:   authRepo,
@@ -140,24 +140,24 @@ func (s *twoFAService) GenerateSetup(ctx context.Context, user model.User) (mode
 	if err != nil {
 		return model.TwoFASetupResponse{}, fmt.Errorf("error generando secret: %w", err)
 	}
-	
+
 	// Encriptar secret antes de guardar
 	encryptedSecret, err := s.encrypt(key.Secret())
 	if err != nil {
 		return model.TwoFASetupResponse{}, err
 	}
-	
+
 	// Guardar en estado pendiente (two_fa_enabled sigue en FALSE)
 	if err := s.twoFARepo.SaveTwoFASecret(ctx, user.ID, encryptedSecret); err != nil {
 		return model.TwoFASetupResponse{}, err
 	}
-	
+
 	// Generar QR como data URL
 	qrCode, err := s.generateQRDataURL(key.URL())
 	if err != nil {
 		return model.TwoFASetupResponse{}, err
 	}
-	
+
 	return model.TwoFASetupResponse{
 		Secret:      key.Secret(), // Mostrar UNA VEZ para backup manual
 		QRCodeURL:   qrCode,
@@ -203,29 +203,29 @@ func (s *twoFAService) Disable(ctx context.Context, userID, password, code strin
 	if err != nil {
 		return err
 	}
-	
+
 	// Validar contraseña actual
 	_, err = s.authRepo.FindUser(user.Username, password)
 	if err != nil {
 		return errors.New("contraseña incorrecta")
 	}
-	
+
 	// Validar código 2FA antes de desactivar
 	encryptedSecret, err := s.twoFARepo.GetTwoFASecret(ctx, userID)
 	if err != nil {
 		return err
 	}
-	
+
 	secret, err := s.decrypt(encryptedSecret)
 	if err != nil {
 		return err
 	}
-	
+
 	valid := totp.Validate(code, secret)
 	if !valid {
 		return errors.New("código de verificación inválido")
 	}
-	
+
 	return s.twoFARepo.DisableTwoFA(ctx, userID)
 }
 
@@ -302,17 +302,17 @@ func (s *twoFAService) encrypt(plaintext string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return "", err
 	}
-	
+
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", err
 	}
-	
+
 	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
@@ -322,28 +322,28 @@ func (s *twoFAService) decrypt(encoded string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	block, err := aes.NewCipher(s.aesKey)
 	if err != nil {
 		return "", err
 	}
-	
+
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return "", err
 	}
-	
+
 	nonceSize := gcm.NonceSize()
 	if len(ciphertext) < nonceSize {
 		return "", errors.New("ciphertext inválido")
 	}
-	
+
 	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
 		return "", err
 	}
-	
+
 	return string(plaintext), nil
 }
 
@@ -352,7 +352,7 @@ func (s *twoFAService) generateQRDataURL(url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	encoded := base64.StdEncoding.EncodeToString(png)
 	return "data:image/png;base64," + encoded, nil
 }

@@ -92,4 +92,3 @@ func PackageSizeFromLegacy(legacy string, weightKg float64) PackageSize {
 		return PackageSizeXL
 	}
 }
-

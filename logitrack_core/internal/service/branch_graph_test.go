@@ -15,6 +15,7 @@ type fakeBranchGraphRepo struct {
 func (f *fakeBranchGraphRepo) ListEdges() ([]model.BranchEdge, error) {
 	return f.edges, nil
 }
+
 func (f *fakeBranchGraphRepo) GetEdge(from, to string) (model.BranchEdge, bool) {
 	for _, e := range f.edges {
 		if e.FromBranchID == from && e.ToBranchID == to {
@@ -23,6 +24,7 @@ func (f *fakeBranchGraphRepo) GetEdge(from, to string) (model.BranchEdge, bool) 
 	}
 	return model.BranchEdge{}, false
 }
+
 func (f *fakeBranchGraphRepo) UpsertEdge(e model.BranchEdge) error {
 	for i, ex := range f.edges {
 		if ex.FromBranchID == e.FromBranchID && ex.ToBranchID == e.ToBranchID {
@@ -33,6 +35,7 @@ func (f *fakeBranchGraphRepo) UpsertEdge(e model.BranchEdge) error {
 	f.edges = append(f.edges, e)
 	return nil
 }
+
 func (f *fakeBranchGraphRepo) SetEnabled(from, to string, enabled bool) error {
 	for i, e := range f.edges {
 		if e.FromBranchID == from && e.ToBranchID == to {
@@ -42,6 +45,7 @@ func (f *fakeBranchGraphRepo) SetEnabled(from, to string, enabled bool) error {
 	}
 	return nil
 }
+
 func (f *fakeBranchGraphRepo) DeriveHopAggregates() ([]model.HopAggregate, error) {
 	return f.hopAggregates, nil
 }
@@ -57,12 +61,12 @@ func (f *fakeBranchRepo) GetByID(id string) (model.Branch, bool) {
 	b, ok := f.branches[id]
 	return b, ok
 }
-func (f *fakeBranchRepo) GetByCity(city string) (model.Branch, bool)     { return model.Branch{}, false }
-func (f *fakeBranchRepo) GetByNameOrID(q string) []model.Branch          { return nil }
-func (f *fakeBranchRepo) Create(b model.Branch) error                     { return nil }
-func (f *fakeBranchRepo) Add(b model.Branch)                              {}
-func (f *fakeBranchRepo) Update(id string, b model.Branch) error          { return nil }
-func (f *fakeBranchRepo) UpdateStatus(id string, s model.BranchStatus, u string) error { return nil }
+func (f *fakeBranchRepo) GetByCity(city string) (model.Branch, bool)                    { return model.Branch{}, false }
+func (f *fakeBranchRepo) GetByNameOrID(q string) []model.Branch                         { return nil }
+func (f *fakeBranchRepo) Create(b model.Branch) error                                   { return nil }
+func (f *fakeBranchRepo) Add(b model.Branch)                                            {}
+func (f *fakeBranchRepo) Update(id string, b model.Branch) error                        { return nil }
+func (f *fakeBranchRepo) UpdateStatus(id string, s model.BranchStatus, u string) error  { return nil }
 func (f *fakeBranchRepo) UpdateEmployeeOfMonth(id string, enabled bool, u string) error { return nil }
 
 func newTestGraphService(edges []model.BranchEdge) *BranchGraphService {

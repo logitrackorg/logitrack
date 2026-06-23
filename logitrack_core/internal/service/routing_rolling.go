@@ -185,4 +185,3 @@ func estimateVehicles(weightKg, avgCapacity float64) int {
 	}
 	return int(n)
 }
-

@@ -37,7 +37,7 @@ func makeProblem(deliveries []Node, drivers []Driver, deliveryX []float64) Probl
 		Drivers:                 drivers,
 		DurationMatrix:          dur,
 		DistanceMatrix:          dist,
-		DepartureMin:            8 * 60,  // 08:00
+		DepartureMin:            8 * 60, // 08:00
 		ServiceTimeMin:          5,
 		DayEndMin:               18 * 60, // 18:00
 		MorningWindowStartMin:   8 * 60,  // 08:00

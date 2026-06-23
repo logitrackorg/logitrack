@@ -117,7 +117,8 @@ func (r *postgresBranchZoneRepository) EnsureZonesForBranch(branchID string) err
 
 func scanBranchZone(s interface {
 	Scan(dest ...interface{}) error
-}) (model.BranchZone, error) {
+},
+) (model.BranchZone, error) {
 	var z model.BranchZone
 	var zoneType string
 	var createdAt, updatedAt time.Time

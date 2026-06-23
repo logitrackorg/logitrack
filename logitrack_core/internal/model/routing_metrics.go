@@ -21,12 +21,12 @@ type PlanMetric struct {
 
 // ApplyMetric registra el resultado de una llamada a ApplyPlan.
 type ApplyMetric struct {
-	ID          string    `json:"id"`
-	BranchID    string    `json:"branch_id"`
-	AppliedAt   time.Time `json:"applied_at"`
-	AppliedBy   string    `json:"applied_by"`
-	AppliedCount int      `json:"applied_count"`
-	FailedCount  int      `json:"failed_count"`
+	ID           string    `json:"id"`
+	BranchID     string    `json:"branch_id"`
+	AppliedAt    time.Time `json:"applied_at"`
+	AppliedBy    string    `json:"applied_by"`
+	AppliedCount int       `json:"applied_count"`
+	FailedCount  int       `json:"failed_count"`
 	// DriftCount es el subconjunto de fallos donde el estado del envío o vehículo
 	// cambió entre la generación del plan y su aplicación.
 	DriftCount int `json:"drift_count"`

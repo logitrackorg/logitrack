@@ -26,15 +26,15 @@ func lessUserID(a, b string) bool {
 
 // EmployeeOfMonthService calculates and persists monthly employee rankings.
 type EmployeeOfMonthService struct {
-	branchRepo   repository.BranchRepository
-	shipmentRepo repository.ShipmentRepository
-	routeRepo    repository.RouteRepository
-	tripRepo     repository.InterBranchTripRepository
-	claimRepo    repository.ClaimRepository
-	authRepo     repository.AuthRepository
-	checkinRepo  *repository.CheckinRepository
+	branchRepo       repository.BranchRepository
+	shipmentRepo     repository.ShipmentRepository
+	routeRepo        repository.RouteRepository
+	tripRepo         repository.InterBranchTripRepository
+	claimRepo        repository.ClaimRepository
+	authRepo         repository.AuthRepository
+	checkinRepo      *repository.CheckinRepository
 	fatigueConfigSvc *FatigueConfigService
-	eomRepo      repository.EmployeeOfMonthRepository
+	eomRepo          repository.EmployeeOfMonthRepository
 }
 
 func NewEmployeeOfMonthService(
@@ -122,12 +122,12 @@ func (s *EmployeeOfMonthService) computeLastMile(branchID string, from, to time.
 	}
 
 	type candidate struct {
-		user          model.User
-		deliveries    int
-		firstAttempt  int
-		onTimeSLA     int
-		complaints    int
-		score         float64
+		user         model.User
+		deliveries   int
+		firstAttempt int
+		onTimeSLA    int
+		complaints   int
+		score        float64
 	}
 
 	var candidates []candidate
@@ -227,11 +227,11 @@ func (s *EmployeeOfMonthService) computeOperator(branchID string, from, to time.
 	}
 
 	type candidate struct {
-		user      model.User
-		total     int
-		delivered int
+		user       model.User
+		total      int
+		delivered  int
 		complaints int
-		score     float64
+		score      float64
 	}
 
 	var candidates []candidate
@@ -314,12 +314,12 @@ func (s *EmployeeOfMonthService) computeInterBranch(enabledBranchIDs map[string]
 	fatigueConfig := s.fatigueConfigSvc.Get()
 
 	type candidate struct {
-		userID   string
-		trips    int
-		onTime   int
+		userID     string
+		trips      int
+		onTime     int
 		fatigueSum float64
 		fatigueN   int
-		score    float64
+		score      float64
 	}
 
 	byDriver := map[string]*candidate{}

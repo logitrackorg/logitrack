@@ -16,11 +16,12 @@ import (
 //   - salida 08:00 (480), dwell inter-sucursal 240 min (4 h)
 //
 // Esperado:
-//   salida           = 480
-//   arribo Córdoba   = 480 + 120          = 600    (PrimaryEstimatedArrivalMin)
-//   + dwell Córdoba  = 600 + 240          = 840    (intermedia: descarga + carga)
-//   arribo Mendoza   = 840 + 180          = 1020   (AdditionalStops[0])
-//   llegada final    = 1020                        (última parada, sin dwell)
+//
+//	salida           = 480
+//	arribo Córdoba   = 480 + 120          = 600    (PrimaryEstimatedArrivalMin)
+//	+ dwell Córdoba  = 600 + 240          = 840    (intermedia: descarga + carga)
+//	arribo Mendoza   = 840 + 180          = 1020   (AdditionalStops[0])
+//	llegada final    = 1020                        (última parada, sin dwell)
 func TestScheduleInterBranch_MultiHopWithTransitHours(t *testing.T) {
 	edges := []model.BranchEdge{
 		{FromBranchID: "caba", ToBranchID: "cordoba", AvgTransitHours: 2, Enabled: true},
