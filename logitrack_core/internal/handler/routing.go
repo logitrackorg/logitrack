@@ -69,9 +69,9 @@ func (h *RoutingHandler) RegenerateGlobal(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"plan_date":  plan.PlanDate,
-		"status":     plan.Status,
-		"log":        plan.Log,
+		"plan_date":    plan.PlanDate,
+		"status":       plan.Status,
+		"log":          plan.Log,
 		"generated_at": plan.GeneratedAt,
 	})
 }

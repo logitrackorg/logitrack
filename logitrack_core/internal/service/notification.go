@@ -845,4 +845,3 @@ func (s *NotificationService) NotifyTripClaimed(tripID, driverUsername string, b
 		}
 	}
 }
-

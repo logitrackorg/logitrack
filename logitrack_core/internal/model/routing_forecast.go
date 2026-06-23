@@ -30,10 +30,10 @@ type ODForecast struct {
 // ForecastQuality es el resultado del backtest del modelo.
 // MAPE (Mean Absolute Percentage Error) es la métrica primaria.
 type ForecastQuality struct {
-	MAPE           float64 `json:"mape"`            // promedio del error porcentual
-	SampleSize     int     `json:"sample_size"`     // # de observaciones evaluadas
+	MAPE           float64 `json:"mape"`        // promedio del error porcentual
+	SampleSize     int     `json:"sample_size"` // # de observaciones evaluadas
 	ODPairsCovered int     `json:"od_pairs_covered"`
-	EvaluatedFrom  string  `json:"evaluated_from"`  // YYYY-MM-DD
+	EvaluatedFrom  string  `json:"evaluated_from"` // YYYY-MM-DD
 	EvaluatedTo    string  `json:"evaluated_to"`
 }
 
@@ -44,20 +44,21 @@ type ForecastQuality struct {
 // RollingHorizonPlan es la vista multi-día del plan de ruteo.
 //   - Día 1 (firm): plan global real, ya generado
 //   - Días 2..N (tentative): proyección basada en forecast + envíos pendientes
+//
 // El operador puede regenerar para refrescar.
 type RollingHorizonPlan struct {
-	GeneratedAt  time.Time          `json:"generated_at"`
-	HorizonDays  int                `json:"horizon_days"`
-	Days         []RollingHorizonDay `json:"days"`
+	GeneratedAt time.Time           `json:"generated_at"`
+	HorizonDays int                 `json:"horizon_days"`
+	Days        []RollingHorizonDay `json:"days"`
 }
 
 // RollingHorizonDay resume el plan para un día específico.
 //   - Day 1 (IsFirm=true): mirror del plan global real
 //   - Days 2..N (IsFirm=false): proyección del forecasting
 type RollingHorizonDay struct {
-	Date           string                    `json:"date"`      // YYYY-MM-DD
-	IsFirm         bool                      `json:"is_firm"`   // día 1 vs tentativo
-	Summary        RollingHorizonDaySummary  `json:"summary"`
+	Date             string                   `json:"date"`    // YYYY-MM-DD
+	IsFirm           bool                     `json:"is_firm"` // día 1 vs tentativo
+	Summary          RollingHorizonDaySummary `json:"summary"`
 	ExpectedByODPair []RollingHorizonODBucket `json:"expected_by_od_pair"`
 }
 

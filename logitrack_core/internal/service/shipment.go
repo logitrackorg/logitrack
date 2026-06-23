@@ -163,14 +163,14 @@ type DeliveryFailedNotifier interface {
 }
 
 type ShipmentService struct {
-	repo         repository.ShipmentRepository
-	branchRepo   repository.BranchRepository
-	customerRepo repository.CustomerRepository
-	commentSvc   *CommentService
-	mlClient     *MLService
-	sysConfig    SystemConfigProvider
-	pricingSvc   *PricingService
-	graphSvc     *BranchGraphService // WIP: multi-hop path recording
+	repo                   repository.ShipmentRepository
+	branchRepo             repository.BranchRepository
+	customerRepo           repository.CustomerRepository
+	commentSvc             *CommentService
+	mlClient               *MLService
+	sysConfig              SystemConfigProvider
+	pricingSvc             *PricingService
+	graphSvc               *BranchGraphService // WIP: multi-hop path recording
 	notifSvc               *NotificationService
 	emailSvc               EmailConfirmationSender
 	whatsappConfirm        ConfirmationWhatsAppSender
@@ -183,17 +183,27 @@ type ShipmentService struct {
 	routeSvc               *RouteService
 }
 
-func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)                   { s.graphSvc = g }
-func (s *ShipmentService) SetNotificationService(svc *NotificationService)                { s.notifSvc = svc }
-func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)                    { s.emailSvc = svc }
-func (s *ShipmentService) SetWhatsAppConfirmationService(svc ConfirmationWhatsAppSender)  { s.whatsappConfirm = svc }
-func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)                 { s.messagingSvc = svc }
-func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifier)       { s.pickupEmailSvc = svc }
-func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotifier)      { s.deliveryNotifSvc = svc }
-func (s *ShipmentService) SetRejectedService(svc RejectedNotifier)                       { s.rejectedNotifSvc = svc }
-func (s *ShipmentService) SetDeliveryFailedService(svc DeliveryFailedNotifier)            { s.deliveryFailedNotifSvc = svc }
-func (s *ShipmentService) SetDispatchVolumeService(svc DispatchVolumeNotifier)            { s.dispatchVolumeSvc = svc }
-func (s *ShipmentService) SetRouteService(svc *RouteService)                              { s.routeSvc = svc }
+func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)     { s.graphSvc = g }
+func (s *ShipmentService) SetNotificationService(svc *NotificationService) { s.notifSvc = svc }
+func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)     { s.emailSvc = svc }
+func (s *ShipmentService) SetWhatsAppConfirmationService(svc ConfirmationWhatsAppSender) {
+	s.whatsappConfirm = svc
+}
+func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier) { s.messagingSvc = svc }
+func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifier) {
+	s.pickupEmailSvc = svc
+}
+func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotifier) {
+	s.deliveryNotifSvc = svc
+}
+func (s *ShipmentService) SetRejectedService(svc RejectedNotifier) { s.rejectedNotifSvc = svc }
+func (s *ShipmentService) SetDeliveryFailedService(svc DeliveryFailedNotifier) {
+	s.deliveryFailedNotifSvc = svc
+}
+func (s *ShipmentService) SetDispatchVolumeService(svc DispatchVolumeNotifier) {
+	s.dispatchVolumeSvc = svc
+}
+func (s *ShipmentService) SetRouteService(svc *RouteService) { s.routeSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
@@ -627,11 +637,11 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 		TimeWindow:          timeWindow,
 		DeliveryMethod:      deliveryMethod,
 		ReceivingBranchID:   req.ReceivingBranchID,
-		OriginBranchID:  req.ReceivingBranchID,
-		Status:          model.StatusDraft,
-		CurrentLocation: currentLocation,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		OriginBranchID:      req.ReceivingBranchID,
+		Status:              model.StatusDraft,
+		CurrentLocation:     currentLocation,
+		CreatedAt:           now,
+		UpdatedAt:           now,
 		// EstimatedDeliveryAt is intentionally left as zero — it will be
 		// calculated with definitive data at the moment of confirmation.
 	}
@@ -1701,8 +1711,8 @@ func generateDraftID() string {
 
 func isValidTransition(from, to model.Status) bool {
 	allowed := map[model.Status][]model.Status{
-		model.StatusDraft:           {}, // draft transitions only via RequestPayment/ConfirmDraft
-		model.StatusPendingPayment:  {}, // transitions only via PaymentService (ConfirmPayment/RevertToDraft)
+		model.StatusDraft:          {}, // draft transitions only via RequestPayment/ConfirmDraft
+		model.StatusPendingPayment: {}, // transitions only via PaymentService (ConfirmPayment/RevertToDraft)
 		model.StatusAtOriginHub: {
 			model.StatusLoaded,
 			model.StatusInTransit, // cross-branch pickup en un trip multi-hop que pasa por el origen

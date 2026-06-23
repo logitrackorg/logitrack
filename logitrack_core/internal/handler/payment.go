@@ -8,18 +8,18 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	qrcode "github.com/skip2/go-qrcode"
 	"github.com/logitrack/core/internal/mercadopago"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/service"
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 type PaymentHandler struct {
-	svc        *service.PaymentService
-	mp         *mercadopago.Client
-	shipSvc    *service.ShipmentService
-	configSvc  *service.PaymentConfigService
+	svc       *service.PaymentService
+	mp        *mercadopago.Client
+	shipSvc   *service.ShipmentService
+	configSvc *service.PaymentConfigService
 }
 
 func NewPaymentHandler(svc *service.PaymentService, mp *mercadopago.Client, shipSvc *service.ShipmentService) *PaymentHandler {

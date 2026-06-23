@@ -12,21 +12,21 @@ type KnownMetric struct {
 // the permission system. IDs match the tab IDs in DashboardHost.tsx.
 // Both the migration seed and the PATCH validator derive the valid set from this slice.
 var AllMetrics = []KnownMetric{
-	{ID: "resumen",        Label: "Resumen"},
-	{ID: "choferes",       Label: "Choferes"},
-	{ID: "reclamos",       Label: "Incidentes"},
-	{ID: "claims",         Label: "Reclamos"},
-	{ID: "facturacion",    Label: "Facturación"},
-	{ID: "ranking",        Label: "Ranking"},
-	{ID: "volumen",        Label: "Vol. por Ventana"},
-	{ID: "tipo-envio",     Label: "Tipo de Envío"},
+	{ID: "resumen", Label: "Resumen"},
+	{ID: "choferes", Label: "Choferes"},
+	{ID: "reclamos", Label: "Incidentes"},
+	{ID: "claims", Label: "Reclamos"},
+	{ID: "facturacion", Label: "Facturación"},
+	{ID: "ranking", Label: "Ranking"},
+	{ID: "volumen", Label: "Vol. por Ventana"},
+	{ID: "tipo-envio", Label: "Tipo de Envío"},
 	{ID: "metodo-entrega", Label: "Método de Entrega"},
-	{ID: "retorno",        Label: "Retorno"},
-	{ID: "exito",          Label: "Tasa de Éxito"},
-	{ID: "fatiga",         Label: "Fatiga"},
-	{ID: "sla",            Label: "SLA"},
-	{ID: "empleado-mes",   Label: "Empleado del Mes"},
-	{ID: "analytics",      Label: "Analytics"},
+	{ID: "retorno", Label: "Retorno"},
+	{ID: "exito", Label: "Tasa de Éxito"},
+	{ID: "fatiga", Label: "Fatiga"},
+	{ID: "sla", Label: "SLA"},
+	{ID: "empleado-mes", Label: "Empleado del Mes"},
+	{ID: "analytics", Label: "Analytics"},
 }
 
 // MetricPermission stores whether a role can see a specific metric.

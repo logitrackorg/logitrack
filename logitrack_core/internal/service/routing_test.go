@@ -19,7 +19,9 @@ type fakeAuthRepo struct {
 	driversByBranch map[string][]model.User
 }
 
-func newFakeAuthRepo() *fakeAuthRepo { return &fakeAuthRepo{driversByBranch: map[string][]model.User{}} }
+func newFakeAuthRepo() *fakeAuthRepo {
+	return &fakeAuthRepo{driversByBranch: map[string][]model.User{}}
+}
 
 func (r *fakeAuthRepo) AddDriver(branchID, id, firstName string) {
 	r.driversByBranch[branchID] = append(r.driversByBranch[branchID], model.User{
@@ -35,7 +37,7 @@ func (r *fakeAuthRepo) ListByRole(role model.Role, branchID string) []model.User
 }
 
 // Stubs for the unused interface methods.
-func (r *fakeAuthRepo) FindUser(_, _ string) (model.User, error)   { return model.User{}, nil }
+func (r *fakeAuthRepo) FindUser(_, _ string) (model.User, error)    { return model.User{}, nil }
 func (r *fakeAuthRepo) SaveToken(_ string, _ model.User)            {}
 func (r *fakeAuthRepo) GetUserByToken(_ string) (model.User, error) { return model.User{}, nil }
 func (r *fakeAuthRepo) DeleteToken(_ string)                        {}
@@ -44,6 +46,7 @@ func (r *fakeAuthRepo) GetUserByID(_ string) (model.User, error)    { return mod
 func (r *fakeAuthRepo) UpdateUser(_ string, _ repository.UserUpdate) (model.User, error) {
 	return model.User{}, nil
 }
+
 func (r *fakeAuthRepo) CreateUser(_ repository.UserCreate) (model.User, error) {
 	return model.User{}, nil
 }
@@ -283,9 +286,9 @@ func TestGeneratePlan_InterBranch_SLA_DespachaAunBajoFillRate(t *testing.T) {
 	}
 	// Bajamos el threshold de prioridad a 0 para que cualquier score dispare la regla.
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
-		SLAForceHorizonHours:    24,
-		PriorityForceThreshold:  0.0, // cualquier score dispara
-		MinFillRate:             0.40,
+		SLAForceHorizonHours:   24,
+		PriorityForceThreshold: 0.0, // cualquier score dispara
+		MinFillRate:            0.40,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -308,9 +311,9 @@ func TestGeneratePlan_InterBranch_BajoFillRate_VaAUnassigned(t *testing.T) {
 	addAvailableVehicle(t, ts, "AB123CD", "br-caba", 1000)
 
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
-		SLAForceHorizonHours:    1,    // SLA muy corto, no fuerza
-		PriorityForceThreshold:  0.99, // imposible de alcanzar
-		MinFillRate:             0.40,
+		SLAForceHorizonHours:   1,    // SLA muy corto, no fuerza
+		PriorityForceThreshold: 0.99, // imposible de alcanzar
+		MinFillRate:            0.40,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -340,9 +343,9 @@ func TestGeneratePlan_InterBranch_EligeMenorVehiculoQueCubre(t *testing.T) {
 	addAvailableVehicle(t, ts, "TRUCK1", "br-caba", 2000)
 
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
-		SLAForceHorizonHours:    1,
-		PriorityForceThreshold:  0.99,
-		MinFillRate:             0.10, // bajo para forzar consolidación
+		SLAForceHorizonHours:   1,
+		PriorityForceThreshold: 0.99,
+		MinFillRate:            0.10, // bajo para forzar consolidación
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -370,9 +373,9 @@ func TestGeneratePlan_InterBranch_BinPackEnMayorCuandoNingunoCubre(t *testing.T)
 	addAvailableVehicle(t, ts, "VAN1", "br-caba", 200)
 
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
-		SLAForceHorizonHours:    1,
-		PriorityForceThreshold:  0.99,
-		MinFillRate:             0.10,
+		SLAForceHorizonHours:   1,
+		PriorityForceThreshold: 0.99,
+		MinFillRate:            0.10,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -494,9 +497,9 @@ func TestGeneratePlan_Piggyback_AcercaEnvioHuerfanoAlDestino(t *testing.T) {
 	addAvailableVehicle(t, ts, "VAN1", "br-caba", 1000)
 
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
-		SLAForceHorizonHours:    1,
-		PriorityForceThreshold:  0.99,
-		MinFillRate:             0.10, // bajo, para que Córdoba consolide con poco
+		SLAForceHorizonHours:   1,
+		PriorityForceThreshold: 0.99,
+		MinFillRate:            0.10, // bajo, para que Córdoba consolide con poco
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -537,9 +540,9 @@ func TestGeneratePlan_Piggyback_RespetaCapacidadDelVehiculo(t *testing.T) {
 	addAvailableVehicle(t, ts, "VAN1", "br-caba", 250)
 
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
-		SLAForceHorizonHours:    1,
-		PriorityForceThreshold:  0.99,
-		MinFillRate:             0.10,
+		SLAForceHorizonHours:   1,
+		PriorityForceThreshold: 0.99,
+		MinFillRate:            0.10,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -795,8 +798,7 @@ func TestRoutingConfigService_Update_ValidaRangos(t *testing.T) {
 	cases := []struct {
 		name string
 		cfg  model.RoutingConfig
-	}{
-	}
+	}{}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			if _, err := svc.Update(c.cfg); err == nil {
@@ -825,12 +827,12 @@ func TestGeneratePlan_LastMile_ExcluyeVehiculoConViajeActivo(t *testing.T) {
 	// Create an active trip for VAN-BUSY so it gets excluded from the plan.
 	if ts.routingSvc.interBranchTripSvc != nil {
 		_, _ = ts.routingSvc.interBranchTripSvc.Create(CreateInterBranchTripCmd{
-			Kind:          model.TripKindLastMile,
-			VehicleID:     "VAN-BUSY",
-			LicensePlate:  "VAN-BUSY",
+			Kind:           model.TripKindLastMile,
+			VehicleID:      "VAN-BUSY",
+			LicensePlate:   "VAN-BUSY",
 			OriginBranchID: "br-caba",
-			ShipmentIDs:   []string{"LT-EXIST"},
-			CreatedBy:     "system",
+			ShipmentIDs:    []string{"LT-EXIST"},
+			CreatedBy:      "system",
 		})
 	}
 
@@ -899,12 +901,12 @@ func TestApplyPlan_DriftVehiculoConViajeActivo_FallaItem(t *testing.T) {
 	// Drift: vehicle gets an active trip between Generate and Apply.
 	if ts.routingSvc.interBranchTripSvc != nil {
 		_, _ = ts.routingSvc.interBranchTripSvc.Create(CreateInterBranchTripCmd{
-			Kind:          model.TripKindLastMile,
-			VehicleID:     "VAN1",
-			LicensePlate:  "VAN1",
+			Kind:           model.TripKindLastMile,
+			VehicleID:      "VAN1",
+			LicensePlate:   "VAN1",
 			OriginBranchID: "br-caba",
-			ShipmentIDs:   []string{"LT-OTHER"},
-			CreatedBy:     "system",
+			ShipmentIDs:    []string{"LT-OTHER"},
+			CreatedBy:      "system",
 		})
 		resp, err := ts.routingSvc.ApplyPlan(context.Background(), "br-caba", model.ApplyPlanRequest{
 			BranchID: "br-caba", Plan: plan,

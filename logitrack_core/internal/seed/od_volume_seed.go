@@ -51,10 +51,10 @@ func SeedODVolume(repo repository.RoutingMetricsRepository, branchRepo repositor
 			"mendoza|cordoba": true,
 		}
 		warmPairs := map[string]bool{
-			"caba|posadas":    true,
-			"posadas|caba":    true,
-			"caba|jujuy":      true,
-			"jujuy|caba":      true,
+			"caba|posadas": true,
+			"posadas|caba": true,
+			"caba|jujuy":   true,
+			"jujuy|caba":   true,
 		}
 		key := origin + "|" + dest
 		if hotPairs[key] {

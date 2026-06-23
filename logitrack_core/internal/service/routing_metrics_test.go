@@ -46,15 +46,19 @@ func (f *fakeMetricsRepo) IncrementODVolume(origin, dest, date string, count int
 func (f *fakeMetricsRepo) ListPlanMetrics(string, time.Time, time.Time) ([]model.PlanMetric, error) {
 	return f.plans, nil
 }
+
 func (f *fakeMetricsRepo) ListApplyMetrics(string, time.Time, time.Time) ([]model.ApplyMetric, error) {
 	return f.applies, nil
 }
+
 func (f *fakeMetricsRepo) ListHopMetrics(string, time.Time, time.Time) ([]model.ShipmentHopMetric, error) {
 	return f.hops, nil
 }
+
 func (f *fakeMetricsRepo) ListODVolume(string, string, time.Time, time.Time) ([]model.ODPairVolume, error) {
 	return nil, nil
 }
+
 func (f *fakeMetricsRepo) GetSummary(string, time.Time, time.Time) ([]model.RoutingMetricsSummary, error) {
 	return nil, nil
 }
@@ -158,10 +162,10 @@ func TestRecordApply_CountsDriftCorrectly(t *testing.T) {
 			{TrackingID: "LT-1", Status: "applied"},
 			{TrackingID: "LT-2", Status: "applied"},
 			{TrackingID: "LT-3", Status: "applied"},
-			{TrackingID: "LT-4", Status: "failed", Error: "ruta_ya_iniciada"},         // drift
-			{TrackingID: "LT-5", Status: "failed", Error: "estado_cambio:loaded"},     // drift
-			{TrackingID: "LT-6", Status: "failed", Error: "vehiculo_no_disponible"},   // drift
-			{TrackingID: "LT-7", Status: "failed", Error: "capacidad_excedida"},       // NO drift
+			{TrackingID: "LT-4", Status: "failed", Error: "ruta_ya_iniciada"},       // drift
+			{TrackingID: "LT-5", Status: "failed", Error: "estado_cambio:loaded"},   // drift
+			{TrackingID: "LT-6", Status: "failed", Error: "vehiculo_no_disponible"}, // drift
+			{TrackingID: "LT-7", Status: "failed", Error: "capacidad_excedida"},     // NO drift
 		},
 	}
 

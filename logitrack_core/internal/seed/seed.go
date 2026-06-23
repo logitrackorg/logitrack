@@ -1146,9 +1146,9 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 
 		// Emit shipment_created event
 		createEvent := model.DomainEvent{
-			ID:        uuid.NewString(),
+			ID:         uuid.NewString(),
 			TrackingID: s.trackingID,
-			EventType: model.EventShipmentCreated,
+			EventType:  model.EventShipmentCreated,
 			Payload: model.ShipmentCreatedPayload{
 				Shipment:            initialShipment,
 				Notes:               s.events[0].notes,
@@ -1204,7 +1204,6 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 	// Rebuild projection from all appended events
 	allEvents, _ := store.LoadAll()
 	proj.Rebuild(allEvents)
-
 }
 
 // LoadProjectedDispatchScenario configura el escenario de despacho proyectado

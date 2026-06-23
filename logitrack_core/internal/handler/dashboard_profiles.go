@@ -18,11 +18,11 @@ func NewDashboardProfilesHandler(svc *service.DashboardProfilesService) *Dashboa
 }
 
 type dashboardProfileResponse struct {
-	ID          string             `json:"id"`
-	UserID      string             `json:"user_id"`
-	Name        string             `json:"name"`
+	ID          string              `json:"id"`
+	UserID      string              `json:"user_id"`
+	Name        string              `json:"name"`
 	Preferences []dashboardPrefItem `json:"preferences"`
-	CreatedAt   string             `json:"created_at"`
+	CreatedAt   string              `json:"created_at"`
 }
 
 func toProfileResponse(p model.DashboardProfile) dashboardProfileResponse {
@@ -70,7 +70,7 @@ func (h *DashboardProfilesHandler) List(c *gin.Context) {
 }
 
 type createProfileRequest struct {
-	Name        string                        `json:"name" binding:"required"`
+	Name        string                          `json:"name" binding:"required"`
 	Preferences []model.UserDashboardPreference `json:"preferences" binding:"required"`
 }
 

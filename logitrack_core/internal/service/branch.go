@@ -25,8 +25,8 @@ type ActiveShipmentCounter interface {
 }
 
 type BranchService struct {
-	repo         repository.BranchRepository
-	counter      ActiveShipmentCounter
+	repo          repository.BranchRepository
+	counter       ActiveShipmentCounter
 	branchZoneSvc *BranchZoneService
 }
 

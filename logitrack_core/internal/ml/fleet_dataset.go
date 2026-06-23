@@ -110,10 +110,10 @@ func GenerateFleetDataset(size int, seed int64) []FleetSample {
 		} else {
 			totalShipments = rng.Intn(501) // 0..500 (might still be 0, adds a few extras)
 		}
-		slaDelayPct     := rng.Float64() * 30.0 // 0..30 %
-		idleDrivers     := rng.Intn(11)         // 0..10
-		activeDrivers   := rng.Intn(31)         // 0..30 (0 = no drivers assigned to branch)
-		orphanShipments := rng.Intn(51)         // 0..50
+		slaDelayPct := rng.Float64() * 30.0 // 0..30 %
+		idleDrivers := rng.Intn(11)         // 0..10
+		activeDrivers := rng.Intn(31)       // 0..30 (0 = no drivers assigned to branch)
+		orphanShipments := rng.Intn(51)     // 0..50
 
 		class := fleetClassify(slaDelayPct, idleDrivers, activeDrivers, orphanShipments, totalShipments)
 		features := NormalizeFleetFeatures(

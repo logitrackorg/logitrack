@@ -72,7 +72,7 @@ type SimulationDiagnosis struct {
 // coverageSuggestionMinFragmentAreaKm2 in internal/service/coverage.go.
 type SuggestedLocation struct {
 	LatLng
-	BranchID   string  `json:"branch_id"`   // cell whose uncovered fragment produced this suggestion
+	BranchID   string  `json:"branch_id"` // cell whose uncovered fragment produced this suggestion
 	BranchName string  `json:"branch_name"`
 	GapAreaKm2 float64 `json:"gap_area_km2"` // area of the uncovered fragment
 
@@ -173,7 +173,7 @@ type SnappedCity struct {
 	LatLng
 	CityName    string `json:"city_name"`
 	Snapped     bool   `json:"is_snapped"`
-	Population  int    `json:"population,omitempty"`  // effective population used for selection; 0 when Snapped=false
+	Population  int    `json:"population,omitempty"`   // effective population used for selection; 0 when Snapped=false
 	ErrorReason string `json:"error_reason,omitempty"` // "TIMEOUT" | "NO_RESULTS"; only when Snapped=false
 }
 

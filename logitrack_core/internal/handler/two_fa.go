@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"   
+	"github.com/google/uuid"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"

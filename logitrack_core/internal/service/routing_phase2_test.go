@@ -25,6 +25,7 @@ func (f *fakeVehicleRepo) Add(v model.Vehicle) error {
 	f.vehicles = append(f.vehicles, v)
 	return nil
 }
+
 func (f *fakeVehicleRepo) GetByID(id string) (model.Vehicle, bool) {
 	for _, v := range f.vehicles {
 		if v.ID == id {
@@ -33,6 +34,7 @@ func (f *fakeVehicleRepo) GetByID(id string) (model.Vehicle, bool) {
 	}
 	return model.Vehicle{}, false
 }
+
 func (f *fakeVehicleRepo) GetByLicensePlate(p string) (model.Vehicle, bool) {
 	for _, v := range f.vehicles {
 		if v.LicensePlate == p {
@@ -45,10 +47,10 @@ func (f *fakeVehicleRepo) UpdateStatus(id string, s model.VehicleStatus) error {
 func (f *fakeVehicleRepo) UpdateStatusByUser(id string, s model.VehicleStatus, u string) error {
 	return nil
 }
-func (f *fakeVehicleRepo) AddShipment(id, tid string) error          { return nil }
-func (f *fakeVehicleRepo) RemoveShipment(id, tid string) error       { return nil }
-func (f *fakeVehicleRepo) ClearShipments(id string) error            { return nil }
-func (f *fakeVehicleRepo) AssignBranch(id string, b *string) error   { return nil }
+func (f *fakeVehicleRepo) AddShipment(id, tid string) error        { return nil }
+func (f *fakeVehicleRepo) RemoveShipment(id, tid string) error     { return nil }
+func (f *fakeVehicleRepo) ClearShipments(id string) error          { return nil }
+func (f *fakeVehicleRepo) AssignBranch(id string, b *string) error { return nil }
 func (f *fakeVehicleRepo) SetDestinationBranch(id string, b *string) error {
 	return nil
 }

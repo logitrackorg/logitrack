@@ -54,8 +54,8 @@ func (s *RoutingService) detectEmptyMoves(plan *model.GlobalRoutingPlan, insight
 
 	// Para cada sucursal con demanda no atendida, contar envíos sin vehículo
 	type needyBranch struct {
-		branchID         string
-		unservedCount    int
+		branchID      string
+		unservedCount int
 	}
 	var needy []needyBranch
 	for _, bp := range plan.BranchPlans {

@@ -38,6 +38,7 @@ const CLAIM_TYPE_LABELS: Record<string, string> = {
     damage: "📦 Daño / Faltante",
     delay: "🕐 Demora en entrega",
     not_delivered: "🚫 No lo recibí",
+    missing: "🔍 Extravío",
     bad_treatment: "😡 Maltrato del personal",
     wrong_data: "📝 Datos incorrectos",
     other: "❓ Otro",

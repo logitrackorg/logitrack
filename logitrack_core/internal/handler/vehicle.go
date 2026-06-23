@@ -8,23 +8,23 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	qrcode "github.com/skip2/go-qrcode"
 	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/service"
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 var validPlateRegex = regexp.MustCompile(`^(?:[A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2})$`)
 
 type VehicleHandler struct {
-	repo          repository.VehicleRepository
-	shipmentSvc   *service.ShipmentService
-	branchRepo    repository.BranchRepository
-	tripSvc       *service.InterBranchTripService
-	branchZoneSvc *service.BranchZoneService
-	dispatchVolumeSvc   service.DispatchVolumeNotifier
+	repo              repository.VehicleRepository
+	shipmentSvc       *service.ShipmentService
+	branchRepo        repository.BranchRepository
+	tripSvc           *service.InterBranchTripService
+	branchZoneSvc     *service.BranchZoneService
+	dispatchVolumeSvc service.DispatchVolumeNotifier
 }
 
 func (h *VehicleHandler) SetDispatchVolumeService(svc service.DispatchVolumeNotifier) {
@@ -452,7 +452,6 @@ func (h *VehicleHandler) GetByShipment(c *gin.Context) {
 	c.JSON(http.StatusNotFound, gin.H{"error": "No hay un vehículo asignado a este envío"})
 }
 
-
 // StartTripRequest is the request body for starting a trip.
 type StartTripRequest struct {
 	DestinationBranch string `json:"destination_branch" binding:"required"`
@@ -798,12 +797,9 @@ func (h *VehicleHandler) GetVehicleQR(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"vehicle_id":     v.ID,
-		"license_plate":  v.LicensePlate,
-		"qr_token":       v.QRToken,
-		"qr_png_base64":  base64.StdEncoding.EncodeToString(qrPNG),
+		"vehicle_id":    v.ID,
+		"license_plate": v.LicensePlate,
+		"qr_token":      v.QRToken,
+		"qr_png_base64": base64.StdEncoding.EncodeToString(qrPNG),
 	})
 }
-
-
-

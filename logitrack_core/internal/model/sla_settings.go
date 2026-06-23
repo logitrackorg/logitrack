@@ -73,6 +73,7 @@ type SLASettings struct {
 //	ready_for_return     → "Listo para devolución"
 //
 // Explicitly EXCLUDED by default:
+//
 //	ready_for_pickup ("Listo para retiro en sucursal") — espera al cliente
 //	delivery_failed  ("Entrega fallida")               — estado de excepción
 //	plus all terminal / pre-operative states (delivered, returned, cancelled,

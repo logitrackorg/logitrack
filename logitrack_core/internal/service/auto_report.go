@@ -246,9 +246,9 @@ func (s *AutoReportService) buildSnapshot(sched model.AutoReportSchedule, from, 
 			vt, _ := s.statsSvc.VolumeByTimeWindow(&from, &to, sched.BranchID)
 			st, _ := s.statsSvc.VolumeByShipmentType(&from, &to, sched.BranchID)
 			out["resumen"] = map[string]any{
-				"total_envios":     vt.Total,
-				"por_ventana":      vt.Buckets,
-				"por_tipo":         st.Buckets,
+				"total_envios": vt.Total,
+				"por_ventana":  vt.Buckets,
+				"por_tipo":     st.Buckets,
 			}
 			if vt.Total > 0 {
 				hasData = true

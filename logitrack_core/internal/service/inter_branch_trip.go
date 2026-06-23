@@ -43,18 +43,18 @@ func (s *InterBranchTripService) SetNotificationService(svc *NotificationService
 }
 
 type CreateInterBranchTripCmd struct {
-	Kind                model.TripKind
-	DriverID            *string
-	VehicleID           string
-	LicensePlate        string
-	OriginBranchID      string
-	DestinationBranchID *string          // nil for last_mile trips; para inter-sucursal = última parada
-	ShipmentIDs         []string         // todos los envíos (todas las paradas)
-	TotalWeightKg       float64
-	CreatedBy           string
-	Stops               []model.TripStop // 1..3 stops para inter-sucursal; vacío para last_mile
-	ScheduledDepartureAt *time.Time      // calculado al aplicar el plan
-	EstimatedArrivalAt   *time.Time      // calculado al aplicar el plan
+	Kind                 model.TripKind
+	DriverID             *string
+	VehicleID            string
+	LicensePlate         string
+	OriginBranchID       string
+	DestinationBranchID  *string  // nil for last_mile trips; para inter-sucursal = última parada
+	ShipmentIDs          []string // todos los envíos (todas las paradas)
+	TotalWeightKg        float64
+	CreatedBy            string
+	Stops                []model.TripStop // 1..3 stops para inter-sucursal; vacío para last_mile
+	ScheduledDepartureAt *time.Time       // calculado al aplicar el plan
+	EstimatedArrivalAt   *time.Time       // calculado al aplicar el plan
 }
 
 func (s *InterBranchTripService) Create(cmd CreateInterBranchTripCmd) (model.InterBranchTrip, error) {

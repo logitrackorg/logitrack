@@ -65,7 +65,7 @@ func NewClient(baseURL, apiKey string) *Client {
 
 // requestBody se serializa al body del POST a /v2/directions/driving-car/geojson.
 type requestBody struct {
-	Coordinates [][]float64     `json:"coordinates"`
+	Coordinates [][]float64 `json:"coordinates"`
 	// Radiuses: radio de snapping en metros por coordenada. -1 = ilimitado.
 	// Por defecto ORS usa 350m; algunas coordenadas (suburbios, zonas rurales)
 	// pueden no tener calles tan cerca → se envía -1 para todos y ORS elige

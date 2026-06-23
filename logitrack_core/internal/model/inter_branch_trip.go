@@ -58,14 +58,14 @@ type InterBranchTrip struct {
 // CompletedAt + CompletedByUserID se setean cuando el operador de esa sucursal
 // escanea el QR del vehículo.
 type TripStop struct {
-	BranchID          string     `json:"branch_id"`
-	ShipmentIDs       []string   `json:"shipment_ids"`                  // dropoffs en este branch
-	TotalWeightKg     float64    `json:"total_weight_kg"`               // peso de los dropoffs
-	PickupShipmentIDs []string   `json:"pickup_shipment_ids,omitempty"` // recogidas en este branch
-	PickupWeightKg    float64    `json:"pickup_weight_kg,omitempty"`
+	BranchID          string   `json:"branch_id"`
+	ShipmentIDs       []string `json:"shipment_ids"`                  // dropoffs en este branch
+	TotalWeightKg     float64  `json:"total_weight_kg"`               // peso de los dropoffs
+	PickupShipmentIDs []string `json:"pickup_shipment_ids,omitempty"` // recogidas en este branch
+	PickupWeightKg    float64  `json:"pickup_weight_kg,omitempty"`
 	// Descarga confirmada por el operador (paso 1 de la recepción).
-	UnloadedAt       *time.Time `json:"unloaded_at,omitempty"`
-	UnloadedBy       string     `json:"unloaded_by,omitempty"`
+	UnloadedAt *time.Time `json:"unloaded_at,omitempty"`
+	UnloadedBy string     `json:"unloaded_by,omitempty"`
 	// Carga confirmada y parada cerrada (paso 2, o automático si no hay pickups).
 	CompletedAt       *time.Time `json:"completed_at,omitempty"`
 	CompletedByUserID *string    `json:"completed_by_user_id,omitempty"`

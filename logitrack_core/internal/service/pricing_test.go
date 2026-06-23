@@ -98,9 +98,9 @@ func TestPricing_WeightTiers(t *testing.T) {
 		Destination:  addrCABA(),
 	}
 	cases := []struct {
-		name     string
-		weight   float64
-		surplus  float64
+		name    string
+		weight  float64
+		surplus float64
 	}{
 		{"low", 4.9, 0},
 		{"boundary-5", 5.0, 0},
@@ -119,7 +119,6 @@ func TestPricing_WeightTiers(t *testing.T) {
 		})
 	}
 }
-
 
 func TestPricing_ExpressMultiplier(t *testing.T) {
 	svc := newPricingSvc()

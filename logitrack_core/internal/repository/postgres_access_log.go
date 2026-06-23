@@ -2,8 +2,8 @@ package repository
 
 import (
 	"database/sql"
-	"fmt" 
-	"strings" 
+	"fmt"
+	"strings"
 
 	"github.com/logitrack/core/internal/model"
 )

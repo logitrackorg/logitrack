@@ -5,7 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
-	"github.com/google/uuid"   
+
+	"github.com/google/uuid"
 	"github.com/logitrack/core/internal/model"
 )
 
@@ -20,12 +21,12 @@ type TwoFARepository interface {
 	GetTwoFASecret(ctx context.Context, userID string) (string, error)
 	EnableTwoFA(ctx context.Context, userID string) error
 	DisableTwoFA(ctx context.Context, userID string) error
-	
+
 	// Sesiones temporales (SCOPE_2FA_PENDING)
 	CreatePendingSession(ctx context.Context, userID string, expiresIn time.Duration) (string, error)
 	GetUserByPendingSession(ctx context.Context, token string) (model.User, error)
 	DeletePendingSession(ctx context.Context, token string) error
-	
+
 	// Anti-replay
 	MarkCodeAsUsed(ctx context.Context, userID, code string) error
 	IsCodeUsed(ctx context.Context, userID, code string) (bool, error)
@@ -68,7 +69,6 @@ func (r *twoFARepository) GetTwoFASecret(ctx context.Context, userID string) (st
 		`SELECT two_fa_secret FROM users WHERE id = $1`,
 		userID,
 	).Scan(&secret)
-	
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +104,7 @@ func (r *twoFARepository) DisableTwoFA(ctx context.Context, userID string) error
 func (r *twoFARepository) CreatePendingSession(ctx context.Context, userID string, expiresIn time.Duration) (string, error) {
 	token := uuid.NewString()
 	expiresAt := time.Now().Add(expiresIn)
-	
+
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO two_fa_pending_sessions (token, user_id, expires_at)
 		VALUES ($1, $2, $3)`,
@@ -134,14 +134,13 @@ func (r *twoFARepository) GetUserByPendingSession(ctx context.Context, token str
 		&email, &phone, &user.Role, &branchID,
 		&user.Status, &driverType, &user.TwoFAEnabled, &twoFAEnrolledAt,
 	)
-	
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return model.User{}, ErrInvalidSessionToken
 		}
 		return model.User{}, err
 	}
-	
+
 	if email.Valid {
 		user.Email = email.String
 	}

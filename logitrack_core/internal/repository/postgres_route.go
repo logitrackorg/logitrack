@@ -144,13 +144,13 @@ func (r *postgresRouteRepository) RemoveShipmentFromDate(trackingID string, date
 
 func scanRoute(row *sql.Row) (model.Route, error) {
 	var (
-		route        model.Route
-		dateStr      string
-		idsJSON      []byte
-		ts           time.Time
-		statusStr    string
-		startedAt    sql.NullTime
-		suggestedAt  sql.NullTime
+		route       model.Route
+		dateStr     string
+		idsJSON     []byte
+		ts          time.Time
+		statusStr   string
+		startedAt   sql.NullTime
+		suggestedAt sql.NullTime
 	)
 	err := row.Scan(&route.ID, &dateStr, &route.DriverID, &idsJSON, &route.CreatedBy, &ts, &statusStr, &startedAt, &suggestedAt)
 	if err == sql.ErrNoRows {
@@ -164,13 +164,13 @@ func scanRoute(row *sql.Row) (model.Route, error) {
 
 func scanRouteRow(rows *sql.Rows) (model.Route, error) {
 	var (
-		route        model.Route
-		dateStr      string
-		idsJSON      []byte
-		ts           time.Time
-		statusStr    string
-		startedAt    sql.NullTime
-		suggestedAt  sql.NullTime
+		route       model.Route
+		dateStr     string
+		idsJSON     []byte
+		ts          time.Time
+		statusStr   string
+		startedAt   sql.NullTime
+		suggestedAt sql.NullTime
 	)
 	if err := rows.Scan(&route.ID, &dateStr, &route.DriverID, &idsJSON, &route.CreatedBy, &ts, &statusStr, &startedAt, &suggestedAt); err != nil {
 		return model.Route{}, err

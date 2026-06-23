@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/logitrack/core/internal/analytics"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/service"
-	"github.com/logitrack/core/internal/analytics"
 )
 
 // formatAddress convierte un Address struct a string legible
@@ -29,11 +29,11 @@ func formatAddress(addr model.Address) string {
 	if addr.PostalCode != "" {
 		parts = append(parts, "CP "+addr.PostalCode)
 	}
-	
+
 	if len(parts) == 0 {
 		return "Dirección no disponible"
 	}
-	
+
 	return strings.Join(parts, ", ")
 }
 
@@ -55,7 +55,7 @@ func NewChatbotHandler(
 	shipmentSvc *service.ShipmentService,
 	sysConfigSvc *service.SystemConfigService,
 	claimSvc *service.ClaimService,
- 	analyticsClient *analytics.Client,
+	analyticsClient *analytics.Client,
 ) *ChatbotHandler {
 	return &ChatbotHandler{
 		shipmentRepo: shipmentRepo,
@@ -64,7 +64,7 @@ func NewChatbotHandler(
 		shipmentSvc:  shipmentSvc,
 		sysConfigSvc: sysConfigSvc,
 		claimSvc:     claimSvc,
-		analytics:           analyticsClient,
+		analytics:    analyticsClient,
 	}
 }
 
@@ -161,7 +161,6 @@ func (h *ChatbotHandler) Authenticate(c *gin.Context) {
 		TrackingID:   req.TrackingID,
 		RecipientDNI: req.RecipientDNI,
 	})
-
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "No pudimos encontrar tu envío con los datos ingresados, por favor verifica e intenta nuevamente",
@@ -184,7 +183,7 @@ func (h *ChatbotHandler) Authenticate(c *gin.Context) {
 				activeClaim.SupervisorNotes = h.getSupervisorNotes(claim.ID)
 				actions = append(actions, "respond_claim")
 			}
-		}  else {
+		} else {
 			// Mostramos file_claim siempre que el envío exista (no sea draft):
 			// como mínimo bad_treatment es reclamable. El resto de los tipos
 			// se filtra en FileClaim mediante canFileClaimOfType.
@@ -234,9 +233,9 @@ type PickupRequest struct {
 
 // PickupResponse contiene la confirmación y datos de la sucursal
 type PickupResponse struct {
-	Success bool               `json:"success"`
-	Message string             `json:"message"`
-	Branch  *BranchInfo        `json:"branch,omitempty"`
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Branch  *BranchInfo `json:"branch,omitempty"`
 }
 
 // BranchInfo contiene información de la sucursal para retiro
@@ -271,7 +270,6 @@ func (h *ChatbotHandler) RequestPickup(c *gin.Context) {
 		ChangedBy:    "chatbot-recipient:" + req.RecipientDNI,
 		Timestamp:    time.Now(),
 	})
-
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -320,12 +318,12 @@ type RescheduleOptionsRequest struct {
 
 // RescheduleOptionsResponse contiene las fechas disponibles
 type RescheduleOptionsResponse struct {
-	Success          bool       `json:"success"`
-	AvailableDates   []string   `json:"available_dates"`
-	RescheduleCount  int        `json:"reschedule_count"`
-	MaxReschedules   int        `json:"max_reschedules"`
-	CanReschedule    bool       `json:"can_reschedule"`
-	Message          string     `json:"message,omitempty"`
+	Success         bool     `json:"success"`
+	AvailableDates  []string `json:"available_dates"`
+	RescheduleCount int      `json:"reschedule_count"`
+	MaxReschedules  int      `json:"max_reschedules"`
+	CanReschedule   bool     `json:"can_reschedule"`
+	Message         string   `json:"message,omitempty"`
 }
 
 // GetRescheduleOptions obtiene las fechas disponibles para reprogramar (US3)
@@ -352,7 +350,6 @@ func (h *ChatbotHandler) GetRescheduleOptions(c *gin.Context) {
 		TrackingID:   req.TrackingID,
 		RecipientDNI: req.RecipientDNI,
 	})
-
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Envío no encontrado"})
 		return
@@ -364,14 +361,14 @@ func (h *ChatbotHandler) GetRescheduleOptions(c *gin.Context) {
 	maxRescheduleDays := 3
 	if h.sysConfigSvc != nil {
 		cfg := h.sysConfigSvc.Get()
-		log.Printf("✅ [CHATBOT] Config obtenida: MaxReschedules=%d, MaxRescheduleDays=%d", 
+		log.Printf("✅ [CHATBOT] Config obtenida: MaxReschedules=%d, MaxRescheduleDays=%d",
 			cfg.MaxReschedules, cfg.MaxRescheduleDays)
 		maxReschedules = cfg.MaxReschedules
 		maxRescheduleDays = cfg.MaxRescheduleDays
 	} else {
 		log.Printf("⚠️ sysConfigSvc es nil, usando defaults")
 	}
-	log.Printf("📊 Usando: MaxReschedules=%d, MaxRescheduleDays=%d", 
+	log.Printf("📊 Usando: MaxReschedules=%d, MaxRescheduleDays=%d",
 		maxReschedules, maxRescheduleDays)
 
 	// ✅ CAMBIO 1: Inicializar metadata SIN parámetro
@@ -394,7 +391,7 @@ func (h *ChatbotHandler) GetRescheduleOptions(c *gin.Context) {
 		for i, d := range dates {
 			dateStrings[i] = d.Format("2006-01-02")
 		}
-		
+
 		response.AvailableDates = dateStrings
 	}
 	log.Printf("📤 [CHATBOT] Response a enviar: RescheduleCount=%d, MaxReschedules=%d, Dates=%d",
@@ -453,12 +450,12 @@ func (h *ChatbotHandler) RescheduleDelivery(c *gin.Context) {
 
 	// ✅ Declarar AMBAS variables
 	maxRescheduleDays := 3
-	maxReschedules := 2  // ✅ AGREGAR ESTA LÍNEA
-	
+	maxReschedules := 2 // ✅ AGREGAR ESTA LÍNEA
+
 	if h.sysConfigSvc != nil {
 		cfg := h.sysConfigSvc.Get()
 		maxRescheduleDays = cfg.MaxRescheduleDays
-		maxReschedules = cfg.MaxReschedules  // ✅ AGREGAR ESTA LÍNEA
+		maxReschedules = cfg.MaxReschedules // ✅ AGREGAR ESTA LÍNEA
 	}
 
 	baseDate := shipment.EstimatedDeliveryAt
@@ -485,10 +482,9 @@ func (h *ChatbotHandler) RescheduleDelivery(c *gin.Context) {
 		NewDeliveryDate:   newDate,
 		ChangedBy:         "chatbot-recipient:" + req.RecipientDNI,
 		Timestamp:         time.Now(),
-		MaxReschedules:    maxReschedules,    // ✅ Ahora existe
+		MaxReschedules:    maxReschedules, // ✅ Ahora existe
 		MaxRescheduleDays: maxRescheduleDays,
 	})
-
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -509,7 +505,7 @@ func (h *ChatbotHandler) RescheduleDelivery(c *gin.Context) {
 }
 
 // CancelRequest es el payload para cancelar un envío
-type ChatbotCancelRequest  struct {
+type ChatbotCancelRequest struct {
 	TrackingID   string `json:"tracking_id" binding:"required"`
 	RecipientDNI string `json:"recipient_dni" binding:"required"`
 	Reason       string `json:"reason"`
@@ -677,6 +673,7 @@ func (h *ChatbotHandler) CancelBySender(c *gin.Context) {
 		Message: "Tu envío ha sido cancelado exitosamente",
 	})
 }
+
 // RespondToClaim procesa la respuesta del cliente a un reclamo pending_customer (US-4)
 func (h *ChatbotHandler) RespondToClaim(c *gin.Context) {
 	claimID := strings.TrimSpace(c.PostForm("claim_id"))

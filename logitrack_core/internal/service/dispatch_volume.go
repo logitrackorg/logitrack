@@ -368,4 +368,3 @@ type DispatchVolumeNotifier interface {
 	Check(branchID string)
 	CheckAfterDispatch(branchID string)
 }
-

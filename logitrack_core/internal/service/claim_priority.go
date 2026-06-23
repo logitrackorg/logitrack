@@ -16,10 +16,10 @@ type ClaimPriorityInput struct {
 // armar un model.Shipment completo y aísla el cálculo de futuros cambios al
 // modelo de envíos.
 type ShipmentPriorityInfo struct {
-	Status                model.Status
-	PriorityScore         float64
-	SLAExpired            bool
-	DeliveryAttemptCount  int
+	Status               model.Status
+	PriorityScore        float64
+	SLAExpired           bool
+	DeliveryAttemptCount int
 }
 
 // CalculatePriority decide la prioridad de un ticket nuevo en base al tipo,

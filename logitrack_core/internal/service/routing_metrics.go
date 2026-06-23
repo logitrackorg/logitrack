@@ -27,16 +27,16 @@ func (s *RoutingMetricsService) RecordPlan(branchID string, plan model.RoutingPl
 	var windowCovPct *float64
 
 	m := model.PlanMetric{
-		ID:               uuid.NewString(),
-		BranchID:         branchID,
-		GeneratedAt:      plan.GeneratedAt,
-		GenerationTimeMs: durationMs,
-		LastMileCount:    len(plan.LastMile),
-		InterBranchCount: len(plan.InterBranch),
-		UnassignedCount:  len(plan.Unassigned),
-		VRPUsed:          false,
+		ID:                uuid.NewString(),
+		BranchID:          branchID,
+		GeneratedAt:       plan.GeneratedAt,
+		GenerationTimeMs:  durationMs,
+		LastMileCount:     len(plan.LastMile),
+		InterBranchCount:  len(plan.InterBranch),
+		UnassignedCount:   len(plan.Unassigned),
+		VRPUsed:           false,
 		WindowCoveragePct: windowCovPct,
-		CreatedAt:        now,
+		CreatedAt:         now,
 	}
 	if err := s.repo.SavePlanMetric(m); err != nil {
 		log.Printf("[metrics] error guardando plan metric: %v", err)
@@ -48,7 +48,7 @@ func (s *RoutingMetricsService) RecordApply(branchID, appliedBy string, resp mod
 
 	driftCount := 0
 	driftReasons := map[string]bool{
-		"ruta_ya_iniciada":      true,
+		"ruta_ya_iniciada":       true,
 		"vehiculo_no_disponible": true,
 	}
 	for _, item := range resp.Items {

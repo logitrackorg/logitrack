@@ -138,14 +138,14 @@ type ExtendETACmd struct {
 }
 
 type RequestPaymentCmd struct {
-	Shipment  model.Shipment // with Price/Priority already stamped
-	PaymentID string
+	Shipment       model.Shipment // with Price/Priority already stamped
+	PaymentID      string
 	MPPreferenceID string
-	InitPoint string
-	Amount    float64
-	Currency  string
-	ChangedBy string
-	Timestamp time.Time
+	InitPoint      string
+	Amount         float64
+	Currency       string
+	ChangedBy      string
+	Timestamp      time.Time
 }
 
 type ConfirmPaymentCmd struct {
@@ -182,7 +182,6 @@ type PathPlannedCmd struct {
 	Reason          string
 }
 
-
 // ==========================================
 // CHATBOT COMMANDS
 // ==========================================
@@ -203,15 +202,14 @@ type RequestPickupCmd struct {
 
 // RescheduleDeliveryCmd reprograma la fecha de entrega (máx 2 veces, +3 días)
 type RescheduleDeliveryCmd struct {
-	TrackingID      string
-	RecipientDNI    string
-	NewDeliveryDate time.Time
-	ChangedBy       string
-	Timestamp       time.Time
-	MaxReschedules    int  	
-	MaxRescheduleDays int  
+	TrackingID        string
+	RecipientDNI      string
+	NewDeliveryDate   time.Time
+	ChangedBy         string
+	Timestamp         time.Time
+	MaxReschedules    int
+	MaxRescheduleDays int
 }
-
 
 // CancelByRecipientCmd cancela el envío por solicitud del destinatario
 type CancelByRecipientCmd struct {

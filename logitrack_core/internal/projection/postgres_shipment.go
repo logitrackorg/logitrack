@@ -316,59 +316,59 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 		return err
 
 	case model.EventDeliveryRescheduled:
-	payload := event.Payload.(model.DeliveryRescheduledPayload)
-	
-	chatbotMetadata := map[string]interface{}{
-		"reschedule_count":         payload.RescheduleCount,
-		"max_reschedules":          2,
-		"original_delivery_date":   payload.OriginalDate,
-		"scheduled_delivery_date":  payload.NewDeliveryDate,
-		"last_chatbot_interaction": event.Timestamp,
-	}
-	
-	metadataJSON, err := json.Marshal(chatbotMetadata)
-	if err != nil {
-		return err
-	}
-	
-	// Obtener el estado actual
-	var currentStatus string
-	err = p.db.QueryRow(`SELECT status FROM shipments WHERE tracking_id = $1`, event.TrackingID).Scan(&currentStatus)
-	if err != nil {
-		return err
-	}
-	
-	// Solo cambiar a redelivery_scheduled si viene de delivery_failed
-	newStatus := currentStatus
-	if currentStatus == string(model.StatusDeliveryFailed) {
-		newStatus = string(model.StatusRedeliveryScheduled)
-	}
-	
-	// ✅ ACTUALIZAR: Guardar también en la tabla de eventos con ubicación
-	_, err = p.db.Exec(`
+		payload := event.Payload.(model.DeliveryRescheduledPayload)
+
+		chatbotMetadata := map[string]interface{}{
+			"reschedule_count":         payload.RescheduleCount,
+			"max_reschedules":          2,
+			"original_delivery_date":   payload.OriginalDate,
+			"scheduled_delivery_date":  payload.NewDeliveryDate,
+			"last_chatbot_interaction": event.Timestamp,
+		}
+
+		metadataJSON, err := json.Marshal(chatbotMetadata)
+		if err != nil {
+			return err
+		}
+
+		// Obtener el estado actual
+		var currentStatus string
+		err = p.db.QueryRow(`SELECT status FROM shipments WHERE tracking_id = $1`, event.TrackingID).Scan(&currentStatus)
+		if err != nil {
+			return err
+		}
+
+		// Solo cambiar a redelivery_scheduled si viene de delivery_failed
+		newStatus := currentStatus
+		if currentStatus == string(model.StatusDeliveryFailed) {
+			newStatus = string(model.StatusRedeliveryScheduled)
+		}
+
+		// ✅ ACTUALIZAR: Guardar también en la tabla de eventos con ubicación
+		_, err = p.db.Exec(`
 		UPDATE shipments 
 		SET estimated_delivery_at = $1, 
 		    status = $2,
 		    chatbot_metadata = $3,
 		    updated_at = $4 
 		WHERE tracking_id = $5`,
-		payload.NewDeliveryDate,
-		newStatus,
-		metadataJSON,
-		event.Timestamp,
-		event.TrackingID,
-	)
-	
-	// ✅ NUEVO: Guardar evento con ubicación en la tabla events
-	if err == nil && payload.CurrentLocation != nil {
-		var locationTypeStr, locationCodeStr, locationNameStr, locationStatusStr interface{}
-		locationTypeStr = payload.CurrentLocation.Type
-		locationCodeStr = payload.CurrentLocation.BranchCode
-		locationNameStr = payload.CurrentLocation.BranchName
-		locationStatusStr = payload.CurrentLocation.Status
-		
-		// Actualizar evento en la tabla events
-		_, err = p.db.Exec(`
+			payload.NewDeliveryDate,
+			newStatus,
+			metadataJSON,
+			event.Timestamp,
+			event.TrackingID,
+		)
+
+		// ✅ NUEVO: Guardar evento con ubicación en la tabla events
+		if err == nil && payload.CurrentLocation != nil {
+			var locationTypeStr, locationCodeStr, locationNameStr, locationStatusStr interface{}
+			locationTypeStr = payload.CurrentLocation.Type
+			locationCodeStr = payload.CurrentLocation.BranchCode
+			locationNameStr = payload.CurrentLocation.BranchName
+			locationStatusStr = payload.CurrentLocation.Status
+
+			// Actualizar evento en la tabla events
+			_, err = p.db.Exec(`
 			UPDATE events 
 			SET current_location_type = $1,
 			    current_location_code = $2,
@@ -377,18 +377,18 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			    rescheduled_date = $5,
 			    via = $6
 			WHERE tracking_id = $7 AND id = $8`,
-			locationTypeStr,
-			locationCodeStr,
-			locationNameStr,
-			locationStatusStr,
-			payload.NewDeliveryDate,
-			payload.RequestedVia,
-			event.TrackingID,
-			event.ID,
-		)
-	}
-	
-	return err
+				locationTypeStr,
+				locationCodeStr,
+				locationNameStr,
+				locationStatusStr,
+				payload.NewDeliveryDate,
+				payload.RequestedVia,
+				event.TrackingID,
+				event.ID,
+			)
+		}
+
+		return err
 
 	case model.EventCancelledByRecipient:
 		_, err := p.db.Exec(`
@@ -534,7 +534,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 		s.RejectedByRecipient, serializeChatbotMetadata(s.ChatbotMetadata),
 		s.SecurityKeyword, s.SecurityKeywordHash, s.KeywordAttempts, s.ContingencyDelivery,
 		s.CreatedBy, s.PhotoExpiredAt, s.PhotoPurgedAt,
-)
+	)
 	return err
 }
 
@@ -1095,25 +1095,25 @@ func (p *PostgresShipmentProjection) CountActiveByBranch(branchID string) int {
 // scanShipment scans a single row into a Shipment.
 func scanShipment(row *sql.Row) (model.Shipment, error) {
 	var (
-		s                   model.Shipment
-		status              string
-		packageType         string
-		shipmentType        string
-		timeWindow          string
-		incidentType        string
-		deliveryMethod      string
-		senderJSON          []byte
-		recipientJSON       []byte
-		correctionsJSON     []byte
-		priorityFactorsJSON []byte
-		estimatedAt         *time.Time
-		price               sql.NullFloat64
-		priceBreakdownJSON  []byte
-		priceCurrency       string
+		s                    model.Shipment
+		status               string
+		packageType          string
+		shipmentType         string
+		timeWindow           string
+		incidentType         string
+		deliveryMethod       string
+		senderJSON           []byte
+		recipientJSON        []byte
+		correctionsJSON      []byte
+		priorityFactorsJSON  []byte
+		estimatedAt          *time.Time
+		price                sql.NullFloat64
+		priceBreakdownJSON   []byte
+		priceCurrency        string
 		reservedForTripID    sql.NullString
 		slaNotifiedAt        *time.Time
 		slaExpiredNotifiedAt *time.Time
-		chatbotMetadataJSON []byte
+		chatbotMetadataJSON  []byte
 	)
 	err := row.Scan(
 		&s.TrackingID, &status, &s.CurrentLocation, &s.CurrentZone, &s.WeightKg, &packageType,
@@ -1193,25 +1193,25 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 	var result []model.Shipment
 	for rows.Next() {
 		var (
-			s                   model.Shipment
-			status              string
-			packageType         string
-			shipmentType        string
-			timeWindow          string
-			incidentType        string
-			deliveryMethod      string
-			senderJSON          []byte
-			recipientJSON       []byte
-			correctionsJSON     []byte
-			priorityFactorsJSON []byte
-			estimatedAt         *time.Time
-			price               sql.NullFloat64
-			priceBreakdownJSON  []byte
-			priceCurrency       string
+			s                    model.Shipment
+			status               string
+			packageType          string
+			shipmentType         string
+			timeWindow           string
+			incidentType         string
+			deliveryMethod       string
+			senderJSON           []byte
+			recipientJSON        []byte
+			correctionsJSON      []byte
+			priorityFactorsJSON  []byte
+			estimatedAt          *time.Time
+			price                sql.NullFloat64
+			priceBreakdownJSON   []byte
+			priceCurrency        string
 			reservedForTripID    sql.NullString
 			slaNotifiedAt        *time.Time
 			slaExpiredNotifiedAt *time.Time
-			chatbotMetadataJSON []byte
+			chatbotMetadataJSON  []byte
 		)
 		err := rows.Scan(
 			&s.TrackingID, &status, &s.CurrentLocation, &s.CurrentZone, &s.WeightKg, &packageType,
@@ -1276,19 +1276,18 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 		}
 
 		if len(chatbotMetadataJSON) > 0 {
-		var metadata model.ChatbotMetadata
-		if err := json.Unmarshal(chatbotMetadataJSON, &metadata); err != nil {
-			return nil, err
+			var metadata model.ChatbotMetadata
+			if err := json.Unmarshal(chatbotMetadataJSON, &metadata); err != nil {
+				return nil, err
+			}
+			s.ChatbotMetadata = &metadata
 		}
-		s.ChatbotMetadata = &metadata
-	}
 		result = append(result, s)
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].TrackingID < result[j].TrackingID
 	})
 
-	
 	return result, rows.Err()
 }
 
@@ -1364,6 +1363,7 @@ func (p *PostgresShipmentProjection) SetConfirmationEmailSent(trackingID string)
 	n, err := res.RowsAffected()
 	return n > 0, err
 }
+
 // serializeChatbotMetadata serializa ChatbotMetadata a JSON
 func serializeChatbotMetadata(metadata *model.ChatbotMetadata) interface{} {
 	if metadata == nil {

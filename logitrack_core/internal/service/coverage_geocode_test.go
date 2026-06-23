@@ -114,8 +114,10 @@ func TestBestLocality_DangerousZoneExcluded(t *testing.T) {
 	// A small box around Tandil marks it dangerous; with a 5km radius no other
 	// city qualifies, so the result must be "not found".
 	zone := []model.LatLng{
-		{Lat: -37.5, Lng: -59.4}, {Lat: -37.5, Lng: -58.9},
-		{Lat: -37.1, Lng: -58.9}, {Lat: -37.1, Lng: -59.4},
+		{Lat: -37.5, Lng: -59.4},
+		{Lat: -37.5, Lng: -58.9},
+		{Lat: -37.1, Lng: -58.9},
+		{Lat: -37.1, Lng: -59.4},
 	}
 	_, found := bestLocality(tandil.Lat, tandil.Lng, 5.0, 0, nil, [][]model.LatLng{zone})
 	if found {

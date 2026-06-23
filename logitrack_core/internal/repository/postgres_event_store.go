@@ -148,7 +148,7 @@ func (s *postgresEventStore) LoadStream(trackingID string) ([]model.DomainEvent,
 			rescheduledDate  sql.NullTime
 			via              sql.NullString
 		)
-		
+
 		if err := rows.Scan(
 			&e.ID, &e.TrackingID, &e.EventType, &payloadJSON, &e.ChangedBy, &ts, &e.Version,
 			&currentLocType, &currentLocCode, &currentLocName, &currentLocStatus,
@@ -156,13 +156,13 @@ func (s *postgresEventStore) LoadStream(trackingID string) ([]model.DomainEvent,
 		); err != nil {
 			return nil, err
 		}
-		
+
 		e.Timestamp = ts
 		e.Payload, err = unmarshalPayload(e.EventType, payloadJSON)
 		if err != nil {
 			return nil, fmt.Errorf("unmarshal payload for event %s: %w", e.ID, err)
 		}
-		
+
 		// ✅ NUEVO: Si es un evento de reprogramación, agregar los campos del evento
 		if e.EventType == model.EventDeliveryRescheduled {
 			if payload, ok := e.Payload.(model.DeliveryRescheduledPayload); ok {
@@ -184,7 +184,7 @@ func (s *postgresEventStore) LoadStream(trackingID string) ([]model.DomainEvent,
 				e.Payload = payload
 			}
 		}
-		
+
 		events = append(events, e)
 	}
 	return events, rows.Err()
@@ -207,9 +207,9 @@ func (s *postgresEventStore) LoadAll() ([]model.DomainEvent, error) {
 	var events []model.DomainEvent
 	for rows.Next() {
 		var (
-			e           model.DomainEvent
-			payloadJSON []byte
-			ts          time.Time
+			e                model.DomainEvent
+			payloadJSON      []byte
+			ts               time.Time
 			currentLocType   sql.NullString
 			currentLocCode   sql.NullString
 			currentLocName   sql.NullString
@@ -217,7 +217,7 @@ func (s *postgresEventStore) LoadAll() ([]model.DomainEvent, error) {
 			rescheduledDate  sql.NullTime
 			via              sql.NullString
 		)
-		
+
 		if err := rows.Scan(
 			&e.ID, &e.TrackingID, &e.EventType, &payloadJSON, &e.ChangedBy, &ts, &e.Version,
 			&currentLocType, &currentLocCode, &currentLocName, &currentLocStatus,
@@ -225,13 +225,13 @@ func (s *postgresEventStore) LoadAll() ([]model.DomainEvent, error) {
 		); err != nil {
 			return nil, err
 		}
-		
+
 		e.Timestamp = ts
 		e.Payload, err = unmarshalPayload(e.EventType, payloadJSON)
 		if err != nil {
 			return nil, fmt.Errorf("unmarshal payload for event %s: %w", e.ID, err)
 		}
-		
+
 		// ✅ NUEVO: Enriquecer eventos de reprogramación
 		if e.EventType == model.EventDeliveryRescheduled {
 			if payload, ok := e.Payload.(model.DeliveryRescheduledPayload); ok {
@@ -252,7 +252,7 @@ func (s *postgresEventStore) LoadAll() ([]model.DomainEvent, error) {
 				e.Payload = payload
 			}
 		}
-		
+
 		events = append(events, e)
 	}
 	return events, rows.Err()

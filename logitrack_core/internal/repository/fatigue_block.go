@@ -121,9 +121,15 @@ func (r *postgresFatigueBlockRepository) ListAllActive() ([]FatigueBlock, error)
 		if err := rows.Scan(&b.ID, &b.DriverID, &tripID, &b.BlockedAt, &unblockedAt, &unblockedBy); err != nil {
 			return nil, err
 		}
-		if tripID.Valid { b.TripID = &tripID.String }
-		if unblockedAt.Valid { b.UnblockedAt = &unblockedAt.Time }
-		if unblockedBy.Valid { b.UnblockedBy = &unblockedBy.String }
+		if tripID.Valid {
+			b.TripID = &tripID.String
+		}
+		if unblockedAt.Valid {
+			b.UnblockedAt = &unblockedAt.Time
+		}
+		if unblockedBy.Valid {
+			b.UnblockedBy = &unblockedBy.String
+		}
 		blocks = append(blocks, b)
 	}
 	return blocks, rows.Err()

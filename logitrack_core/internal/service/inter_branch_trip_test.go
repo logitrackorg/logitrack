@@ -174,23 +174,28 @@ func (f *fakeAuthRepoForTrip) SaveToken(_ string, _ model.User)         {}
 func (f *fakeAuthRepoForTrip) GetUserByToken(_ string) (model.User, error) {
 	return model.User{}, nil
 }
-func (f *fakeAuthRepoForTrip) DeleteToken(_ string)          {}
-func (f *fakeAuthRepoForTrip) ListAll() []model.User         { return nil }
+func (f *fakeAuthRepoForTrip) DeleteToken(_ string)  {}
+func (f *fakeAuthRepoForTrip) ListAll() []model.User { return nil }
 func (f *fakeAuthRepoForTrip) GetUserByID(_ string) (model.User, error) {
 	return model.User{}, nil
 }
+
 func (f *fakeAuthRepoForTrip) UpdateUser(_ string, _ repository.UserUpdate) (model.User, error) {
 	return model.User{}, nil
 }
+
 func (f *fakeAuthRepoForTrip) CreateUser(_ repository.UserCreate) (model.User, error) {
 	return model.User{}, nil
 }
+
 func (f *fakeAuthRepoForTrip) ChangePassword(_ context.Context, _, _, _ string) error {
 	return nil
 }
 func (f *fakeAuthRepoForTrip) ListByRole(_ model.Role, _ string) []model.User { return nil }
-func (f *fakeAuthRepoForTrip) FindUserByUsername(_ string) (model.User, bool)  { return model.User{}, false }
-func (f *fakeAuthRepoForTrip) UpdatePassword(_, _ string) error                { return nil }
+func (f *fakeAuthRepoForTrip) FindUserByUsername(_ string) (model.User, bool) {
+	return model.User{}, false
+}
+func (f *fakeAuthRepoForTrip) UpdatePassword(_, _ string) error { return nil }
 
 // =============================================================================
 // Helpers
@@ -279,13 +284,13 @@ func TestClaimByQR_InterBranch_IdempotentSecondClaim(t *testing.T) {
 	driverID := "driver-ib-2"
 
 	_, _ = svc.Create(CreateInterBranchTripCmd{
-		Kind:          model.TripKindInterBranch,
-		VehicleID:     "V2",
-		LicensePlate:  "EF456GH",
+		Kind:           model.TripKindInterBranch,
+		VehicleID:      "V2",
+		LicensePlate:   "EF456GH",
 		OriginBranchID: "caba",
-		ShipmentIDs:   []string{},
-		TotalWeightKg: 50,
-		CreatedBy:     "op_caba",
+		ShipmentIDs:    []string{},
+		TotalWeightKg:  50,
+		CreatedBy:      "op_caba",
 	})
 
 	first, err := svc.ClaimByQR("QR-V2", driverID, "caba", model.DriverTypeInterBranch)
@@ -339,13 +344,13 @@ func TestClaimByQR_InterBranch_WrongDriverTypeRejected(t *testing.T) {
 	svc := newTripService(tripRepo, vehicleRepo)
 
 	_, _ = svc.Create(CreateInterBranchTripCmd{
-		Kind:          model.TripKindInterBranch,
-		VehicleID:     "V4",
-		LicensePlate:  "MN000OP",
+		Kind:           model.TripKindInterBranch,
+		VehicleID:      "V4",
+		LicensePlate:   "MN000OP",
 		OriginBranchID: "caba",
-		ShipmentIDs:   []string{},
-		TotalWeightKg: 80,
-		CreatedBy:     "op_caba",
+		ShipmentIDs:    []string{},
+		TotalWeightKg:  80,
+		CreatedBy:      "op_caba",
 	})
 
 	_, err := svc.ClaimByQR("QR-V4", "driver-lm-wrong", "caba", model.DriverTypeLastMile)

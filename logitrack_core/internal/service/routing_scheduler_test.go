@@ -232,8 +232,8 @@ func TestApplyZonePenalties(t *testing.T) {
 	zones := []model.Zone{{Active: true, Polygon: square}}
 
 	coords := []vrp.Coord{
-		{Lat: -1, Lon: 0.5}, // depot
-		{Lat: 2, Lon: 0.5},  // delivery0 — cruzar zona en segmento depot→d0
+		{Lat: -1, Lon: 0.5},  // depot
+		{Lat: 2, Lon: 0.5},   // delivery0 — cruzar zona en segmento depot→d0
 		{Lat: 0.5, Lon: 0.5}, // delivery1 — dentro de la zona
 	}
 	dur := [][]float64{
@@ -258,11 +258,13 @@ func TestApplyZonePenalties(t *testing.T) {
 //
 // Sucursal (depot): Once / Balvanera (-34.6037, -58.3816)
 // Zona peligrosa:   corredor lat -34.592...-34.598, lng -58.420...-58.376
-//                   — queda entre el depot y las 4 entregas del norte.
+//
+//	— queda entre el depot y las 4 entregas del norte.
 //
 // Entregas SUR (no cruzan zona): LT-LM00001 (Congreso), LT-LM00004 (Caballito)
 // Entregas NORTE (cruzan zona):  LT-LM00002 (Belgrano), LT-LM00003 (Sta Fe),
-//                                LT-LM00005 (Palermo), LT-LM00006 (Recoleta)
+//
+//	LT-LM00005 (Palermo), LT-LM00006 (Recoleta)
 //
 // Todas las ventanas son flexible para eliminar la influencia del horario y
 // testear solo el efecto de la penalización de zona (igual al seed actualizado).
@@ -272,9 +274,10 @@ func TestApplyZonePenalties(t *testing.T) {
 // sin la capa de selección de horario de findBestDepartureForRoute.
 //
 // Expectativa en modo SEGURA:
-//   Las dos entregas del SUR deben aparecer ANTES de la primera entrega del NORTE
-//   — penalty 2.5× hace que los arcos que cruzan la zona sean más caros que el
-//   desvío al stop del sur (LM00004 a ~4.4 km vs LM00006 penalizado a 5.97 km).
+//
+//	Las dos entregas del SUR deben aparecer ANTES de la primera entrega del NORTE
+//	— penalty 2.5× hace que los arcos que cruzan la zona sean más caros que el
+//	desvío al stop del sur (LM00004 a ~4.4 km vs LM00006 penalizado a 5.97 km).
 func TestRouteModeSegura_CABAScenario(t *testing.T) {
 	depot := vrp.Coord{Lat: -34.6037, Lon: -58.3816}
 
@@ -534,8 +537,10 @@ func TestRouteModeSegura_ViaFindBestDeparture(t *testing.T) {
 	zone := []model.Zone{{
 		Active: true,
 		Polygon: []model.ZonePoint{
-			{Lat: -34.592, Lng: -58.420}, {Lat: -34.592, Lng: -58.376},
-			{Lat: -34.598, Lng: -58.376}, {Lat: -34.598, Lng: -58.420},
+			{Lat: -34.592, Lng: -58.420},
+			{Lat: -34.592, Lng: -58.376},
+			{Lat: -34.598, Lng: -58.376},
+			{Lat: -34.598, Lng: -58.420},
 		},
 	}}
 	allTIDs := []string{"LT-LM00001", "LT-LM00002", "LT-LM00003", "LT-LM00004", "LT-LM00005", "LT-LM00006"}

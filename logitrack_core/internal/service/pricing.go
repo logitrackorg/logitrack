@@ -57,10 +57,10 @@ func (s *PricingService) Quote(input PricingInput) (float64, model.PriceBreakdow
 // have a fully-formed Shipment in hand (e.g. seed loading or post-creation hooks).
 func (s *PricingService) CalculateForShipment(shipment model.Shipment) (float64, model.PriceBreakdown) {
 	return s.Quote(PricingInput{
-		WeightKg:     shipment.WeightKg,
-		PackageType:  shipment.PackageType,
-		ShipmentType: shipment.ShipmentType,
-		TimeWindow:   shipment.TimeWindow,
+		WeightKg:       shipment.WeightKg,
+		PackageType:    shipment.PackageType,
+		ShipmentType:   shipment.ShipmentType,
+		TimeWindow:     shipment.TimeWindow,
 		IsFragile:      shipment.IsFragile,
 		DeliveryMethod: shipment.DeliveryMethod,
 		Origin:         shipment.Sender.Address,

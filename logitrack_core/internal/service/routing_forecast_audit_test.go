@@ -241,8 +241,8 @@ func TestAudit_HorizonClampedAndDefaulted(t *testing.T) {
 		in       int
 		expected int
 	}{
-		{0, 7},   // default
-		{-5, 7},  // default
+		{0, 7},  // default
+		{-5, 7}, // default
 		{1, 1},
 		{30, 30},
 	}

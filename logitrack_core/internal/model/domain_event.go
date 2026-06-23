@@ -16,30 +16,30 @@ type DomainEvent struct {
 
 // DomainEvent type constants
 const (
-	EventShipmentCreated     = "shipment_created"
-	EventDraftSaved          = "draft_saved"
-	EventDraftUpdated        = "draft_updated"
-	EventDraftConfirmed      = "draft_confirmed"
-	EventStatusChanged       = "status_changed"
-	EventShipmentCorrected   = "shipment_corrected"
-	EventShipmentCancelled   = "shipment_cancelled"
-	EventIncidentReported    = "incident_reported"
-	EventShipmentETAExtended = "shipment_eta_extended"
-	EventDraftExpired        = "draft_expired"
-	EventDraftPIIPurged      = "draft_pii_purged"
-	EventDraftPIISuppressed  = "draft_pii_suppressed"
-	EventPaymentRequested    = "payment_requested"
-	EventPaymentConfirmed    = "payment_confirmed"
-	EventReturnedToDraft     = "returned_to_draft"
-	EventPickupRequested      = "pickup_requested"
-	EventDeliveryRescheduled  = "delivery_rescheduled"
-	EventCancelledByRecipient = "cancelled_by_recipient"
-	EventCancelledBySender    = "cancelled_by_sender"
+	EventShipmentCreated       = "shipment_created"
+	EventDraftSaved            = "draft_saved"
+	EventDraftUpdated          = "draft_updated"
+	EventDraftConfirmed        = "draft_confirmed"
+	EventStatusChanged         = "status_changed"
+	EventShipmentCorrected     = "shipment_corrected"
+	EventShipmentCancelled     = "shipment_cancelled"
+	EventIncidentReported      = "incident_reported"
+	EventShipmentETAExtended   = "shipment_eta_extended"
+	EventDraftExpired          = "draft_expired"
+	EventDraftPIIPurged        = "draft_pii_purged"
+	EventDraftPIISuppressed    = "draft_pii_suppressed"
+	EventPaymentRequested      = "payment_requested"
+	EventPaymentConfirmed      = "payment_confirmed"
+	EventReturnedToDraft       = "returned_to_draft"
+	EventPickupRequested       = "pickup_requested"
+	EventDeliveryRescheduled   = "delivery_rescheduled"
+	EventCancelledByRecipient  = "cancelled_by_recipient"
+	EventCancelledBySender     = "cancelled_by_sender"
 	EventDeliveryKeywordFailed = "delivery_keyword_failed" // driver entered wrong keyword; increments keyword_attempts
 
 	// Branch zone events
-	EventShipmentZoned  = "shipment_zoned"   // automatic assignment to Entrada on arrival
-	EventShipmentMoved  = "shipment_moved"   // manual zone-to-zone movement
+	EventShipmentZoned = "shipment_zoned" // automatic assignment to Entrada on arrival
+	EventShipmentMoved = "shipment_moved" // manual zone-to-zone movement
 )
 
 // ReturnETAExtraDays is added to the estimated_delivery_at when a shipment
@@ -145,7 +145,6 @@ type ShipmentETAExtendedPayload struct {
 	Reason    string
 }
 
-
 // ShipmentZonedPayload se emite cuando el sistema asigna automáticamente un envío
 // a la zona Entrada al llegar a una sucursal (fin de viaje).
 type ShipmentZonedPayload struct {
@@ -176,13 +175,13 @@ type PickupRequestedPayload struct {
 
 // DeliveryRescheduledPayload registra cuando el destinatario reprograma la entrega vía chatbot
 type DeliveryRescheduledPayload struct {
-	RecipientDNI     string     `json:"recipient_dni"`
-	OldDeliveryDate  *time.Time `json:"old_delivery_date"`
-	NewDeliveryDate  time.Time  `json:"new_delivery_date"`
-	OriginalDate     *time.Time `json:"original_date"`
-	RescheduleCount  int        `json:"reschedule_count"`
-	DaysFromOriginal int        `json:"days_from_original"`
-	RequestedVia     string     `json:"requested_via"` // "chatbot"
+	RecipientDNI     string         `json:"recipient_dni"`
+	OldDeliveryDate  *time.Time     `json:"old_delivery_date"`
+	NewDeliveryDate  time.Time      `json:"new_delivery_date"`
+	OriginalDate     *time.Time     `json:"original_date"`
+	RescheduleCount  int            `json:"reschedule_count"`
+	DaysFromOriginal int            `json:"days_from_original"`
+	RequestedVia     string         `json:"requested_via"` // "chatbot"
 	CurrentLocation  *EventLocation `json:"current_location,omitempty"`
 }
 
@@ -201,4 +200,3 @@ type CancelledBySenderPayload struct {
 	Reason       string `json:"reason"`
 	RequestedVia string `json:"requested_via"` // "chatbot"
 }
-

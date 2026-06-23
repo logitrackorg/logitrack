@@ -27,21 +27,21 @@ const (
 )
 
 type User struct {
-	ID         string     `json:"id"`
-	Username   string     `json:"username"`
-	FirstName  string     `json:"first_name,omitempty"`
-	LastName   string     `json:"last_name,omitempty"`
-	Email      string     `json:"email,omitempty"`
-	Phone      string     `json:"phone,omitempty"`
-	Role       Role       `json:"role"`
-	BranchID   string     `json:"branch_id,omitempty"`
-	Status     UserStatus `json:"status"`
-	Address    *Address   `json:"address,omitempty"`
-	UpdatedBy  string     `json:"updated_by,omitempty"`
-	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
-	DriverType DriverType `json:"driver_type,omitempty"`
-	TwoFAEnabled     bool       `json:"two_fa_enabled"`
-	TwoFAEnrolledAt  *time.Time `json:"two_fa_enrolled_at,omitempty"`
+	ID              string     `json:"id"`
+	Username        string     `json:"username"`
+	FirstName       string     `json:"first_name,omitempty"`
+	LastName        string     `json:"last_name,omitempty"`
+	Email           string     `json:"email,omitempty"`
+	Phone           string     `json:"phone,omitempty"`
+	Role            Role       `json:"role"`
+	BranchID        string     `json:"branch_id,omitempty"`
+	Status          UserStatus `json:"status"`
+	Address         *Address   `json:"address,omitempty"`
+	UpdatedBy       string     `json:"updated_by,omitempty"`
+	UpdatedAt       *time.Time `json:"updated_at,omitempty"`
+	DriverType      DriverType `json:"driver_type,omitempty"`
+	TwoFAEnabled    bool       `json:"two_fa_enabled"`
+	TwoFAEnrolledAt *time.Time `json:"two_fa_enrolled_at,omitempty"`
 }
 
 type UserProfileResponse struct {
@@ -78,15 +78,14 @@ type ChangePasswordRequest struct {
 	ConfirmPassword string `json:"confirm_password" binding:"required"`
 }
 
-
 type TwoFASetupRequest struct {
 	// Vacío: solo activa el proceso
 }
 
 type TwoFASetupResponse struct {
-	Secret    string `json:"secret"`     
-	QRCodeURL string `json:"qr_code_url"` 
-	Issuer    string `json:"issuer"`
+	Secret      string `json:"secret"`
+	QRCodeURL   string `json:"qr_code_url"`
+	Issuer      string `json:"issuer"`
 	AccountName string `json:"account_name"`
 }
 
@@ -100,7 +99,7 @@ type TwoFAVerifyRequest struct {
 }
 
 type TwoFAVerifyResponse struct {
-	Token string `json:"token"` 
+	Token string `json:"token"`
 	User  User   `json:"user"`
 }
 

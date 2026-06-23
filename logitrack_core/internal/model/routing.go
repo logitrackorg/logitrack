@@ -200,8 +200,8 @@ type InterBranchAssignment struct {
 // at_hub en BranchID que el vehículo recogerá al pasar (cross-branch pickup).
 type AssignmentStop struct {
 	BranchID        string   `json:"branch_id"`
-	Shipments       []string `json:"shipments"`        // dropoffs
-	TotalWeightKg   float64  `json:"total_weight_kg"`  // peso de los dropoffs
+	Shipments       []string `json:"shipments"`       // dropoffs
+	TotalWeightKg   float64  `json:"total_weight_kg"` // peso de los dropoffs
 	PickupShipments []string `json:"pickup_shipments,omitempty"`
 	PickupWeightKg  float64  `json:"pickup_weight_kg,omitempty"`
 	// EstimatedArrivalMin es el arribo estimado a esta parada en minutos desde medianoche.
@@ -213,13 +213,13 @@ const MaxTripStops = 3
 
 // UnassignedShipment es un envío que el algoritmo no pudo rutear, con motivo.
 type UnassignedShipment struct {
-	TrackingID     string  `json:"tracking_id"`
-	Destination    string  `json:"destination"` // final_branch_id, o "(última milla)" si aplica
-	Reason         string  `json:"reason"`      // código snake_case (sin_choferes_disponibles, etc.)
-	WeightKg       float64 `json:"weight_kg"`
-	Priority       string  `json:"priority"`
-	SLAForced      bool    `json:"sla_forced,omitempty"`
-	PriorityScore  float64 `json:"priority_score,omitempty"`
+	TrackingID    string  `json:"tracking_id"`
+	Destination   string  `json:"destination"` // final_branch_id, o "(última milla)" si aplica
+	Reason        string  `json:"reason"`      // código snake_case (sin_choferes_disponibles, etc.)
+	WeightKg      float64 `json:"weight_kg"`
+	Priority      string  `json:"priority"`
+	SLAForced     bool    `json:"sla_forced,omitempty"`
+	PriorityScore float64 `json:"priority_score,omitempty"`
 }
 
 // VehicleLoad reporta la carga ya asignada a un vehículo del pool. Se exporta

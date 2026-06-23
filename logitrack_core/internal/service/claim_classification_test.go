@@ -11,12 +11,12 @@ import (
 // (chatbot o formulario público).
 func TestClassifyClaimType_Table(t *testing.T) {
 	cases := []struct {
-		name             string
-		category         ClaimCategoryInput
-		damageSubtypes   []DamageSubtype
-		deliverySubtype  DeliverySubtype
-		wantType         model.ClaimType
-		wantOK           bool
+		name            string
+		category        ClaimCategoryInput
+		damageSubtypes  []DamageSubtype
+		deliverySubtype DeliverySubtype
+		wantType        model.ClaimType
+		wantOK          bool
 	}{
 		{
 			name:     "staff_conduct → bad_treatment",
