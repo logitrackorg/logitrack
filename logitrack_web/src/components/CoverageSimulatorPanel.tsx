@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import type { Region } from "../api/regions";
-
-export const SIM_AREA_MIN = 50;
-export const SIM_AREA_MAX = 1_000_000;
-export const SIM_AREA_STEP = 1_000;
-export const SIM_AREA_DEFAULT = 500_000;
+import { SIM_AREA_MAX, computeSimAreaBounds } from "../utils/coverageArea";
 
 const MIN_POP_MAX = 500_000;
 const MIN_POP_STEP = 10_000;
@@ -138,14 +134,12 @@ export function CoverageSimulatorPanel({
 }: CoverageSimulatorPanelProps) {
   const isDisabled = disabled || isDiagnosing;
 
-  // Adaptive slider bounds: floor stays at SIM_AREA_MIN (~4 km radius) even
-  // nationally so dense metros (AMBA) can use a tight radius that exposes
-  // uncovered demand; max scales to 25 % of the active zone. Use the number
-  // input for precise small values — the linear slider is coarse at the low end.
+  // Adaptive slider bounds: both floor (0.1 %) and ceiling (25 %) scale with the
+  // active zone so small zones (CABA) keep a usable range instead of being pinned
+  // at a fixed floor near their own ceiling. Use the number input for precise
+  // small values — the linear slider is coarse at the low end.
   const effectiveZoneArea = zoneAreaKm2 ?? SIM_AREA_MAX;
-  const simAreaMin = SIM_AREA_MIN;
-  const simAreaMax = Math.max(simAreaMin, Math.min(SIM_AREA_MAX, Math.round(effectiveZoneArea * 0.25)));
-  const simAreaStep = Math.max(10, Math.round((simAreaMax - simAreaMin) / 1000));
+  const { min: simAreaMin, max: simAreaMax, step: simAreaStep } = computeSimAreaBounds(effectiveZoneArea);
 
   const [minPopulation, setMinPopulation] = useState(MIN_POP_DEFAULT);
   const [densityInput, setDensityInput] = useState("0");
@@ -176,14 +170,12 @@ export function CoverageSimulatorPanel({
             disabled={isDrawingBoundary}
             className="flex-1 text-xs px-2 py-1.5 rounded-md border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
-            <option value="national">Nacional (Completo)</option>
-            {predefined.length > 0 && (
-              <optgroup label="Zonas Predefinidas">
-                {predefined.map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
-                ))}
-              </optgroup>
-            )}
+            <optgroup label="Zonas Predefinidas">
+              <option value="national">Nacional (Completo)</option>
+              {predefined.map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </optgroup>
             {custom.length > 0 && (
               <optgroup label="Mis Zonas">
                 {custom.map((r) => (

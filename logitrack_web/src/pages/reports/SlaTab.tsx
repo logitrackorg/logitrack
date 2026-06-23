@@ -32,7 +32,8 @@ import {
 } from "../../api/coverage";
 import { regionsApi, type Region as CoverageRegion } from "../../api/regions";
 import { VoronoiCoverageMap, type VoronoiCoverageMapHandle } from "../../components/VoronoiCoverageMap";
-import { CoverageSimulatorPanel, SIM_AREA_DEFAULT, SIM_AREA_MIN, SIM_AREA_MAX, type DiagnosisMode } from "../../components/CoverageSimulatorPanel";
+import { CoverageSimulatorPanel, type DiagnosisMode } from "../../components/CoverageSimulatorPanel";
+import { SIM_AREA_DEFAULT, SIM_AREA_MAX, computeSimAreaBounds } from "../../utils/coverageArea";
 import { CollapsiblePanel } from "../../components/CollapsiblePanel";
 import { SkeletonCard } from "../../components/ui/skeleton";
 // ── Palette ──────────────────────────────────────────────────────────────────
@@ -1147,13 +1148,14 @@ export function CoberturaTab() {
     setIsDrawingBoundary(true);
   }, [resetDiagnosis]);
 
-  // Editar una zona personalizada existente: entra en modo re-dibujo mostrando
-  // la forma original de fondo (tono claro) como referencia. Al cerrar el nuevo
-  // polígono (Enter) se abre el modal con el nombre precargado para confirmar
-  // nombre + nueva geometría. Solo aplica a zonas propias (type "custom").
+  // Editar una zona existente: entra en modo re-dibujo mostrando la forma
+  // original de fondo (tono claro) como referencia. Al cerrar el nuevo polígono
+  // (Enter) se abre el modal con el nombre precargado para confirmar nombre +
+  // nueva geometría. Las zonas propias se reemplazan; las predefinidas se
+  // guardan como una zona nueva en "Mis Zonas" (ver handleSaveNewRegion).
   const handleStartEditRegion = useCallback(() => {
     const region = regions.find((r) => r.id === selectedRegionId);
-    if (!region || region.type !== "custom") return;
+    if (!region) return;
     resetDiagnosis();
     setEditingRegionId(region.id);
     setRedrawReference(customBoundary ?? region.coordinates.map((c) => [c.lat, c.lng]));
@@ -1169,10 +1171,13 @@ export function CoberturaTab() {
     setRegionSaveError(null);
     setPendingRegionBoundary(pts);
     // Al editar, precargamos el nombre actual para que el usuario pueda
-    // mantenerlo o cambiarlo en el mismo paso de confirmación.
+    // mantenerlo o cambiarlo. Las predefinidas se guardan como zona nueva, así
+    // que sugerimos "{nombre} (editada)" para no duplicar el nombre original.
     if (editingRegionId) {
       const region = regions.find((r) => r.id === editingRegionId);
-      setSavingRegionName(region?.name ?? "");
+      if (region) {
+        setSavingRegionName(region.type === "custom" ? region.name : `${region.name} (editada)`);
+      }
     }
     setShowSaveRegionModal(true);
   }, [editingRegionId, regions]);
@@ -1217,19 +1222,27 @@ export function CoberturaTab() {
     setCustomBoundary(pts);
     setIsEditingBoundary(false);
     resetDiagnosis();
-    // If the active boundary belongs to a saved custom region, persist the new
-    // shape immediately so it survives a page refresh.
+    // Persistir la nueva forma para que sobreviva a un F5.
     if (selectedRegionId !== "national") {
-      const region = regions.find((r) => r.id === selectedRegionId && r.type === "custom");
+      const region = regions.find((r) => r.id === selectedRegionId);
       if (region) {
+        const coordinates = pts.map(([lat, lng]) => ({ lat, lng }));
         try {
           setRegionSaveError(null);
-          await regionsApi.update(region.id, {
-            name: region.name,
-            coordinates: pts.map(([lat, lng]) => ({ lat, lng })),
-          });
-          const updated = await regionsApi.list();
-          setRegions(updated);
+          if (region.type === "custom") {
+            // Zona propia: se reemplaza en el lugar.
+            await regionsApi.update(region.id, { name: region.name, coordinates });
+            const updated = await regionsApi.list();
+            setRegions(updated);
+          } else {
+            // Zona predefinida: está hardcodeada en el servidor (un PUT daría 404
+            // y al F5 volvería a su forma original). En vez de reemplazarla,
+            // guardamos la edición como una zona nueva en "Mis Zonas".
+            const saved = await regionsApi.create({ name: `${region.name} (editada)`, coordinates });
+            const updated = await regionsApi.list();
+            setRegions(updated);
+            setSelectedRegionId(saved.id);
+          }
         } catch {
           setRegionSaveError("No se pudieron guardar los cambios de la zona. Verificá tu conexión e intentá de nuevo.");
         }
@@ -1248,8 +1261,12 @@ export function CoberturaTab() {
     try {
       const coordinates = pendingRegionBoundary.map(([lat, lng]) => ({ lat, lng }));
       const name = savingRegionName.trim();
-      const saved = editingRegionId
-        ? await regionsApi.update(editingRegionId, { name, coordinates })
+      // Solo se reemplaza en el lugar cuando se edita una zona propia. Editar una
+      // zona predefinida (hardcodeada en el servidor) crea una zona nueva en
+      // "Mis Zonas" en vez de intentar un update que devolvería 404.
+      const editingRegion = editingRegionId ? regions.find((r) => r.id === editingRegionId) : undefined;
+      const saved = editingRegion?.type === "custom"
+        ? await regionsApi.update(editingRegion.id, { name, coordinates })
         : await regionsApi.create({ name, coordinates });
       const updated = await regionsApi.list();
       setRegions(updated);
@@ -1267,7 +1284,7 @@ export function CoberturaTab() {
     } finally {
       setSavingRegion(false);
     }
-  }, [pendingRegionBoundary, savingRegionName, editingRegionId]);
+  }, [pendingRegionBoundary, savingRegionName, editingRegionId, regions]);
 
   const handleCancelSaveRegion = useCallback(() => {
     setShowSaveRegionModal(false);
@@ -1820,14 +1837,11 @@ export function CoberturaTab() {
     return `${minLng},${minLat},${maxLng},${maxLat}`;
   }, [customBoundary]);
 
-  // Clamp the coverage-radius slider whenever the zone area changes.
-  // The floor stays at SIM_AREA_MIN (~4 km radius) even nationally so dense
-  // metros (AMBA) can use a tight radius that exposes uncovered demand — a
-  // larger floor would let a single central branch blanket the whole metro and
-  // suppress all suggestions there.
+  // Clamp the coverage-radius slider whenever the zone area changes. Both bounds
+  // scale with the zone (min = 0.1 %, max = 25 %) so small zones like CABA keep a
+  // usable range — computeSimAreaBounds keeps this in sync with the panel.
   useEffect(() => {
-    const minA = SIM_AREA_MIN;
-    const maxA = Math.max(minA, Math.min(SIM_AREA_MAX, Math.round(zoneAreaKm2 * 0.25)));
+    const { min: minA, max: maxA } = computeSimAreaBounds(zoneAreaKm2);
     setVisualArea((prev) => Math.max(minA, Math.min(maxA, prev)));
   }, [zoneAreaKm2]);
 
@@ -2032,7 +2046,7 @@ export function CoberturaTab() {
                 selectedRegionId={selectedRegionId}
                 onRegionChange={handleRegionChange}
                 onStartDrawNewRegion={handleStartDrawNewRegion}
-                canEditSelectedRegion={regions.find((r) => r.id === selectedRegionId)?.type === "custom"}
+                canEditSelectedRegion={selectedRegionId !== "national" && regions.some((r) => r.id === selectedRegionId)}
                 onEditRegion={handleStartEditRegion}
                 diagnosisMode={diagnosisMode}
                 onDiagnosisModeChange={setDiagnosisMode}
