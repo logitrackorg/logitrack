@@ -199,6 +199,11 @@ type SnapToCityRequest struct {
 	// different results after the user discards a previously-returned city.
 	// Empty or nil disables the filter.
 	BlacklistedCities []string `json:"blacklisted_cities,omitempty"`
+
+	// Provinces is an optional whitelist of province names (exact dataset
+	// strings, see geo.Provinces): only cities in these provinces are eligible
+	// for snapping. Empty or nil disables the filter (any province).
+	Provinces []string `json:"provinces,omitempty"`
 }
 
 // SnapToCityResponse pairs each input point with its SnappedCity result,
@@ -230,6 +235,11 @@ type DensityOptions struct {
 	// ExcludedCities are city names from previous diagnoses that the snap
 	// step must skip, so "Buscar más" returns genuinely new locations.
 	ExcludedCities []string `json:"excluded_cities,omitempty"`
+
+	// Provinces is an optional whitelist of province names (exact dataset
+	// strings, see geo.Provinces): only cities in these provinces are kept as
+	// candidates. Empty or nil disables the filter (any province).
+	Provinces []string `json:"provinces,omitempty"`
 
 	// AdditionalSites are coordinates of already-placed suggestions (from
 	// previous "Buscar más" rounds). Their coverage circles are subtracted

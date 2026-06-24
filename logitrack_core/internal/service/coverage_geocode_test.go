@@ -14,7 +14,7 @@ var tandil = model.LatLng{Lat: -37.32885, Lng: -59.13399}
 
 func TestSnapToCities_Empty(t *testing.T) {
 	svc := NewCoverageService(nil, nil)
-	results := svc.SnapToCities(nil, 50, 0, nil)
+	results := svc.SnapToCities(nil, 50, 0, nil, nil)
 	if len(results) != 0 {
 		t.Fatalf("expected empty results, got %d", len(results))
 	}
@@ -24,7 +24,7 @@ func TestSnapToCities_Empty(t *testing.T) {
 // to it with its official population.
 func TestSnapToCities_SnapsToRealCity(t *testing.T) {
 	svc := NewCoverageService(nil, nil)
-	results := svc.SnapToCities([]model.LatLng{tandil}, 10, 0, nil)
+	results := svc.SnapToCities([]model.LatLng{tandil}, 10, 0, nil, nil)
 	if len(results) != 1 || !results[0].Snapped {
 		t.Fatalf("expected Tandil to snap, got %+v", results)
 	}
@@ -41,7 +41,7 @@ func TestSnapToCities_SnapsToRealCity(t *testing.T) {
 func TestSnapToCities_NoResultsBeyondRadius(t *testing.T) {
 	svc := NewCoverageService(nil, nil)
 	ocean := model.LatLng{Lat: -45.0, Lng: -45.0} // South Atlantic
-	results := svc.SnapToCities([]model.LatLng{ocean}, 50, 0, nil)
+	results := svc.SnapToCities([]model.LatLng{ocean}, 50, 0, nil, nil)
 	if results[0].Snapped {
 		t.Errorf("expected no snap in the open ocean, got %q", results[0].CityName)
 	}
@@ -54,7 +54,7 @@ func TestSnapToCities_NoResultsBeyondRadius(t *testing.T) {
 // population yields no snap.
 func TestSnapToCities_MinPopulationFilter(t *testing.T) {
 	svc := NewCoverageService(nil, nil)
-	results := svc.SnapToCities([]model.LatLng{tandil}, 10, 1_000_000_000, nil)
+	results := svc.SnapToCities([]model.LatLng{tandil}, 10, 1_000_000_000, nil, nil)
 	if results[0].Snapped {
 		t.Errorf("expected no snap with impossible minPopulation, got %q", results[0].CityName)
 	}
@@ -63,9 +63,42 @@ func TestSnapToCities_MinPopulationFilter(t *testing.T) {
 // TestSnapToCities_Blacklist verifies a blacklisted city is never selected.
 func TestSnapToCities_Blacklist(t *testing.T) {
 	svc := NewCoverageService(nil, nil)
-	results := svc.SnapToCities([]model.LatLng{tandil}, 10, 0, []string{"Tandil"})
+	results := svc.SnapToCities([]model.LatLng{tandil}, 10, 0, []string{"Tandil"}, nil)
 	if results[0].Snapped && results[0].CityName == "Tandil" {
 		t.Error("expected Tandil to be excluded by the blacklist")
+	}
+}
+
+// TestSnapToCities_ProvinceFilter verifies the province whitelist keeps cities
+// in allowed provinces and excludes the rest.
+func TestSnapToCities_ProvinceFilter(t *testing.T) {
+	svc := NewCoverageService(nil, nil)
+
+	var prov string
+	for _, l := range geo.Localities() {
+		if l.Nombre == "Tandil" {
+			prov = l.Provincia
+			break
+		}
+	}
+	if prov == "" {
+		t.Skip("Tandil not in dataset")
+	}
+
+	// Allowing Tandil's own province keeps it.
+	keep := svc.SnapToCities([]model.LatLng{tandil}, 10, 0, nil, []string{prov})
+	if !keep[0].Snapped {
+		t.Errorf("expected snap when Tandil's province (%q) is allowed, got %+v", prov, keep[0])
+	}
+
+	// Allowing only a different province (no city of it within 10km) excludes it.
+	other := "Córdoba"
+	if prov == other {
+		other = "Buenos Aires"
+	}
+	drop := svc.SnapToCities([]model.LatLng{tandil}, 10, 0, nil, []string{other})
+	if drop[0].Snapped {
+		t.Errorf("expected no snap when only %q is allowed, got %q", other, drop[0].CityName)
 	}
 }
 
@@ -87,7 +120,7 @@ func TestBestLocality_PrefersHigherPopulation(t *testing.T) {
 		t.Fatal("dataset has no locality within 200km of Tandil — unexpected")
 	}
 
-	best, found := bestLocality(tandil.Lat, tandil.Lng, radiusKm, 0, nil, nil)
+	best, found := bestLocality(tandil.Lat, tandil.Lng, radiusKm, 0, nil, nil, nil)
 	if !found {
 		t.Fatal("expected a candidate within 200km")
 	}
@@ -99,7 +132,7 @@ func TestBestLocality_PrefersHigherPopulation(t *testing.T) {
 // TestBestLocality_RespectsRadius verifies candidates beyond the radius are
 // excluded.
 func TestBestLocality_RespectsRadius(t *testing.T) {
-	best, found := bestLocality(tandil.Lat, tandil.Lng, 5.0, 0, nil, nil)
+	best, found := bestLocality(tandil.Lat, tandil.Lng, 5.0, 0, nil, nil, nil)
 	if !found {
 		t.Fatal("expected Tandil itself within 5km")
 	}
@@ -119,7 +152,7 @@ func TestBestLocality_DangerousZoneExcluded(t *testing.T) {
 		{Lat: -37.1, Lng: -58.9},
 		{Lat: -37.1, Lng: -59.4},
 	}
-	_, found := bestLocality(tandil.Lat, tandil.Lng, 5.0, 0, nil, [][]model.LatLng{zone})
+	_, found := bestLocality(tandil.Lat, tandil.Lng, 5.0, 0, nil, [][]model.LatLng{zone}, nil)
 	if found {
 		t.Error("expected Tandil to be excluded by the dangerous zone")
 	}

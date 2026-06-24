@@ -210,6 +210,7 @@ export const coverageApi = {
       minDensity?: number;
       rankingMode?: "population" | "gap_area";
       excludedCities?: string[];
+      provinces?: string[];
       additionalSites?: LatLng[];
       prioritizeIndustrial?: boolean;
       applyTerrainFriction?: boolean;
@@ -233,6 +234,7 @@ export const coverageApi = {
                 ...(density.minDensity && density.minDensity > 0 ? { min_density: density.minDensity } : {}),
                 ...(density.rankingMode && density.rankingMode !== "population" ? { ranking_mode: density.rankingMode } : {}),
                 ...(density.excludedCities?.length ? { excluded_cities: density.excludedCities } : {}),
+                ...(density.provinces?.length ? { provinces: density.provinces } : {}),
                 ...(density.additionalSites?.length ? { additional_sites: density.additionalSites } : {}),
                 ...(density.prioritizeIndustrial ? { prioritize_industrial: true } : {}),
                 ...(density.applyTerrainFriction ? { apply_terrain_friction: true } : {}),
@@ -250,17 +252,24 @@ export const coverageApi = {
    * `radiusKm` (la zona de cobertura simulada). Devuelve un resultado por
    * punto, en el mismo orden.
    */
+  /** Lista de provincias del dataset (strings exactos), para el filtro del simulador. */
+  listProvinces: (): Promise<string[]> =>
+    api.get<{ provinces: string[] }>("/coverage/provinces").then((r) => r.data.provinces ?? []),
+
   /**
    * blacklistedCities: nombres de ciudades a excluir de la selección en este reintento
    * (ciudades descartadas por el usuario en reintentos anteriores).
+   * provinces: whitelist de provincias (strings exactos del dataset); solo se
+   * aterrizan ciudades de esas provincias. Vacío/undefined = sin filtro.
    */
-  snapToCity: (points: LatLng[], radiusKm: number, minPopulation = 0, blacklistedCities?: string[]) =>
+  snapToCity: (points: LatLng[], radiusKm: number, minPopulation = 0, blacklistedCities?: string[], provinces?: string[]) =>
     api
       .post<SnapToCityResponse>("/coverage/snap-to-city", {
         points,
         radius_km: radiusKm,
         min_population: minPopulation,
         ...(blacklistedCities?.length ? { blacklisted_cities: blacklistedCities } : {}),
+        ...(provinces?.length ? { provinces } : {}),
       })
       .then((r) => r.data.results),
 

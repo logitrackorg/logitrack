@@ -1058,6 +1058,12 @@ export function CoberturaTab() {
   const [minScore, setMinScore] = useState(0);
   const minScoreRef = useRef(0);
   const [showRejectedOnMap, setShowRejectedOnMap] = useState(true);
+  // Filtro de provincias: lista completa (del dataset) + selección del usuario.
+  // Vacío = sin filtro (todas las provincias). El ref lo leen diagnoseCore y el
+  // snap (callbacks estables que no quieren cerrar sobre el estado).
+  const [provinces, setProvinces] = useState<string[]>([]);
+  const [selectedProvinces, setSelectedProvinces] = useState<string[]>([]);
+  const selectedProvincesRef = useRef<string[]>([]);
 
   const simResultRef = useRef<SimulationResult | null>(null);
   const visualAreaRef = useRef(SIM_AREA_DEFAULT);
@@ -1125,6 +1131,7 @@ export function CoberturaTab() {
   useEffect(() => { applyTerrainFrictionRef.current = applyTerrainFriction; }, [applyTerrainFriction]);
   useEffect(() => { minSeparationRef.current = minSeparation; }, [minSeparation]);
   useEffect(() => { minScoreRef.current = minScore; }, [minScore]);
+  useEffect(() => { selectedProvincesRef.current = selectedProvinces; }, [selectedProvinces]);
 
   // Fetch all branches (including inactive) for the simulation panel.
   useEffect(() => { branchApi.list().then(setAllBranches).catch(() => {}); }, []);
@@ -1134,6 +1141,9 @@ export function CoberturaTab() {
 
   // Fetch active dangerous zones (read-only overlay + scoring penalty).
   useEffect(() => { zoneApi.list(false).then(setDangerZones).catch(() => {}); }, []);
+
+  // Fetch the province list (dataset strings) for the province filter dropdown.
+  useEffect(() => { coverageApi.listProvinces().then(setProvinces).catch(() => {}); }, []);
 
   // Limpia el último diagnóstico confirmado (sugerencias, ciudades aterrizadas,
   // errores, proyección). Se llama al cambiar de zona para que el resultado de
@@ -1375,6 +1385,7 @@ export function CoberturaTab() {
               applyTerrainFriction: applyTerrainFrictionRef.current || undefined,
               minSeparation: minSeparationRef.current > 0 ? minSeparationRef.current : undefined,
               minScore: minScoreRef.current > 0 ? minScoreRef.current : undefined,
+              provinces: selectedProvincesRef.current.length > 0 ? selectedProvincesRef.current : undefined,
             }
           : undefined,
       )
@@ -1538,6 +1549,7 @@ export function CoberturaTab() {
               applyTerrainFriction: applyTerrainFrictionRef.current || undefined,
               minSeparation: minSeparationRef.current > 0 ? minSeparationRef.current : undefined,
               minScore: minScoreRef.current > 0 ? minScoreRef.current : undefined,
+              provinces: selectedProvincesRef.current.length > 0 ? selectedProvincesRef.current : undefined,
             }
           : undefined,
       )
@@ -1684,6 +1696,7 @@ export function CoberturaTab() {
           radiusKm,
           snapMinPopulationRef.current,
           blacklistedCities.length > 0 ? blacklistedCities : undefined,
+          selectedProvincesRef.current.length > 0 ? selectedProvincesRef.current : undefined,
         );
         for (let i = 0; i < batch.length; i++) {
           if (snapResults[i]) {
@@ -2161,6 +2174,9 @@ export function CoberturaTab() {
                 onStartDrawNewRegion={handleStartDrawNewRegion}
                 canEditSelectedRegion={selectedRegionId !== "national" && regions.some((r) => r.id === selectedRegionId)}
                 onEditRegion={handleStartEditRegion}
+                provinces={provinces}
+                selectedProvinces={selectedProvinces}
+                onSelectedProvincesChange={setSelectedProvinces}
                 diagnosisMode={diagnosisMode}
                 onDiagnosisModeChange={setDiagnosisMode}
                 minDensity={minDensity}

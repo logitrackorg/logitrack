@@ -687,6 +687,7 @@ func main() {
 	protected.GET("/coverage/branch-for", shipmentWrite, coverageHandler.BranchForPoint)
 	protected.POST("/coverage/diagnose", canViewStats, coverageHandler.Diagnose)
 	protected.POST("/coverage/snap-to-city", canViewStats, coverageHandler.SnapToCity)
+	protected.GET("/coverage/provinces", canViewStats, coverageHandler.Provinces)
 	protected.POST("/coverage/project", canViewStats, coverageHandler.Project)
 	protected.GET("/coverage/industrial-heatmap", canViewStats, coverageHandler.IndustrialHeatmap)
 	protected.GET("/regions", canViewStats, regionHandler.List)
