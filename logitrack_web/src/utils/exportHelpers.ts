@@ -57,14 +57,19 @@ export interface BranchSuggestionPdfRow {
 }
 
 /**
- * Genera un PDF de texto (no captura de pantalla) con las recomendaciones de
- * nuevas sucursales del simulador de Cobertura territorial. Estructurado y
- * paginado: una entrada por ciudad recomendada, ordenadas como se reciben.
+ * Genera un PDF con las recomendaciones de nuevas sucursales del simulador de
+ * Cobertura territorial: una captura opcional del mapa centrado en las
+ * recomendaciones, seguida de una entrada de texto por ciudad recomendada.
+ * Estructurado y paginado.
+ *
+ * mapImageDataUrl: PNG (data URL) del mapa ya centrado; si es undefined o falla
+ * la captura, el reporte se genera igual, solo sin la imagen.
  */
-export function exportBranchSuggestionsToPDF(
+export async function exportBranchSuggestionsToPDF(
   meta: BranchSuggestionPdfMeta,
   rows: BranchSuggestionPdfRow[],
   filename: string,
+  mapImageDataUrl?: string,
 ) {
   try {
     toast.success("Generando PDF…");
@@ -113,6 +118,34 @@ export function exportBranchSuggestionsToPDF(
     pdf.line(marginX, y, pageW - marginX, y);
     y += 7;
     pdf.setTextColor(0);
+
+    // Captura del mapa centrado en las recomendaciones (si está disponible).
+    if (mapImageDataUrl) {
+      try {
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const i = new Image();
+          i.onload = () => resolve(i);
+          i.onerror = reject;
+          i.src = mapImageDataUrl;
+        });
+        const aspect = img.naturalWidth / img.naturalHeight || 1.6;
+        let imgW = contentW;
+        let imgH = imgW / aspect;
+        const maxH = 110;
+        if (imgH > maxH) {
+          imgH = maxH;
+          imgW = imgH * aspect;
+        }
+        const imgX = marginX + (contentW - imgW) / 2;
+        pdf.addImage(mapImageDataUrl, "PNG", imgX, y, imgW, imgH);
+        y += imgH + 6;
+        pdf.setDrawColor(200);
+        pdf.line(marginX, y, pageW - marginX, y);
+        y += 7;
+      } catch {
+        // Si la imagen no carga, seguimos con el reporte de texto.
+      }
+    }
 
     if (rows.length === 0) {
       pdf.setFontSize(11);
