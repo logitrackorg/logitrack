@@ -4,7 +4,7 @@ import {
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
   ChevronDown, ChevronUp, UserPlus, UserMinus, Info, MapPin,
   Eye, EyeOff, X, AlertTriangle, Gauge, Maximize2, Minimize2, Target, Trash2, ExternalLink,
-  Power, RotateCcw, Building2, Settings,
+  Power, RotateCcw, Building2, Settings, FileDown,
 } from "lucide-react";
 import type { FleetStatus, FleetDiagnosis, BranchFleetDiagnosis } from "../../api/slaMetrics";
 import {
@@ -36,6 +36,7 @@ import { isInDangerZone } from "../../utils/pointInPolygon";
 import { VoronoiCoverageMap, type VoronoiCoverageMapHandle } from "../../components/VoronoiCoverageMap";
 import { CoverageSimulatorPanel, type DiagnosisMode } from "../../components/CoverageSimulatorPanel";
 import { SIM_AREA_DEFAULT, SIM_AREA_MAX, computeSimAreaBounds } from "../../utils/coverageArea";
+import { exportBranchSuggestionsToPDF } from "../../utils/exportHelpers";
 import { CollapsiblePanel } from "../../components/CollapsiblePanel";
 import { SkeletonCard } from "../../components/ui/skeleton";
 // ── Palette ──────────────────────────────────────────────────────────────────
@@ -1562,6 +1563,59 @@ export function CoberturaTab() {
       .finally(() => setIsFindingMore(false));
   }, [isFindingMore, isDiagnosing, snappedCities, excludedCitiesForMore, rejectedLocations]);
 
+  // "Descargar PDF": reporte de texto con las recomendaciones aterrizadas en
+  // ciudades reales, en el mismo orden y con el mismo score que se muestra en
+  // las tarjetas (score ponderado con los modificadores activos).
+  const handleExportSuggestionsPdf = useCallback(() => {
+    const result = simResultRef.current;
+    if (!result) return;
+    const snaps = snappedCities ?? [];
+    const rows = result.suggested_locations
+      .map((loc, i) => ({ loc, snap: snaps[i] }))
+      .filter(({ snap }) => snap?.is_snapped)
+      .map(({ loc, snap }) => {
+        const inDanger = isInDangerZone(loc.lat, loc.lng, dangerZones);
+        return {
+          loc,
+          cityName: snap!.city_name || loc.city_name || `(${loc.lat.toFixed(3)}°, ${loc.lng.toFixed(3)}°)`,
+          score: computeWeightedScore(loc, effectiveWeights, inDanger),
+          inDanger,
+        };
+      })
+      .sort((a, b) => b.score - a.score)
+      .map(({ loc, cityName, score, inDanger }, idx) => {
+        const flags: string[] = [];
+        if (loc.has_industrial_zone) flags.push("Zona industrial cercana");
+        if (loc.terrain_type && loc.terrain_type !== "Llano") flags.push(`Terreno: ${loc.terrain_type}`);
+        if (inDanger) flags.push("Dentro de una zona peligrosa");
+        return {
+          rank: idx + 1,
+          cityName,
+          score,
+          population: loc.population,
+          density: loc.density,
+          netAreaKm2: loc.actual_added_km2,
+          affectedBranches: loc.affected_branches,
+          flags,
+        };
+      });
+
+    const region = regions.find((r) => r.id === selectedRegionId);
+    const scopeLabel = selectedRegionId === "national" ? "Nacional (Completo)" : (region?.name ?? "Zona personalizada");
+    const now = new Date();
+    exportBranchSuggestionsToPDF(
+      {
+        scopeLabel,
+        modeLabel: diagnosisMode === "density" ? "Densidad (hab./km²)" : "Cobertura geográfica",
+        areaKm2: result.simulated_area_km2,
+        radiusKm: Math.sqrt(result.simulated_area_km2 / Math.PI),
+        generatedAt: now,
+      },
+      rows,
+      `recomendaciones-sucursales-${now.toISOString().slice(0, 10)}.pdf`,
+    );
+  }, [snappedCities, dangerZones, effectiveWeights, regions, selectedRegionId, diagnosisMode]);
+
   // Sugerencias que todavía no aterrizaron en una ciudad real: solo estas se
   // vuelven a enviar al backend en cada click (evita reprocesar puntos que ya
   // tienen resultado).
@@ -2426,6 +2480,15 @@ export function CoberturaTab() {
             Diagrama de cobertura por sucursal (Voronoi) y detección de zonas sub-cubiertas
           </p>
         </div>
+        <button
+          onClick={handleExportSuggestionsPdf}
+          disabled={!(snappedCities ?? []).some((c) => c?.is_snapped)}
+          title="Descargar PDF de las recomendaciones de sucursal"
+          aria-label="Descargar PDF de recomendaciones"
+          className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-gray-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-500"
+        >
+          <FileDown className="w-4 h-4" />
+        </button>
         <button
           onClick={() => setShowScoreSettings(true)}
           title="Configurar pesos del Índice de Viabilidad"
