@@ -6,13 +6,18 @@ export function useMidRouteFatigue() {
   const [misfireCount, setMisfireCount] = useState(0);
   const [requiresSleepData, setRequiresSleepData] = useState(true);
 
-  const triggerGate = async (misfires: number): Promise<boolean> => {
-    let requireTest = false;
-    try {
-      const eligibility = await driverApi.getTestEligibility({ misfires });
-      requireTest = eligibility.require_test;
-    } catch {
-      // network error → continue without blocking
+  // `force`: omite la consulta de elegibilidad y muestra el gate sí o sí.
+  // Se usa en los check-ins OBLIGATORIOS de cada parada intermedia inter-sucursal,
+  // donde el test debe aparecer siempre (no depende de horas transcurridas / misfires).
+  const triggerGate = async (misfires: number, opts?: { force?: boolean }): Promise<boolean> => {
+    let requireTest = opts?.force ?? false;
+    if (!requireTest) {
+      try {
+        const eligibility = await driverApi.getTestEligibility({ misfires });
+        requireTest = eligibility.require_test;
+      } catch {
+        // network error → continue without blocking
+      }
     }
     if (requireTest) {
       try {

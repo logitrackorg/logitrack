@@ -4,7 +4,7 @@ import {
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
   ChevronDown, ChevronUp, UserPlus, UserMinus, Info, MapPin,
   Eye, EyeOff, X, AlertTriangle, Gauge, Maximize2, Minimize2, Target, Trash2, ExternalLink,
-  Power, RotateCcw, Building2, Settings,
+  Power, RotateCcw, Building2, Settings, FileDown,
 } from "lucide-react";
 import type { FleetStatus, FleetDiagnosis, BranchFleetDiagnosis } from "../../api/slaMetrics";
 import {
@@ -36,6 +36,7 @@ import { isInDangerZone } from "../../utils/pointInPolygon";
 import { VoronoiCoverageMap, type VoronoiCoverageMapHandle } from "../../components/VoronoiCoverageMap";
 import { CoverageSimulatorPanel, type DiagnosisMode } from "../../components/CoverageSimulatorPanel";
 import { SIM_AREA_DEFAULT, SIM_AREA_MAX, computeSimAreaBounds } from "../../utils/coverageArea";
+import { exportBranchSuggestionsToPDF } from "../../utils/exportHelpers";
 import { CollapsiblePanel } from "../../components/CollapsiblePanel";
 import { SkeletonCard } from "../../components/ui/skeleton";
 // ── Palette ──────────────────────────────────────────────────────────────────
@@ -1038,20 +1039,31 @@ export function CoberturaTab() {
   // penalización; "Priorizar zonas industriales" anula su bonus Y lo saca del
   // máximo (denominador), de modo que el score se normaliza solo sobre los 3
   // factores que siempre están: población, densidad y área útil.
-  const effectiveWeights = useMemo(
-    () => ({
+  //
+  // Los tres modificadores son exclusivos del modo "densidad" (sus toggles solo
+  // se muestran ahí, y industrial/terreno solo tienen datos en ese modo). En
+  // "cobertura geográfica" se neutralizan, así el score es población + densidad
+  // + área útil — sin filas fantasma "0/15" por datos que ese modo no calcula.
+  const effectiveWeights = useMemo(() => {
+    const densityMode = diagnosisMode === "density";
+    return {
       ...scoreWeights,
-      terrain: applyTerrainFriction ? scoreWeights.terrain : 0,
-      industry: prioritizeIndustrial ? scoreWeights.industry : 0,
-      danger: penalizeDangerZones ? scoreWeights.danger : 0,
-    }),
-    [scoreWeights, applyTerrainFriction, prioritizeIndustrial, penalizeDangerZones],
-  );
+      terrain: densityMode && applyTerrainFriction ? scoreWeights.terrain : 0,
+      industry: densityMode && prioritizeIndustrial ? scoreWeights.industry : 0,
+      danger: densityMode && penalizeDangerZones ? scoreWeights.danger : 0,
+    };
+  }, [scoreWeights, applyTerrainFriction, prioritizeIndustrial, penalizeDangerZones, diagnosisMode]);
   const [minSeparation, setMinSeparation] = useState(20);
   const minSeparationRef = useRef(20);
   const [minScore, setMinScore] = useState(0);
   const minScoreRef = useRef(0);
   const [showRejectedOnMap, setShowRejectedOnMap] = useState(true);
+  // Filtro de provincias: lista completa (del dataset) + selección del usuario.
+  // Vacío = sin filtro (todas las provincias). El ref lo leen diagnoseCore y el
+  // snap (callbacks estables que no quieren cerrar sobre el estado).
+  const [provinces, setProvinces] = useState<string[]>([]);
+  const [selectedProvinces, setSelectedProvinces] = useState<string[]>([]);
+  const selectedProvincesRef = useRef<string[]>([]);
 
   const simResultRef = useRef<SimulationResult | null>(null);
   const visualAreaRef = useRef(SIM_AREA_DEFAULT);
@@ -1119,6 +1131,7 @@ export function CoberturaTab() {
   useEffect(() => { applyTerrainFrictionRef.current = applyTerrainFriction; }, [applyTerrainFriction]);
   useEffect(() => { minSeparationRef.current = minSeparation; }, [minSeparation]);
   useEffect(() => { minScoreRef.current = minScore; }, [minScore]);
+  useEffect(() => { selectedProvincesRef.current = selectedProvinces; }, [selectedProvinces]);
 
   // Fetch all branches (including inactive) for the simulation panel.
   useEffect(() => { branchApi.list().then(setAllBranches).catch(() => {}); }, []);
@@ -1128,6 +1141,9 @@ export function CoberturaTab() {
 
   // Fetch active dangerous zones (read-only overlay + scoring penalty).
   useEffect(() => { zoneApi.list(false).then(setDangerZones).catch(() => {}); }, []);
+
+  // Fetch the province list (dataset strings) for the province filter dropdown.
+  useEffect(() => { coverageApi.listProvinces().then(setProvinces).catch(() => {}); }, []);
 
   // Limpia el último diagnóstico confirmado (sugerencias, ciudades aterrizadas,
   // errores, proyección). Se llama al cambiar de zona para que el resultado de
@@ -1369,6 +1385,7 @@ export function CoberturaTab() {
               applyTerrainFriction: applyTerrainFrictionRef.current || undefined,
               minSeparation: minSeparationRef.current > 0 ? minSeparationRef.current : undefined,
               minScore: minScoreRef.current > 0 ? minScoreRef.current : undefined,
+              provinces: selectedProvincesRef.current.length > 0 ? selectedProvincesRef.current : undefined,
             }
           : undefined,
       )
@@ -1532,6 +1549,7 @@ export function CoberturaTab() {
               applyTerrainFriction: applyTerrainFrictionRef.current || undefined,
               minSeparation: minSeparationRef.current > 0 ? minSeparationRef.current : undefined,
               minScore: minScoreRef.current > 0 ? minScoreRef.current : undefined,
+              provinces: selectedProvincesRef.current.length > 0 ? selectedProvincesRef.current : undefined,
             }
           : undefined,
       )
@@ -1561,6 +1579,72 @@ export function CoberturaTab() {
       })
       .finally(() => setIsFindingMore(false));
   }, [isFindingMore, isDiagnosing, snappedCities, excludedCitiesForMore, rejectedLocations]);
+
+  // "Descargar PDF": reporte de texto con las recomendaciones aterrizadas en
+  // ciudades reales, en el mismo orden y con el mismo score que se muestra en
+  // las tarjetas (score ponderado con los modificadores activos).
+  const handleExportSuggestionsPdf = useCallback(async () => {
+    const result = simResultRef.current;
+    if (!result) return;
+    const snaps = snappedCities ?? [];
+    const snapped = result.suggested_locations
+      .map((loc, i) => ({ loc, snap: snaps[i] }))
+      .filter(({ snap }) => snap?.is_snapped);
+    if (snapped.length === 0) return;
+
+    const rows = snapped
+      .map(({ loc, snap }) => {
+        const inDanger = isInDangerZone(loc.lat, loc.lng, dangerZones);
+        return {
+          loc,
+          cityName: snap!.city_name || loc.city_name || `(${loc.lat.toFixed(3)}°, ${loc.lng.toFixed(3)}°)`,
+          score: computeWeightedScore(loc, effectiveWeights, inDanger),
+          inDanger,
+        };
+      })
+      .sort((a, b) => b.score - a.score)
+      .map(({ loc, cityName, score, inDanger }, idx) => {
+        const flags: string[] = [];
+        if (loc.has_industrial_zone) flags.push("Zona industrial cercana");
+        if (loc.terrain_type && loc.terrain_type !== "Llano") flags.push(`Terreno: ${loc.terrain_type}`);
+        if (inDanger) flags.push("Dentro de una zona peligrosa");
+        return {
+          rank: idx + 1,
+          cityName,
+          score,
+          population: loc.population,
+          density: loc.density,
+          netAreaKm2: loc.actual_added_km2,
+          affectedBranches: loc.affected_branches,
+          flags,
+        };
+      });
+
+    // Captura del mapa centrado en todas las recomendaciones aterrizadas.
+    const coords = snapped.map(({ snap }) => [snap!.lat, snap!.lng] as [number, number]);
+    let mapImage: string | null = null;
+    try {
+      mapImage = (await coverageMapRef.current?.captureMap(coords)) ?? null;
+    } catch {
+      mapImage = null;
+    }
+
+    const region = regions.find((r) => r.id === selectedRegionId);
+    const scopeLabel = selectedRegionId === "national" ? "Nacional (Completo)" : (region?.name ?? "Zona personalizada");
+    const now = new Date();
+    await exportBranchSuggestionsToPDF(
+      {
+        scopeLabel,
+        modeLabel: diagnosisMode === "density" ? "Densidad (hab./km²)" : "Cobertura geográfica",
+        areaKm2: result.simulated_area_km2,
+        radiusKm: Math.sqrt(result.simulated_area_km2 / Math.PI),
+        generatedAt: now,
+      },
+      rows,
+      `recomendaciones-sucursales-${now.toISOString().slice(0, 10)}.pdf`,
+      mapImage ?? undefined,
+    );
+  }, [snappedCities, dangerZones, effectiveWeights, regions, selectedRegionId, diagnosisMode]);
 
   // Sugerencias que todavía no aterrizaron en una ciudad real: solo estas se
   // vuelven a enviar al backend en cada click (evita reprocesar puntos que ya
@@ -1612,6 +1696,7 @@ export function CoberturaTab() {
           radiusKm,
           snapMinPopulationRef.current,
           blacklistedCities.length > 0 ? blacklistedCities : undefined,
+          selectedProvincesRef.current.length > 0 ? selectedProvincesRef.current : undefined,
         );
         for (let i = 0; i < batch.length; i++) {
           if (snapResults[i]) {
@@ -1663,13 +1748,29 @@ export function CoberturaTab() {
         : base;
     });
 
+    // Enriquecer suggested_locations con la población de la ciudad aterrizada
+    // (y la densidad derivada = población / área neta) para que el Índice de
+    // Viabilidad pueda mostrarse también en modo "Cobertura geográfica" — en
+    // modo densidad el backend ya provee estos campos. Y filtrar las que no
+    // encontraron ciudad, manteniendo la alineación con snappedCities.
+    setSimResult((prev) => {
+      if (!prev) return prev;
+      const enriched = prev.suggested_locations.map((loc, i) => {
+        const snap = snappedUpdates.get(i);
+        if (!snap) return loc;
+        const population = loc.population ?? snap.population;
+        const area = loc.actual_added_km2 ?? loc.gap_area_km2 ?? 0;
+        const density = loc.density ?? (population && population > 0 && area > 0 ? population / area : undefined);
+        return { ...loc, population, density };
+      });
+      const filtered = noResultOrigIndexes.size > 0
+        ? enriched.filter((_, i) => !noResultOrigIndexes.has(i))
+        : enriched;
+      return { ...prev, suggested_locations: filtered };
+    });
+
     if (newRejected.length > 0) {
       setRejectedLocations((prev) => [...prev, ...newRejected]);
-      setSimResult((prev) =>
-        prev
-          ? { ...prev, suggested_locations: prev.suggested_locations.filter((_, i) => !noResultOrigIndexes.has(i)) }
-          : prev,
-      );
     }
 
     setIsFetchingCities(false);
@@ -2073,6 +2174,9 @@ export function CoberturaTab() {
                 onStartDrawNewRegion={handleStartDrawNewRegion}
                 canEditSelectedRegion={selectedRegionId !== "national" && regions.some((r) => r.id === selectedRegionId)}
                 onEditRegion={handleStartEditRegion}
+                provinces={provinces}
+                selectedProvinces={selectedProvinces}
+                onSelectedProvincesChange={setSelectedProvinces}
                 diagnosisMode={diagnosisMode}
                 onDiagnosisModeChange={setDiagnosisMode}
                 minDensity={minDensity}
@@ -2426,6 +2530,15 @@ export function CoberturaTab() {
             Diagrama de cobertura por sucursal (Voronoi) y detección de zonas sub-cubiertas
           </p>
         </div>
+        <button
+          onClick={() => void handleExportSuggestionsPdf()}
+          disabled={!(snappedCities ?? []).some((c) => c?.is_snapped)}
+          title="Descargar PDF de las recomendaciones de sucursal"
+          aria-label="Descargar PDF de recomendaciones"
+          className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-gray-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-500"
+        >
+          <FileDown className="w-4 h-4" />
+        </button>
         <button
           onClick={() => setShowScoreSettings(true)}
           title="Configurar pesos del Índice de Viabilidad"
@@ -2929,7 +3042,9 @@ function SuggestionCard({
         </button>
       </div>
       <div className="flex items-start gap-2">
-        {(loc.score ?? 0) > 0 && <ScoreBadge score={loc.score!} loc={loc} weights={weights} dangerZones={dangerZones} />}
+        {((loc.score ?? 0) > 0 || (loc.population ?? 0) > 0 || (loc.actual_added_km2 ?? 0) > 0) && (
+          <ScoreBadge score={loc.score ?? 0} loc={loc} weights={weights} dangerZones={dangerZones} />
+        )}
         <div className="min-w-0">
           <button
             type="button"

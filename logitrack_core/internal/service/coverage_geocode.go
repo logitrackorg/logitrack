@@ -37,12 +37,30 @@ func isBlacklisted(name string, list []string) bool {
 	return false
 }
 
+// newProvinceFilter builds a lookup set from a province-name list. Returns nil
+// for an empty/nil list, which callers treat as "no province filter". The names
+// must be the exact dataset strings (see geo.Provinces) — the comparison is
+// exact, since the frontend dropdown is populated from that same source.
+func newProvinceFilter(provinces []string) map[string]struct{} {
+	if len(provinces) == 0 {
+		return nil
+	}
+	s := make(map[string]struct{}, len(provinces))
+	for _, p := range provinces {
+		s[p] = struct{}{}
+	}
+	return s
+}
+
 // bestLocality returns the most populous Argentine locality within radiusKm of
-// (originLat, originLng) that passes the minPopulation, blacklist and
+// (originLat, originLng) that passes the minPopulation, blacklist, province and
 // dangerous-zone filters. Ties are broken by proximity. Returns (_, false) when
 // no locality qualifies. Every locality in the dataset is on Argentine soil by
 // construction, so no point-in-country check is needed.
-func bestLocality(originLat, originLng, radiusKm float64, minPopulation int, blacklistedCities []string, dangerousZones [][]model.LatLng) (geo.Locality, bool) {
+//
+// provinceFilter is a set of allowed province names (see newProvinceFilter);
+// nil disables the filter.
+func bestLocality(originLat, originLng, radiusKm float64, minPopulation int, blacklistedCities []string, dangerousZones [][]model.LatLng, provinceFilter map[string]struct{}) (geo.Locality, bool) {
 	var best geo.Locality
 	bestPop := -1
 	var bestDist float64
@@ -59,6 +77,11 @@ func bestLocality(originLat, originLng, radiusKm float64, minPopulation int, bla
 		if isBlacklisted(loc.Nombre, blacklistedCities) {
 			continue
 		}
+		if provinceFilter != nil {
+			if _, ok := provinceFilter[loc.Provincia]; !ok {
+				continue
+			}
+		}
 		if isInAnyDangerousZone(loc.Lat, loc.Lng, dangerousZones) {
 			continue
 		}
@@ -72,6 +95,14 @@ func bestLocality(originLat, originLng, radiusKm float64, minPopulation int, bla
 	return best, found
 }
 
+// Provinces returns the distinct province names present in the embedded
+// locality dataset (sorted) — the option list for the coverage simulator's
+// province filter. Thin pass-through to geo.Provinces so handlers don't import
+// the geo package directly.
+func (s *CoverageService) Provinces() []string {
+	return geo.Provinces()
+}
+
 // SnapToCities resolves a batch of geometric coverage-gap points (lat/lng) to
 // the best real Argentine locality within radiusKm of each — typically the
 // suggested branches' simulated coverage radius.
@@ -82,10 +113,13 @@ func bestLocality(originLat, originLng, radiusKm float64, minPopulation int, bla
 // blacklistedCities is an optional list of city names to exclude from selection
 // (already-discarded suggestions from a previous call). Nil/empty disables it.
 //
+// provinces is an optional whitelist of province names (exact dataset strings):
+// only cities in those provinces are eligible. Nil/empty disables the filter.
+//
 // Results preserve input order. A point with no locality within radiusKm gets
 // Snapped=false with ErrorReason="NO_RESULTS". There is no TIMEOUT case anymore
 // (the lookup is local and cannot fail).
-func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64, minPopulation int, blacklistedCities []string) []model.SnappedCity {
+func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64, minPopulation int, blacklistedCities []string, provinces []string) []model.SnappedCity {
 	results := make([]model.SnappedCity, len(points))
 	if len(points) == 0 {
 		return results
@@ -94,9 +128,10 @@ func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64, 
 	if searchRadiusKm <= 0 {
 		searchRadiusKm = snapToCityMaxRadiusKm
 	}
+	provinceFilter := newProvinceFilter(provinces)
 
 	for i, p := range points {
-		if city, ok := bestLocality(p.Lat, p.Lng, searchRadiusKm, minPopulation, blacklistedCities, nil); ok {
+		if city, ok := bestLocality(p.Lat, p.Lng, searchRadiusKm, minPopulation, blacklistedCities, nil, provinceFilter); ok {
 			results[i] = model.SnappedCity{
 				LatLng:     model.LatLng{Lat: city.Lat, Lng: city.Lng},
 				CityName:   city.Nombre,
@@ -261,7 +296,7 @@ func (s *CoverageService) snapMathSuggestionsInPlace(suggestions []model.Suggest
 
 	for i := range suggestions {
 		p := suggestions[i].LatLng
-		city, ok := bestLocality(p.Lat, p.Lng, searchRadius, minPopulation, blacklistedCities, dangerousZones)
+		city, ok := bestLocality(p.Lat, p.Lng, searchRadius, minPopulation, blacklistedCities, dangerousZones, nil)
 		if !ok {
 			out[i] = model.SnappedCity{LatLng: p, ErrorReason: "NO_RESULTS"}
 			log.Printf("[MathSugg] snap[%d]: not snapped (%.4f, %.4f)", i, p.Lat, p.Lng)

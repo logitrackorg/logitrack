@@ -213,7 +213,7 @@ export function PVTCheckIn({ onDone }: Props) {
   // ── render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed inset-0 z-[3000] bg-[var(--sidebar-bg)]/95 backdrop-blur-sm flex flex-col">
+    <div className="fatigue-overlay fixed inset-0 z-[3000] backdrop-blur-sm flex flex-col">
 
       {/* ── Pantalla de instrucciones ──────────────────────────────────── */}
       {phase === "instructions" && (
@@ -230,15 +230,15 @@ export function PVTCheckIn({ onDone }: Props) {
             </Button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 pb-8">
+          <div className="fatigue-card-scope flex-1 overflow-y-auto px-4 pb-8">
             <div className="max-w-md mx-auto pt-4">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 rounded-xl bg-[var(--brand)]/20 text-[var(--brand)] flex items-center justify-center shrink-0">
                   <Zap className="w-5 h-5" />
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-white leading-tight">Prueba de Reacción</h1>
-                  <p className="text-xs text-slate-400">Test psicomotriz opcional · 15 segundos</p>
+                  <h1 className="text-lg font-bold text-[var(--text-heading)] leading-tight">Prueba de Reacción</h1>
+                  <p className="text-xs text-[var(--text-secondary)]">Test psicomotriz opcional · 15 segundos</p>
                 </div>
               </div>
 
@@ -270,14 +270,14 @@ export function PVTCheckIn({ onDone }: Props) {
 
       {/* ── Pantalla de juego ─────────────────────────────────────────── */}
       {phase === "playing" && (
-        <div className="flex-1 overflow-hidden px-4 py-4 flex flex-col">
+        <div className="fatigue-card-scope flex-1 overflow-hidden px-4 py-4 flex flex-col">
           <div className="max-w-md mx-auto w-full flex flex-col flex-1">
 
             {/* Barra de tiempo */}
             <div className="mb-3 shrink-0">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs text-slate-400">Tiempo restante</span>
-                <span className="text-sm font-bold text-white tabular-nums">{timeLeft}s</span>
+                <span className="text-xs text-[var(--text-secondary)]">Tiempo restante</span>
+                <span className="text-sm font-bold text-[var(--text-heading)] tabular-nums">{timeLeft}s</span>
               </div>
               <div className="h-2 w-full rounded-full bg-[var(--bg-inset)] overflow-hidden">
                 <div
@@ -337,7 +337,7 @@ export function PVTCheckIn({ onDone }: Props) {
               )}
             </div>
 
-            <p className="mt-2 text-[11px] text-slate-500 text-center shrink-0">
+            <p className="mt-2 text-[11px] text-[var(--text-muted)] text-center shrink-0">
               Tocá el círculo verde al aparecer · No toques si no hay círculo
             </p>
           </div>
@@ -346,15 +346,15 @@ export function PVTCheckIn({ onDone }: Props) {
 
       {/* ── Pantalla de resultados ────────────────────────────────────── */}
       {phase === "results" && results && (
-        <div className="flex-1 overflow-y-auto px-4 pb-8">
+        <div className="fatigue-card-scope flex-1 overflow-y-auto px-4 pb-8">
           <div className="max-w-md mx-auto pt-8">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-yellow-500/20 text-yellow-300 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-yellow-500/20 text-[var(--warn-text)] flex items-center justify-center shrink-0">
                 <Trophy className="w-5 h-5" />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-white leading-tight">Resultado</h1>
-                <p className="text-xs text-slate-400">Prueba de 15 s finalizada</p>
+                <h1 className="text-lg font-bold text-[var(--text-heading)] leading-tight">Resultado</h1>
+                <p className="text-xs text-[var(--text-secondary)]">Prueba de 15 s finalizada</p>
               </div>
             </div>
 

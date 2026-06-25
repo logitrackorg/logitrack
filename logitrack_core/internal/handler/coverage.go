@@ -89,9 +89,17 @@ func (h *CoverageHandler) SnapToCity(c *gin.Context) {
 		return
 	}
 
-	results := h.svc.SnapToCities(req.Points, req.RadiusKm, req.MinPopulation, req.BlacklistedCities)
+	results := h.svc.SnapToCities(req.Points, req.RadiusKm, req.MinPopulation, req.BlacklistedCities, req.Provinces)
 
 	c.JSON(http.StatusOK, model.SnapToCityResponse{Results: results})
+}
+
+// Provinces returns the distinct province names present in the embedded
+// locality dataset (sorted), for the coverage simulator's province filter
+// dropdown. The strings are the exact dataset values, so the frontend can send
+// them back verbatim as a province whitelist.
+func (h *CoverageHandler) Provinces(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"provinces": h.svc.Provinces()})
 }
 
 // Project answers "what if the network also included these candidate

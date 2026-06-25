@@ -80,6 +80,24 @@ describe("useMidRouteFatigue", () => {
     expect(mockResetMisfires).toHaveBeenCalled();
   });
 
+  it("triggerGate with force=true shows the gate WITHOUT consulting eligibility", async () => {
+    // Caso parada intermedia inter-sucursal: el check-in es obligatorio y no
+    // debe depender de la elegibilidad (horas / misfires).
+    mockGetTodayCheckin.mockResolvedValue({ ok: true, requires_sleep_data: true });
+
+    const { result } = setupHook();
+
+    let triggered = false;
+    await act(async () => {
+      triggered = await result.current.triggerGate(0, { force: true });
+    });
+
+    expect(triggered).toBe(true);
+    expect(result.current.showGate).toBe(true);
+    expect(mockGetTestEligibility).not.toHaveBeenCalled();
+    expect(mockGetTodayCheckin).toHaveBeenCalled();
+  });
+
   it("closeGate sets showGate=false and requiresSleepData=false", async () => {
     // Set up gate as open first
     mockGetTestEligibility.mockResolvedValue({ require_test: true, reason: "tactile_and_time" });

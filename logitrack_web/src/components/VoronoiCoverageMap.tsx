@@ -1,6 +1,7 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import domtoimage from "dom-to-image-more";
 import {
   coverageApi,
   type CoverageCell,
@@ -23,6 +24,12 @@ export interface VoronoiCoverageMapHandle {
   flyTo(lat: number, lng: number, zoom?: number): void;
   /** Fit the viewport to a polygon (e.g. a selected region boundary). */
   fitBoundsToPolygon(points: [number, number][]): void;
+  /**
+   * Centra el mapa para encuadrar todos los puntos dados (las recomendaciones)
+   * y devuelve una captura PNG (data URL) del mapa. Devuelve null si el mapa no
+   * está listo o si la captura falla (p. ej. canvas tainted). Usado por el PDF.
+   */
+  captureMap(points: [number, number][]): Promise<string | null>;
 }
 
 interface VoronoiCoverageMapProps {
@@ -169,6 +176,34 @@ function VoronoiCoverageMap({
         mapRef.current.fitBounds(L.latLngBounds(points), { padding: [24, 24], animate: true });
       }
     },
+    async captureMap(points) {
+      const map = mapRef.current;
+      const container = containerRef.current;
+      if (!map || !container) return null;
+      // Encuadrar todas las recomendaciones (sin animación para capturar enseguida).
+      if (points.length >= 2) {
+        map.fitBounds(L.latLngBounds(points), { padding: [40, 40], animate: false });
+      } else if (points.length === 1) {
+        map.setView(points[0], 12, { animate: false });
+      }
+      map.invalidateSize();
+      // Dar tiempo a que carguen las tiles del nuevo encuadre antes de capturar.
+      await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+      // dom-to-image redondea las posiciones sub-pixel de las tiles al rasterizar
+      // y deja costuras de ~1px entre ellas (se ven como una cuadrícula). Agrandar
+      // las tiles 1px durante la captura las hace solapar y tapa las costuras.
+      const seamFix = document.createElement("style");
+      seamFix.textContent = ".leaflet-tile{width:257px !important;height:257px !important;}";
+      document.head.appendChild(seamFix);
+      try {
+        return await domtoimage.toPng(container, { quality: 1, bgcolor: "#ffffff" });
+      } catch (e) {
+        console.error("captureMap failed:", e);
+        return null;
+      } finally {
+        seamFix.remove();
+      }
+    },
   }));
   const cellsLayer = useRef<L.LayerGroup | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
@@ -214,13 +249,17 @@ function VoronoiCoverageMap({
       zoomControl: true,
       scrollWheelZoom: true,
     });
+    // crossOrigin: las tiles se sirven con CORS (Access-Control-Allow-Origin: *),
+    // así el <canvas> no queda "tainted" y captureMap() puede exportar el mapa a PNG.
     const osmLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
+      crossOrigin: true,
     }).addTo(map);
     const topoLayer = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
       attribution: '© <a href="https://opentopomap.org">OpenTopoMap</a>, © OpenStreetMap',
       maxZoom: 17,
+      crossOrigin: true,
     });
     L.control.layers(
       { "🏙 Vista Urbana": osmLayer, "🗺 Vista Topográfica": topoLayer },

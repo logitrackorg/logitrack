@@ -3,6 +3,7 @@ package geo
 import (
 	_ "embed"
 	"encoding/json"
+	"sort"
 	"sync"
 )
 
@@ -33,6 +34,8 @@ var (
 	localidadesOnce   sync.Once
 	localidades       []Locality
 	localidadesByName map[string]Locality // normalized name → most populous match
+	provincesOnce     sync.Once
+	provincesList     []string // distinct provinces, sorted (built lazily)
 )
 
 // loadLocalidades parses the embedded dataset once, lazily, and builds a
@@ -79,4 +82,23 @@ func Localities() []Locality {
 func LocalityCount() int {
 	loadLocalidades()
 	return len(localidades)
+}
+
+// Provinces returns the distinct province names present in the dataset, sorted
+// alphabetically. Built lazily and cached. These are the exact strings stored in
+// Locality.Provincia, so the frontend can use them verbatim for an exact-match
+// province filter (no normalization needed). The slice is shared (read-only).
+func Provinces() []string {
+	loadLocalidades()
+	provincesOnce.Do(func() {
+		seen := make(map[string]bool)
+		for _, l := range localidades {
+			if l.Provincia != "" && !seen[l.Provincia] {
+				seen[l.Provincia] = true
+				provincesList = append(provincesList, l.Provincia)
+			}
+		}
+		sort.Strings(provincesList)
+	})
+	return provincesList
 }

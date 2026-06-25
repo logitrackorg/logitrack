@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, ChevronDown } from "lucide-react";
 import type { Region } from "../api/regions";
 import { SIM_AREA_MAX, computeSimAreaBounds } from "../utils/coverageArea";
 
@@ -52,6 +52,11 @@ interface CoverageSimulatorPanelProps {
   canEditSelectedRegion?: boolean;
   /** Called when the user clicks "Editar" on a custom region. */
   onEditRegion?: () => void;
+  /** Province filter: full list of provinces (dataset strings) for the dropdown. */
+  provinces?: string[];
+  /** Currently selected provinces. Empty = no filter (all provinces). */
+  selectedProvinces?: string[];
+  onSelectedProvincesChange?: (next: string[]) => void;
   /** Diagnosis ranking mode: "area" (geographic gaps) or "density" (population density). */
   diagnosisMode?: DiagnosisMode;
   onDiagnosisModeChange?: (mode: DiagnosisMode) => void;
@@ -119,6 +124,9 @@ export function CoverageSimulatorPanel({
   onStartDrawNewRegion,
   canEditSelectedRegion = false,
   onEditRegion,
+  provinces = [],
+  selectedProvinces = [],
+  onSelectedProvincesChange,
   diagnosisMode = "area",
   onDiagnosisModeChange,
   minDensity = 0,
@@ -164,6 +172,7 @@ export function CoverageSimulatorPanel({
   const [areaInput, setAreaInput] = useState(() => String(areaKm2));
   const [popInput, setPopInput] = useState(() => String(MIN_POP_DEFAULT));
   const [maxSugInput, setMaxSugInput] = useState(() => String(maxSuggestions));
+  const [provincesOpen, setProvincesOpen] = useState(false);
 
   const hasBoundary = customBoundaryPoints >= 3;
   const predefined = regions.filter((r) => r.type === "predefined");
@@ -219,6 +228,70 @@ export function CoverageSimulatorPanel({
           </button>
         </div>
       </div>
+
+      {/* Filtro de provincias: limita las ciudades sugeridas a las elegidas.
+          Selección vacía = todas las provincias (sin filtro). */}
+      {provinces.length > 0 && (
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+            Provincias
+          </label>
+          <button
+            type="button"
+            onClick={() => setProvincesOpen((o) => !o)}
+            disabled={isDisabled}
+            className="w-full flex items-center justify-between gap-2 text-xs px-2 py-1.5 rounded-md border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <span className="truncate">
+              {selectedProvinces.length === 0
+                ? "Todas las provincias"
+                : `${selectedProvinces.length} provincia${selectedProvinces.length !== 1 ? "s" : ""} seleccionada${selectedProvinces.length !== 1 ? "s" : ""}`}
+            </span>
+            <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${provincesOpen ? "rotate-180" : ""}`} />
+          </button>
+          {provincesOpen && (
+            <div className="rounded-md border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-1.5">
+              {selectedProvinces.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onSelectedProvincesChange?.([])}
+                  className="w-full text-left text-[11px] text-blue-600 dark:text-blue-400 hover:underline px-1.5 py-1 cursor-pointer"
+                >
+                  Limpiar selección (todas)
+                </button>
+              )}
+              <div className="max-h-44 overflow-y-auto space-y-0.5">
+                {provinces.map((p) => {
+                  const checked = selectedProvinces.includes(p);
+                  return (
+                    <label
+                      key={p}
+                      className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-50 dark:hover:bg-gray-700/50 cursor-pointer select-none"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          onSelectedProvincesChange?.(
+                            checked ? selectedProvinces.filter((x) => x !== p) : [...selectedProvinces, p],
+                          )
+                        }
+                        className="accent-blue-600 cursor-pointer"
+                      />
+                      <span className="text-[11px] text-slate-700 dark:text-slate-200 truncate">{p}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {selectedProvinces.length > 0 && (
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
+              Solo se sugieren ciudades de las provincias elegidas.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Estado del área personalizada (dibujo en progreso / edición / activa) */}
       {territoryMode === "custom" && (

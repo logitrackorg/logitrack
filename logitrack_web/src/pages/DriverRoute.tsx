@@ -1408,7 +1408,9 @@ function InterBranchTripView() {
       // curIdx > stored → mostrar el check-in pendiente.
       const stored = parseInt(localStorage.getItem(`trip_checkin_${trip.id}`) ?? "0", 10);
       if (curIdx > stored) {
-        triggerGate(0).catch(() => {});
+        // Check-in pendiente de una parada que avanzó mientras el chofer estaba
+        // fuera: es obligatorio, se fuerza sin pasar por la elegibilidad.
+        triggerGate(0, { force: true }).catch(() => {});
       }
       prevStopIndexRef.current = curIdx;
       return;
@@ -1417,7 +1419,8 @@ function InterBranchTripView() {
     if (curIdx > prevStopIndexRef.current) {
       // El índice subió en tiempo real → nueva parada confirmada por QR.
       // Mostrar check-in antes de que el chofer salga hacia la siguiente.
-      triggerGate(0).catch(() => {});
+      // Es OBLIGATORIO en cada parada intermedia → se fuerza el gate.
+      triggerGate(0, { force: true }).catch(() => {});
     }
 
     // Actualizar SIEMPRE el ref, incluso si el gate fue abierto.
@@ -1735,8 +1738,8 @@ function InterBranchTripView() {
   return (
     <>
       {/* ── HEADER ── */}
-      <header className="sticky top-0 z-10 bg-[var(--bg-card)]/95 backdrop-blur border-b border-[var(--border)]">
-        <div className="px-4 max-w-2xl mx-auto py-3">
+      <header className="sticky top-0 z-10 -mx-4 md:-mx-6 px-4 md:px-6 bg-[var(--bg-card)]/95 backdrop-blur border-b border-[var(--border)]">
+        <div className="max-w-2xl mx-auto py-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
               <Truck className="w-5 h-5" />
@@ -1764,7 +1767,7 @@ function InterBranchTripView() {
         </div>
       </header>
 
-      <div className="px-4 max-w-2xl mx-auto pt-4 space-y-4">
+      <div className="w-full max-w-2xl mx-auto pt-4 space-y-4 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]">
         {error && (
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
             <AlertCircle className="w-5 h-5 shrink-0" />
@@ -1800,7 +1803,7 @@ function InterBranchTripView() {
 
         {/* ── MAPA ── */}
         {origin?.latitude != null ? (
-          <Card className="overflow-hidden !p-0 border-[var(--border)]" variant="muted">
+          <Card className="isolate overflow-hidden !p-0 border-[var(--border)]" variant="muted">
             <div ref={mapRef} className="h-48 w-full" />
           </Card>
         ) : (

@@ -212,7 +212,7 @@ export function VoiceCheckIn({ onDone }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[3000] bg-[var(--sidebar-bg)]/95 backdrop-blur-sm flex flex-col">
+    <div className="fatigue-overlay fixed inset-0 z-[3000] backdrop-blur-sm flex flex-col">
       {/* Skip button */}
       <div className="flex justify-end px-4 pt-4">
         <Button
@@ -226,7 +226,7 @@ export function VoiceCheckIn({ onDone }: Props) {
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-8">
+      <div className="fatigue-card-scope flex-1 overflow-y-auto px-4 pb-8">
         <div className="max-w-md mx-auto pt-4">
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
@@ -234,14 +234,14 @@ export function VoiceCheckIn({ onDone }: Props) {
               <Volume2 className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-white leading-tight">Análisis de voz</h1>
-              <p className="text-xs text-slate-400">Leé la frase en voz alta para el análisis acústico</p>
+              <h1 className="text-lg font-bold text-[var(--text-heading)] leading-tight">Análisis de voz</h1>
+              <p className="text-xs text-[var(--text-secondary)]">Leé la frase en voz alta para el análisis acústico</p>
             </div>
           </div>
 
           {/* Control phrase */}
           <div className="mb-6 px-4 py-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border)]">
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
               Frase de control
             </p>
             {phrase ? (
@@ -291,10 +291,10 @@ export function VoiceCheckIn({ onDone }: Props) {
           </div>
 
           {retryMsg && (
-            <p className="text-sm text-amber-400 text-center leading-snug">{retryMsg}</p>
+            <p className="text-sm text-[var(--warn-text)] text-center leading-snug">{retryMsg}</p>
           )}
           {errorMsg && (
-            <p className="text-sm text-rose-400 text-center leading-snug">{errorMsg}</p>
+            <p className="text-sm text-[var(--danger-text)] text-center leading-snug">{errorMsg}</p>
           )}
         </div>
       </div>

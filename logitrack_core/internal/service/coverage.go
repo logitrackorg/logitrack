@@ -751,11 +751,19 @@ func (s *CoverageService) computeDensitySuggestions(coverageCells []model.Covera
 		return best
 	}
 
+	// Optional province whitelist: only cities in these provinces are eligible.
+	provinceFilter := newProvinceFilter(density.Provinces)
+
 	// ── Step 1: scan all localities ──────────────────────────────────────────
 	var candidates []model.SuggestedLocation
 	for _, loc := range geo.Localities() {
 		if len(customBoundary) >= 3 && !latLngInPolygon(loc.Lat, loc.Lng, customBoundary) {
 			continue
+		}
+		if provinceFilter != nil {
+			if _, ok := provinceFilter[loc.Provincia]; !ok {
+				continue
+			}
 		}
 		if isInAnyDangerousZone(loc.Lat, loc.Lng, dangerousZones) {
 			continue
