@@ -1166,3 +1166,42 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   color: var(--text-muted) !important;
   cursor: default;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   CHECK-IN DE FATIGA — overlay de pantalla completa
+   (KssCheckIn / VoiceCheckIn / PVTCheckIn)
+
+   Antes el overlay usaba siempre --sidebar-bg (azul marino) y las
+   tarjetas internas --bg-elevated, que en modo CLARO valía blanco
+   → tarjetas blancas con texto claro (casi invisible) sobre fondo azul.
+
+   Ahora, en modo CLARO el overlay es BLANCO y las tarjetas AZULES
+   (con texto claro legible encima). En modo OSCURO se conserva el look
+   actual (fondo y tarjetas oscuras), que ya se veía bien.
+   ═══════════════════════════════════════════════════════════ */
+:root {
+  --fatigue-overlay-bg:  #ffffff;   /* fondo del overlay → blanco */
+  --fatigue-card:        #1e3a5f;   /* cuadros de texto → azul */
+  --fatigue-card-inset:  #16314f;   /* barras/insets dentro de las tarjetas */
+  --fatigue-card-border: #2c4a73;   /* borde de las tarjetas azules */
+}
+.dark {
+  --fatigue-overlay-bg:  #0c1424;   /* = --sidebar-bg oscuro (sin cambios) */
+  --fatigue-card:        #1c2740;   /* = --bg-elevated oscuro (sin cambios) */
+  --fatigue-card-inset:  #131c2e;   /* = --bg-inset oscuro (sin cambios) */
+  --fatigue-card-border: #2a3650;   /* = --border oscuro (sin cambios) */
+}
+
+/* Fondo del overlay (translúcido para conservar el backdrop-blur). */
+.fatigue-overlay {
+  background: color-mix(in srgb, var(--fatigue-overlay-bg) 96%, transparent);
+}
+
+/* Las tarjetas internas usan los tokens de superficie estándar; acá los
+   reapuntamos a la paleta del check-in SOLO dentro del contenido — no en los
+   modales anidados, que mantienen su propio estilo. */
+.fatigue-card-scope {
+  --bg-elevated: var(--fatigue-card);
+  --bg-inset:    var(--fatigue-card-inset);
+  --border:      var(--fatigue-card-border);
+}
